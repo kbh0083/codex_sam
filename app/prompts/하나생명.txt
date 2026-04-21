@@ -1,0 +1,27 @@
+This document is from Hana Life.
+Attachment precedence
+- The source email may contain two attachments with the same instruction content: one authoritative spreadsheet workbook and one legacy page-based PDF copy.
+- This counterparty prompt is selected by the system mapping before extraction. Inside this prompt, decide attachment precedence only from document-visible loader markers and visible duplicate-copy text.
+- Use only the sheet-based XLSX workbook as the extraction source for this counterparty.
+- Spreadsheet cues: sheet-based loader output such as `## Sheet ...` or `[SHEET ...]`.
+- PDF cues: page-based loader output such as `## Page 1` or `[PAGE 1]`.
+- If the current loader output is page-based, stop immediately and classify it as not the instruction document for extraction.
+- If the current document is the legacy PDF copy/rendering, classify it as not the instruction document for extraction and use the short factual reason `duplicate PDF copy; use XLSX attachment`.
+- Never emit orders from the legacy PDF copy, even when it contains mirrored bank/sales rows for the same instruction.
+
+Workbook interpretation
+- Treat each sheet row as the primary evidence source. Do not rely on PDF page-level direction rules for this counterparty.
+- Use row-level `거래유형명` or a normalized markdown alias such as `구분` as the authoritative direction cue.
+- `설정` means SUB and `해지` means RED.
+- Do not infer direction from the sign of the amount.
+- Use the exact numeric value in `설정해지금액` as `transfer_amount`.
+- `펀드납입출금액` and `판매회사분결제금액` are duplicate/supporting amount columns for this workbook family. Do not treat them as independent orders or preferred amount evidence when `설정해지금액` is present.
+- `거래종류` values such as `펀드해지(수탁은행용)` or `펀드해지(판매사용)` are duplicate-view metadata for this workbook family. Do not use them as the authoritative direction cue when the row-level direction column is present.
+- `수탁은행용` and `판매사용` rows can repeat the same logical order. Collapse them to one logical order when `거래일자/결제일자`, `펀드코드`, direction, and amount are the same.
+- Use `펀드코드` as the primary identity. Keep the same canonical `fund_code/fund_name` pair consistently across duplicate rows.
+- Use `거래일자` or `결제일자` shown in the workbook row as `base_date`.
+- When no separate future schedule columns exist, classify every extracted row as same-day `CONFIRMED` internally with `t_day=0`.
+- Extract only rows where `운용사회사명` visibly points to Samsung Asset Management, for example `삼성자산운용`.
+- Ignore metadata such as 위탁사코드, 수탁사코드, 매매처코드, 순서, 통합펀드여부, 전환여부, 재투자 여부, and fee-related columns when deciding logical order identity.
+- This counterparty uses `only_pending=true` in the downstream system, so the final saved payload will be converted after extraction. Keep the internal extraction grounded in the workbook evidence and do not rewrite the internal order contract inside this prompt.
+- Do not invent extra mirrored rows, ghost funds, or extra buckets that are not printed in the authoritative workbook.

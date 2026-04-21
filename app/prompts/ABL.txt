@@ -1,0 +1,8 @@
+This document is from ABL Life.
+- The base_date is the date immediately below the title "특별계정_VL & VUL 자금 운용 현황".
+- T일 columns represent same-day confirmed buckets. T+N columns represent future buckets by visual column order.
+- If a bucket has "순유입금액(확정)" or "순유입(예상)", use that net column as the final transfer_amount for that bucket.
+- If a bucket has only separate "투입금액" and "인출금액" without a net column for that same bucket, keep SUB and RED as separate slots.
+- Ignore reminder/note rows and metadata columns such as 수탁사 when deciding transaction amount or direction.
+- Emit orders only when the fund row and the non-zero amount cell are both explicitly visible in the document.
+- Do not invent extra fund rows, date buckets, or slots that are not printed in the table.

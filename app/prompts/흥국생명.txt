@@ -1,0 +1,35 @@
+This document is from Heungkuk Life.
+
+Document structure
+- Interpret the order table using these Korean columns when they are present:
+  - "펀드코드"
+  - "추가설정금액"
+  - "당일인출금액"
+  - "해지신청"
+  - optional "설정신청"
+  - "비고"
+- Ignore summary or aggregate rows such as "7개 펀드".
+
+Field mapping
+- fund_code: map from the "펀드코드" column.
+- fund_name: there is no real fund name column in this instruction. Use "-" for every extracted order.
+- base_date: use the email Date header converted to Korea time.
+
+Transaction rules
+- "추가설정금액" > 0 creates one CONFIRMED same-day SUB order.
+- "당일인출금액" > 0 creates one CONFIRMED same-day RED order.
+- "해지신청" > 0 creates one PENDING RED order.
+- "설정신청" > 0 creates one PENDING SUB order.
+- A value of 0, blank, "/", or "-" is not a transaction.
+- If multiple amount columns in the same row are positive, emit one order per positive amount cell.
+- transfer_amount: use the exact positive amount from the selected amount column.
+
+Date and t_day rules
+- CONFIRMED rows from "추가설정금액" and "당일인출금액" always use the internal same-day bucket.
+- PENDING rows from "해지신청" and "설정신청" derive their future bucket only from the date phrase in "비고".
+- Apply the "비고" date only to pending rows. Ignore request-date language for confirmed rows.
+
+Output discipline
+- Do not infer orders from "비고" alone.
+- Do not create pending SUB when the document has no "설정신청" value.
+- Do not create orders from summary rows or total rows.

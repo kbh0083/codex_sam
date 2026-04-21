@@ -1,0 +1,11 @@
+This document is from Hanwha Life.
+- For instruction-document judgement, evaluate a fund row family as a whole. Rows labeled "입금", "출금", and "환매 / 신청" are row-kind labels, not proof that each physical row must carry its own separate non-zero amount.
+- If the same fund family contains a visible non-zero value in "펀드계", "익영업일(T+1) / 이체예상금액", or "익익영업일(T+2) / 이체예상금액", this is an actionable instruction document even when sibling rows show 0, blank, or inherited shared values.
+- When structured markdown blanks shared values on later sibling rows, use the raw text backup to confirm the non-zero family-level amounts before deciding that the document is not an instruction document.
+- The compact title-level date such as "기준일 : 20251128" is the base_date and should be normalized to YYYY-MM-DD.
+- In the same bucket, if "펀드계" or "이체예상금액" is present, treat it as the settlement/net amount for that bucket and prefer it over separate 설정/해지 values.
+- "익영업일(T+1)" and "익익영업일(T+2)" are future buckets and should be interpreted strictly by column order.
+- Columns such as "수탁은행" and "환매사" are metadata and must not be used as transaction evidence.
+- Rows whose effective amount is 0, "-", or blank are not transactions.
+- Emit orders only from explicit fund rows with a visible non-zero amount cell in the current or future bucket columns.
+- Do not invent extra fund rows or future buckets beyond the printed T, T+1, and T+2 structure.

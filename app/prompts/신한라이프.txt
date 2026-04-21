@@ -1,0 +1,8 @@
+This document is from Shinhan Life.
+- The base date is the document-level "기준일자".
+- Use "당일이체금액" as the same-day confirmed bucket for each fund.
+- Date columns such as "2025-11-28", "2025-12-01", and later dates are future scheduled buckets and should be kept separately by visual column order.
+- Determine SUB or RED from the sign of each amount cell. Do not infer direction from summary totals.
+- Ignore summary rows such as "설정 합계", "해지 합계", "총 계", and non-order sections such as "회계처리 내역" or contact/approval text.
+- Emit orders only from visible fund rows and visible non-zero amount cells in the dated columns.
+- Do not invent extra future buckets, funds, or directions beyond what is explicitly printed in the transaction grid.

@@ -1,0 +1,45 @@
+This document is from Heungkuk Life via HANAIS.
+
+Attachment precedence
+- The source email may contain two attachments with the same instruction content: one spreadsheet attachment and one PDF rendering.
+- This counterparty prompt is selected by the system mapping before extraction. Inside this prompt, decide attachment precedence only from document-visible loader markers and visible duplicate-copy text.
+- Use only the spreadsheet attachment as the extraction source.
+- Spreadsheet cues: the document text begins with `## Sheet` or `[SHEET`.
+- PDF cues: the document text may appear as page-based loader output such as `## Page 1` or `[PAGE 1]` instead of an explicit `## PDF` label.
+- If the document text explicitly says it is a duplicate PDF copy or says to use the XLSX attachment for extraction, treat it as the PDF rendering to skip.
+- If the current document is the PDF copy/rendering, classify it as not the instruction document for extraction and give a short factual reason such as `duplicate PDF copy; use XLSX attachment`.
+- Never emit orders from the PDF copy, even when the PDF visibly contains the same rows as the spreadsheet.
+
+Spreadsheet document structure
+- Read the real transaction rows from the HANAIS export table that contains these business columns when present:
+  - `운용사명`
+  - `확정일`
+  - `거래유형` or `구분`
+  - `운용사 펀드코드`
+  - `펀드코드`
+  - `펀드명`
+  - `설정액`
+  - `해지액`
+  - `설정해지유형구분`
+  - `결제일`
+- Ignore blank spacer rows, malformed pre-header rows, and aggregate or summary rows.
+- Extract only rows whose `운용사명` contains `삼성`.
+- In the structured markdown view produced by the loader, `거래유형` may appear as `구분`.
+- In the structured markdown view, the business date may survive only as the trailing row date cell rather than an explicit `결제일` header. Use the raw text backup to confirm which row date is the actual settlement date when the markdown header looks flattened.
+
+Field mapping
+- `fund_code`: prefer `운용사 펀드코드`; if it is missing, use `펀드코드`.
+- `fund_name`: use `펀드명` exactly as written.
+- `base_date`: use `결제일` when it is visible in raw text or aligned row data; if it is missing, use `확정일`.
+
+Transaction rules
+- `거래유형=설정` or `구분=설정` and `설정액` > 0 creates one `CONFIRMED` same-day `SUB` order.
+- `거래유형=해지` or `구분=해지` and `해지액` > 0 creates one `CONFIRMED` same-day `RED` order.
+- Values `0`, blank, `/`, or `-` in `설정액` or `해지액` are not transactions.
+- `설정해지유형구분` is supporting metadata only. Do not create extra orders from it.
+- Do not create pending orders from this format.
+
+Date and t_day rules
+- This format is same-day only.
+- When `결제일` or `확정일` exists, use the internal same-day bucket `T0`.
+- `only_pending=false` downstream, so keep confirmed orders as confirmed.

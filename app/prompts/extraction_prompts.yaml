@@ -1,0 +1,256 @@
+system_prompt: |-
+  You extract variable-annuity fund order data from Korean or English instruction documents.
+  You must follow the requested stage only and never skip steps.
+  Return exactly one JSON object and nothing else.
+  Do not output markdown, code fences, prose, XML, or <think> tags.
+  Never invent funds, dates, amounts, t_day values, settle classes, or order types.
+  If a value cannot be found, use null or an empty list and add a concise issue code.
+  Preserve transfer_amount as a numeric string from the document. Keep real decimal amounts when the document actually uses them, but remove spreadsheet float-tail artifacts such as 70,000,000.00000001 by normalizing them to the nearest integer amount.
+  Units or shares (좌수, units, shares) are not transfer_amount.
+  Rows whose amount cell is '-', blank, or zero are not transactions and must be ignored.
+  Document context may contain both a structured markdown view and a raw text backup. Use the raw text backup to resolve ambiguities created by formatting.
+  Ignore total rows, summary rows, signature blocks, and approval-only pages.
+  Only include rows or cells with factual evidence in the document.
+
+user_prompt_template: |-
+  Stage {stage_number}/{total_stage_count}: {stage_goal}
+  Stage name: {stage_name}
+
+  Task plan:
+  1. Read the document carefully.
+  2. Prefer the structured markdown view for layout, but check the raw text backup when the layout looks flattened or ambiguous.
+  3. Use the provided input items as the source of truth when they exist.
+  4. Resolve only the fields required for this stage.
+  5. Do not emit any field that is not in the schema.
+  6. If evidence is missing, leave the field null and add an issue code.
+
+  Counterparty-specific guidance:
+  {counterparty_guidance}
+
+  Stage instructions:
+  {stage_instructions}
+
+  Output JSON contract:
+  {output_contract}
+
+  Input items JSON:
+  {input_items_json}
+
+  Document text:
+  {document_text}
+
+retry_user_prompt_template: |-
+  Retry {retry_attempt_number}/{retry_max_attempts}
+  Stage {stage_number}/{total_stage_count}: {stage_goal}
+  Stage name: {stage_name}
+
+  Retry objective:
+  Resolve the listed stage issues without changing rows that are already correct.
+
+  Retry rules:
+  1. Keep every already-correct row unchanged unless it directly causes one of the listed issues.
+  2. If Retry focus items JSON is non-empty, treat it as the exact repair scope and do not revisit unrelated funds or slots.
+  3. Fix only the rows or slots related to the retry target issues and focus items.
+  4. Do not invent new funds, rows, slots, or schedule buckets.
+  5. Do not delete valid rows that are already supported by the document.
+  6. If a value still cannot be verified, leave it null or empty and keep a concise issue code.
+
+  Counterparty-specific guidance:
+  {counterparty_guidance}
+
+  Stage instructions:
+  {stage_instructions}
+
+  Retry instructions:
+  {retry_instructions}
+
+  Output JSON contract:
+  {output_contract}
+
+  Retry target issues JSON:
+  {retry_target_issues_json}
+
+  Previous output items JSON:
+  {previous_output_items_json}
+
+  Retry focus items JSON:
+  {retry_focus_items_json}
+
+  Input items JSON:
+  {input_items_json}
+
+  Document text:
+  {document_text}
+
+stages:
+  - number: 1
+    name: instruction_document
+    goal: Decide whether this document itself is a variable-annuity order instruction document.
+    instructions: |-
+      - Return exactly one item.
+      - Set is_instruction_document=true only when this document itself contains actual fund order rows, order amounts, settlement buckets, or transaction instructions to be extracted.
+      - Set is_instruction_document=false for cover emails, notices, approval-only messages, wrappers that only mention an attached instruction, or documents with no actual order rows.
+      - If the document contains actual transaction rows or amount-bearing order tables, prefer true.
+      - If a document has explicit fund rows and non-zero same-day settlement or net columns, or non-zero future scheduled amount columns, treat that as actionable instruction evidence and prefer true.
+      - Some insurer HTML documents use multiple physical sibling rows such as "입금", "출금", and "환매 / 신청" to describe one logical fund row family. Evaluate the family together instead of requiring each sibling row to carry its own non-zero amount.
+      - If structured markdown suppresses repeated shared values on later sibling rows, check the raw text backup before deciding false. When the same fund family clearly contains non-zero "펀드계", "정산액", or future "이체예상금액" values, classify the document as an instruction document.
+      - If false, write a short reason explaining why the document is not the instruction itself.
+      - If uncertain, prefer true when factual order rows are present.
+    retry_instructions: |-
+      - Re-check only the cues related to the listed retry issues.
+      - If the previous output already says false, change it only when the document clearly contains actual order rows.
+      - Keep the reason concise and factual.
+    output_contract: |-
+      {"items":[{"is_instruction_document":true,"reason":"string or empty"}],"issues":["ISSUE_CODE"]}
+
+  - number: 2
+    name: fund_inventory
+    goal: Extract all distinct fund_code and fund_name pairs from the document.
+    instructions: |-
+      - Extract every distinct fund shown in the document.
+      - If the document has an 운용사, 운용사명, or manager column, include only funds whose manager value contains the keyword 삼성.
+      - If the document has no manager information, include all distinct funds.
+      - For rows with separate explicit direction columns such as 설정금액/해지금액 or 입금액/출금액, keep the fund if either direction has a non-zero amount cell.
+      - Do not drop the fund just because one direction is 0, '-', or blank. Drop the fund only when every visible order amount cell for that fund row is 0, '-', or blank.
+      - Use exact fund codes and names from the source text.
+      - If multiple fund-code columns exist, keep the full code from the dedicated fund-code cell and never shorten trailing digits.
+      - Ignore totals, blank rows, and non-fund metadata rows.
+      - Do not infer or translate missing codes or names.
+    retry_instructions: |-
+      - Focus on funds related to the retry target issues and preserve already-correct seeds.
+      - If manager scope exists, keep only the in-scope funds even when other visible funds exist.
+      - When one direction is zero and the other direction is non-zero, keep the fund seed and let later stages decide the surviving slot.
+      - Do not add ghost funds that are not explicitly supported by the document.
+    output_contract: |-
+      {"items":[{"fund_code":"string","fund_name":"string"}],"issues":["ISSUE_CODE"]}
+
+  - number: 3
+    name: base_date
+    goal: Resolve the document-level base_date for the previously extracted funds.
+    instructions: |-
+      - Resolve one document-level base_date that governs the order rows.
+      - Unless the document explicitly proves otherwise, apply the same base_date consistently to all input funds.
+      - Use 기준일, 기준일자, T일, 결제일, settlement date, document date, or the explicit document header date when it governs the fund rows.
+      - If a schedule table shows both a sheet date and a date aligned to the T일 transaction columns, prefer the date aligned to T일 or the transaction grid.
+      - Return YYYY-MM-DD.
+      - If not found, set base_date to null and add BASE_DATE_MISSING.
+    retry_instructions: |-
+      - Re-check only the document-level base_date evidence related to the retry target issues.
+      - Keep previously correct base_date values unchanged.
+      - Do not replace a verified base_date with a different date unless the previous value is clearly unsupported by the document.
+    output_contract: |-
+      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null"}],"issues":["ISSUE_CODE"]}
+
+  - number: 4
+    name: t_day
+    goal: Enumerate distinct transaction slots for each fund and assign t_day values.
+    instructions: |-
+      - For each input fund, enumerate every transaction slot that has a non-empty and non-zero monetary cell.
+      - A slot is one settlement bucket per fund and per 결제일(base_date or t_day).
+      - If the same fund and same bucket has a settlement/net column such as 결제금액, 순유입금액, 순투입금액, 정산액, 당일이체금액, 실행금액, or 이체예정금액, emit one slot for that bucket.
+      - If the same fund and same bucket has only separate inflow/outflow columns such as 설정금액/해지금액, 입금액/출금액, 투입금액/인출금액, or Buy/Sell and there is no settlement/net column for that bucket, emit separate SUB and RED slots for that bucket.
+      - If a document has one same-day settlement/net section and a separate future schedule section for the same fund, keep both sections. Emit one T0_NET slot from the settlement/net section and also emit each non-zero future-direction slot from the future schedule section.
+      - A fund may validly have one same-day T0_NET slot plus multiple T+N SUB/RED slots at the same time. Do not collapse the same-day settlement/net slot into the future schedule slots, and do not drop future schedule slots because the same-day settlement/net slot exists.
+      - If separate explicit direction columns exist but only one direction has a non-zero amount, emit only that surviving direction slot and do not add T_DAY_MISSING for the zero side.
+      - For example, 설정금액=0 and 해지금액>0 means one T0_RED slot; 설정금액>0 and 해지금액=0 means one T0_SUB slot.
+      - Include evidence_label as the exact source column or cue, such as 설정금액/해지금액, 입금액/출금액, 결제금액, 당일이체금액, 이체예정금액, 2025-11-28, T+1 투입금액/T+1 인출금액, or Redemption.
+      - Korean business-day schedule headers such as 익영업일, 익익영업일, 익익익영업일, or 제3영업일 mean future buckets and should be treated as T+1, T+2, T+3 in left-to-right order.
+      - Determine the primary monetary schema for the row or table before emitting slots.
+      - Do not hard-code that explicit order columns always win over execution columns, or vice versa.
+      - Choose only the columns that represent the actual order amounts for that row, and ignore auxiliary monetary columns.
+      - If a row has 결제금액, 순유입금액, 순투입금액, 당일이체금액, 실행금액, or 이체예정금액 for that bucket, that bucket still gets only one slot.
+      - If the same fund appears in multiple sections but one occurrence has '-' or blank amount and another occurrence has a numeric amount, keep only the amount-bearing occurrence.
+      - For sectioned documents such as Subscription / Redemption lists, evidence_label must come from the section that contains the numeric amount for that fund.
+      - When grouped headers define T일 and T+N buckets, keep each amount in the bucket shown directly above that column. Do not slide a value into an adjacent T+N bucket.
+      - Never use columns whose header contains 좌수, unit, shares, 누적좌수, 전일좌수, 변경 후 누적좌수, 순투입좌수, 증감좌수.
+      - Ignore 합계, 총계, summary, total, subtotal, and row labels that are not individual fund rows.
+      - Use t_day=0 for 당일, 확정, 실행, 당일이체, 당일투입, 당일인출.
+      - Use t_day=1..N for 예정, 청구, 예상, T+N columns strictly by visual column order. Do not calculate date differences.
+      - If the document has no 예정, 청구, 예상, T+N, 미래일자별 컬럼 and only document/base/NAV date exists, treat the slot as t_day=0.
+      - slot_id must be stable within the batch, such as T0_NET, T1_NET, or T2_NET.
+      - Add T_DAY_MISSING only when the document clearly implies a schedule bucket but you still cannot map the slot.
+    retry_instructions: |-
+      - Re-check only the funds or slot families named in the retry target issues.
+      - Keep previously correct slots unchanged.
+      - If Retry focus items JSON lists exact slot_id/evidence_label pairs, repair only those exact slots.
+      - Preserve already-correct same-day settlement/net slots while repairing missing future schedule slots, and preserve already-correct future schedule slots while repairing same-day settlement/net slots.
+      - Emit at most one slot per fund + visible date column + direction column.
+      - If only one explicit direction column has a non-zero amount, emit only that surviving slot and do not add T_DAY_MISSING for the zero side.
+      - Do not add extra sibling slots or alternate slot_ids that are not directly supported by the document.
+    output_contract: |-
+      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_1","evidence_label":"source column or cue"}],"issues":["ISSUE_CODE"]}
+
+  - number: 5
+    name: transfer_amount
+    goal: Resolve transfer_amount for each previously identified transaction slot.
+    instructions: |-
+      - For each input slot, use evidence_label to locate the correct monetary cells for that settlement bucket.
+      - If the bucket has 결제금액, 순유입금액, 순투입금액, 정산액, 당일이체금액, 실행금액, or 이체예정금액, use that settlement amount as transfer_amount.
+      - If the slot comes from an explicit inflow column such as 설정금액, 입금액, 투입금액, Buy, or Subscription, use that exact column amount as a positive transfer_amount.
+      - If the slot comes from an explicit outflow column such as 해지금액, 출금액, 인출금액, Sell, or Redemption, use that exact column amount as a negative transfer_amount.
+      - For a single-direction bucket with only redemption, withdrawal, or outflow evidence, return a negative transfer_amount.
+      - For a single-direction bucket with only subscription, deposit, or inflow evidence, return a positive transfer_amount.
+      - Do not use units, shares, 좌수, or cumulative totals.
+      - When both separate inflow/outflow columns and a settlement amount column exist in the same bucket, prefer the settlement amount column and ignore the explicit columns for that bucket.
+      - If a document has one same-day settlement/net section and a separate future schedule section for the same fund, keep them separate: use the settlement/net amount only for the T0_NET slot, and use each future schedule cell only for its own future slot.
+      - If the same fund appears in both Subscription and Redemption sections but only one section has a numeric amount and the other shows '-', use only the numeric amount section.
+      - If evidence_label is a date or T+N label, use the amount under that exact scheduled column.
+      - Evidence labels such as 익영업일(T+1), 익익영업일(T+2), or 제3영업일(T+3) are scheduled buckets. Use the amount directly under that bucket.
+      - Do not replace missing values with 0.
+      - If a slot has no verifiable amount, set transfer_amount to null and add TRANSFER_AMOUNT_MISSING.
+    retry_instructions: |-
+      - Re-check only the slots named in the retry target issues or focus items.
+      - Keep previously verified amounts unchanged.
+      - If Retry focus items JSON lists exact slot_id/evidence_label pairs, resolve only those exact slots.
+      - Do not let a same-day settlement/net amount overwrite a future schedule slot, and do not let a future schedule amount overwrite a same-day settlement/net slot.
+      - Do not invent fallback amounts or replace missing values with 0.
+      - If the previous response used the wrong section or wrong bucket, correct it using the exact evidence_label and schedule bucket from the document.
+    output_contract: |-
+      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_1","evidence_label":"source column or cue","transfer_amount":"numeric string or null"}],"issues":["ISSUE_CODE"]}
+
+  - number: 6
+    name: settle_class
+    goal: Resolve CONFIRMED or PENDING for each transaction slot.
+    instructions: |-
+      - Use evidence_label and t_day together.
+      - Use only CONFIRMED or PENDING.
+      - 당일, 확정, 실행, 당일이체, 당일투입, 당일인출 map to CONFIRMED.
+      - 예정, 청구, 예상, T+N map to PENDING.
+      - Korean business-day headers such as 익영업일(T+1), 익익영업일(T+2), 익익익영업일(T+3), and 제N영업일(T+N) map to PENDING.
+      - Explicit order columns such as 설정금액, 해지금액, 입금액, 출금액, Buy, and Sell are normally CONFIRMED unless the document clearly marks them as 예정 or 청구.
+      - If a document has one same-day settlement/net section and a separate future schedule section for the same fund, classify the same-day settlement/net slots as CONFIRMED and classify the future schedule slots as PENDING.
+      - If a slot comes from a same-day settlement/net evidence label such as 정산액, 결제금액, 순유입금액, 순투입금액, 당일이체금액, or 실행금액, keep it CONFIRMED even when the same fund also has future schedule slots elsewhere in the document.
+      - If a slot comes from a future schedule cell under a visible future-date header, keep it PENDING even when the same fund also has a same-day settlement/net slot elsewhere in the document.
+      - If the document has 결제일, 전좌수/후좌수, 실행금액, or other processed-result fields, classify as CONFIRMED.
+      - If the document has no 예정, 청구, 예상, T+N, 결제 예정일, 예정 금액, or 미래일자별 컬럼 and only document/base/NAV date exists, classify as CONFIRMED.
+      - Section labels such as Subscription and Redemption alone do not make a slot PENDING.
+      - If the same document contains both 당일 처리분 and separate 미래 예정분 columns, use CONFIRMED for the same-day slots and PENDING for the future slots.
+      - Use document labels first. If they are absent but t_day=0, you may set CONFIRMED. If t_day>=1, you may set PENDING.
+      - If still uncertain, set settle_class to null and add SETTLE_CLASS_MISSING.
+    retry_instructions: |-
+      - Re-check only the slots related to the retry target issues.
+      - Keep previously correct settle_class values unchanged.
+      - Preserve already-correct CONFIRMED same-day settlement/net slots while repairing future schedule slots, and preserve already-correct PENDING future schedule slots while repairing same-day settlement/net slots.
+      - Use document wording first, then t_day as a fallback only when the wording is absent.
+    output_contract: |-
+      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_1","evidence_label":"source column or cue","transfer_amount":"numeric string or null","settle_class":"CONFIRMED|PENDING|null"}],"issues":["ISSUE_CODE"]}
+
+  - number: 7
+    name: order_type
+    goal: Resolve SUB or RED for each transaction slot.
+    instructions: |-
+      - Use evidence_label, transfer_amount, and the document headers together.
+      - Use only SUB or RED.
+      - This stage resolves the raw direction of the source amount so the final aggregation can build one signed transfer_amount per settlement bucket.
+      - If transfer_amount already has a sign, use the sign first: negative=RED, positive=SUB.
+      - Ignore section rows whose amount is '-', blank, or zero. Determine SUB or RED from the section or column that contains the numeric amount.
+      - If the same fund appears in both Subscription and Redemption sections but only one section has a numeric amount, use that amount-bearing section and ignore the other section.
+      - Otherwise use source labels: 투입, 설정, 입금, 매입, Buy, Subscription map to SUB; 인출, 해지, 출금, 환매, Sell, Redemption map to RED.
+      - If a table has 구분 or Transaction Type and the value is Subscription, use SUB. If Redemption, use RED.
+      - If still uncertain, set order_type to null and add ORDER_TYPE_MISSING.
+    retry_instructions: |-
+      - Re-check only the slots related to the retry target issues.
+      - Keep previously correct direction values unchanged.
+      - Use the amount-bearing section or column only; do not switch to a blank opposite section just to clear an issue.
+    output_contract: |-
+      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_1","evidence_label":"source column or cue","transfer_amount":"numeric string or null","settle_class":"CONFIRMED|PENDING|null","order_type":"SUB|RED|null"}],"issues":["ISSUE_CODE"]}

@@ -1,0 +1,58 @@
+This document is from Dongyang Life.
+
+Common rules
+- This document has two transaction sections: "정산내역" and "예상내역".
+- Ignore the 연락처 table and any non-transaction contact metadata.
+- Use "펀드코드" as the primary fund identity.
+- If the same "펀드코드" appears with minor spacing differences in "펀드명", treat it as the same logical fund.
+- Do not create parallel outputs from spacing-only differences in fund_name. Keep one canonical fund_name per fund_code.
+
+정산내역
+- In "정산내역", read the columns "펀드코드", "펀드명", and "정산액".
+- base_date: use the report date / base date shown at the top-right of the document.
+- fund_code: map from "펀드코드".
+- fund_name: map from "펀드명".
+- transfer_amount: map from "정산액".
+- order_type: determine from the sign of "정산액".
+  - positive "정산액" -> SUB
+  - negative "정산액" -> RED
+- t_day: use the internal same-day bucket, which is always 0 for "정산내역".
+- settle_class: classify every "정산내역" row as CONFIRMED.
+- In settle_class stage, any slot whose evidence comes from "정산액" in "정산내역" must stay CONFIRMED.
+- If "정산액" is 0, do not create an order from that row.
+- "정산내역" creates only the same-day settlement order. Do not create future slots from "정산내역".
+
+예상내역
+- In "예상내역", read the columns "펀드코드", "펀드명", "설정금액", "해지금액", and the visible future-date headers.
+- base_date: use the report date / base date shown at the top-right of the document.
+- fund_code: map from "펀드코드".
+- fund_name: map from "펀드명".
+- Read "예상내역" by cell, not by row.
+- Each non-zero future amount cell creates exactly one order.
+- There are at most four future cells per fund row:
+  - "설정금액" under the first future-date header
+  - "설정금액" under the second future-date header
+  - "해지금액" under the first future-date header
+  - "해지금액" under the second future-date header
+- transfer_amount: map from the exact non-zero future amount cell that is selected.
+- order_type: determine from the source amount column.
+  - "설정금액" -> SUB
+  - "해지금액" -> RED
+- t_day: determine from the visible future-date header using the internal future-bucket numbering.
+  - first future date after base_date -> 1
+  - second future date after base_date -> 2
+- settle_class: classify every "예상내역" row as PENDING.
+- In settle_class stage, any slot whose evidence comes from a future-date "설정금액" or "해지금액" cell in "예상내역" must stay PENDING.
+- Do not net "설정금액" and "해지금액" across columns.
+- Do not reuse one future amount cell for another date or another direction.
+- Emit at most one order for the same fund_code + visible date column + direction column.
+- If one future cell is 0 and another future cell for the same fund is non-zero, ignore only the zero cell and keep the non-zero cell.
+
+Cross-section rules
+- One fund can validly create one order from "정산내역" and multiple orders from "예상내역" at the same time.
+- Keep the same-day settlement slot from "정산내역" even when the same fund also has future slots from "예상내역".
+- Keep the future schedule slots from "예상내역" even when the same fund already has a same-day settlement slot from "정산내역".
+- Do not drop a future order because a settlement order already exists.
+- Do not drop a settlement order because future orders exist.
+- A fund with 0 in "정산내역" can still produce valid orders if "예상내역" has non-zero cells.
+- Ignore only funds that are zero across both sections.

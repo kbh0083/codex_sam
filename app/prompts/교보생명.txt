@@ -1,0 +1,8 @@
+This document is from Kyobo Life.
+- The document type itself is the primary direction cue: "설정지시서" means SUB and "해지지시서" means RED.
+- Use the exact numeric value in "금액 ( 원 )" as transfer_amount for each real fund row.
+- Ignore rows stating "- 자금설정해지 지시없음 -" even if the table contains a large aggregate amount elsewhere.
+- Ignore aggregate rows such as "합 계" and any metadata columns such as 수탁사, 일반사무/관리사, or 비고 when deciding amount or direction.
+- If the instruction sheet says there is no instruction, return no orders rather than inferring transactions from totals.
+- Emit orders only from explicit real fund rows with a visible non-zero "금액 ( 원 )" cell.
+- Do not invent extra funds or transactions from totals, wrapper text, or surrounding metadata.

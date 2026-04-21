@@ -1,0 +1,80 @@
+mappings:
+  - prompt_name: 카디프
+    match_tokens:
+      - 카디프
+    content_match_tokens:
+      - BNP Paribas Cardif Life Insurance
+      - The order of Subscription and Redemption
+      - Amount(KRW)
+  - prompt_name: 동양생명
+    match_tokens:
+      - 동양생명
+  - prompt_name: 한화생명
+    match_tokens:
+      - 한화생명
+      - hanhwa
+      - hanhwa2
+  - prompt_name: AIA
+    match_tokens:
+      - 삼성액티브자산운용
+      - aia
+  - prompt_name: ABL
+    match_tokens:
+      - abl
+  - prompt_name: DB
+    match_tokens:
+      - db_250826
+      - DB
+  - prompt_name: IM
+    match_tokens:
+      - im라이프
+  - prompt_name: IBK
+    match_tokens:
+      - IBK연금보험
+    content_match_tokens:
+      - IBK 연금보험 변액보험 펀드 정산 자료
+      - 기준일자
+      - 예정 정산액 기준일+1
+      - 펀드코드
+  - prompt_name: KB
+    match_tokens:
+      - kb라이프
+  - prompt_name: 라이나
+    match_tokens:
+      - 라이나
+  - prompt_name: 신한라이프
+    match_tokens:
+      - 신한라이프
+  - prompt_name: KDB
+    match_tokens:
+      - 운용지시서_kdb
+      - kdb생명
+      - kdb
+  - prompt_name: 교보생명
+    match_tokens:
+      - 교보생명
+      - 자금운용_설정_5440
+      - 자금운용_해지_5440
+  - prompt_name: 하나생명
+    match_tokens:
+      - 하나생명
+  - prompt_name: 메트라이프생명
+    content_match_tokens:
+      - 메트라이프생명
+      - 펀드설정/해지 운용지시서
+  - prompt_name: 흥국생명-hanais
+    match_tokens:
+      - 흥국생명-hanais
+      - hanais
+    content_match_tokens:
+      - 운용사명
+      - 운용사 펀드코드
+      - 설정해지유형구분
+      - 흥국생명보험
+  - prompt_name: 흥국생명
+    content_match_tokens:
+      - 흥국생명
+      - 설정해지 내역 운용지시건
+      - 펀드코드
+      - 추가설정금액
+      - 당일인출금액

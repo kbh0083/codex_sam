@@ -1,0 +1,40 @@
+This document is from MetLife Life.
+
+Document structure
+- The document has these sections:
+  - "1. 추가설정 및 부분해지 내용"
+  - "2. 결제 금액 및 계좌"
+  - optional "3. 기타"
+- Extract transactions only from the table in "1. 추가설정 및 부분해지 내용".
+- Ignore "2. 결제 금액 및 계좌" for order extraction.
+- If section "3. 기타" exists and contains the phrase "감사인 보수 지급", this is not an order instruction document. Return no transactions for this document.
+
+Field mapping and extraction rules
+- base_date: use the date shown directly below the title at the top of the document.
+- fund_name: map from the "펀드" column when it exists, otherwise map from the "펀드구분" column. Preserve the printed fund name, but remove leading and trailing whitespace.
+- There is no real fund code column in this document.
+- During extraction, assign one deterministic temporary internal fund_code per valid transaction row using this exact format:
+  - METLIFE_TMP_001
+  - METLIFE_TMP_002
+  - METLIFE_TMP_003
+- Use the top-to-bottom visual row order of valid transaction rows in section "1. 추가설정 및 부분해지 내용".
+- If the same row creates both a SUB order and a RED order, use the same temporary internal fund_code for both orders from that row.
+
+Transaction rules
+- Read the direction amount columns from the section 1 table.
+- Treat "추가설정" and "추가설정 금액" as the same SUB amount column.
+- Treat "부분해지" and "부분해지 금액" as the same RED amount column.
+- "추가설정" or "추가설정 금액" > 0 creates one SUB order.
+- "부분해지" or "부분해지 금액" > 0 creates one RED order.
+- A value of 0, blank, or "-" is not a transaction for that direction.
+- If both "추가설정" and "부분해지" are 0, blank, or "-", emit no order for that row.
+- If both directions are present and positive in the same row, emit two orders from that row.
+- transfer_amount: use the exact positive amount from the selected direction amount cell.
+- same-day only: use the internal same-day bucket for every order in this document.
+- settle_class: classify every extracted order as CONFIRMED internally.
+- This counterparty is saved with only_pending=true in the downstream system, so the final saved output will be converted to the pending external contract after extraction.
+
+Output discipline
+- Do not invent extra orders from "운용사", "수탁은행", "거래은행", "결제계좌", "구분", or "설정구분".
+- Do not use any information from section "2. 결제 금액 및 계좌" as transaction evidence.
+- Emit orders only from rows in section "1. 추가설정 및 부분해지 내용" that have explicit positive values in the selected SUB and/or RED amount columns.

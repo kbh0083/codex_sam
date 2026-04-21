@@ -1,0 +1,11 @@
+This document is from Lina Life.
+- Use "결제일" as the document base_date for the order rows. Do not use "Closing Date" as base_date when both dates are present.
+- The main table is a same-day subscription and redemption instruction sheet with separate "설정금액" and "해지금액" columns.
+- Use the exact numeric value from "설정금액" as SUB and the exact numeric value from "해지금액" as RED for the same fund. Do not net them unless a dedicated net column exists.
+- In fund discovery, keep the fund when either "설정금액" or "해지금액" is non-zero. Do not drop the fund just because one side is 0.
+- In t_day, "설정금액" and "해지금액" are same-day explicit columns. If 설정금액=0 and 해지금액>0, emit only one T0_RED slot. If 해지금액=0 and 설정금액>0, emit only one T0_SUB slot.
+- The manager column is "운용사명". Keep only Samsung-managed rows when the manager value indicates 삼성.
+- Ignore subtotal and total rows such as rows whose fund code is an aggregate label ending with "합계".
+- Rows whose effective amount is 0, "-", or blank are not transactions for that direction.
+- Emit orders only from Samsung-managed rows whose fund identity and non-zero amount cell are explicitly visible.
+- Do not invent extra fund rows, directions, or buckets that are not printed in the main table.

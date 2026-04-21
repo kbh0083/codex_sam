@@ -1,0 +1,27 @@
+This document is from BNP Paribas Cardif Life Insurance.
+
+Attachment precedence
+- The source email may contain two attachments with the same instruction content: one PDF instruction and one spreadsheet copy.
+- Attachment precedence is absolute for this counterparty. Apply it before any section, date, fund, or amount parsing rules below.
+- This counterparty prompt is selected by the system mapping before extraction. Inside this prompt, decide attachment precedence only from document-visible loader markers and visible duplicate-copy text.
+- Use only the page-based PDF document as the extraction source for this counterparty.
+- PDF cues: page-based loader output such as `## Page 1` or `[PAGE 1]`.
+- Spreadsheet cues: sheet-based loader output such as `## Sheet ...` or `[SHEET ...]`.
+- If the current loader output is sheet-based, stop immediately and classify it as not the instruction document for extraction.
+- If the current document is the spreadsheet attachment/copy, classify it as not the instruction document for extraction and use the short factual reason `duplicate XLSX copy; use PDF attachment`.
+- Never emit orders from the spreadsheet copy, even when it contains the same rows as the PDF.
+- The Subscription/Redemption table rules below apply only after you have already confirmed that the current attachment is the PDF/page-based document. Do not let section headers or numeric rows inside a spreadsheet override the skip decision.
+
+- Section headers such as "1. Subscription" and "2. Redemption" are the primary order-direction cues.
+- Subscription or Redemption rows can continue across page breaks. Read the entire document before finalizing the row list.
+- Do not stop at the end of the first page if the Redemption section continues on the next page.
+- Use the numeric value in "Amount(KRW)" as the final transfer_amount for each row.
+- Ignore "No. of Unit", "NAV Date", "NAV", and "Bank" when deciding transaction amount or direction.
+- Rows whose "Amount(KRW)" cell is "-", blank, or zero are not transactions.
+- Treat numeric rows in Subscription as SUB and numeric rows in Redemption as RED.
+- The same fund code can appear in both Subscription and Redemption. Decide direction only from the section whose "Amount(KRW)" is numeric for that fund row.
+- If one occurrence of a fund shows "-" and another occurrence shows a numeric amount, keep only the numeric occurrence and ignore the blank one.
+- Classify every extracted row as `CONFIRMED` internally for this format.
+- This counterparty uses `only_pending=true` in the downstream system, so the final saved payload will be converted to the pending external contract after extraction.
+- Emit orders only from explicit numeric rows inside the Subscription or Redemption sections.
+- Do not invent extra rows, future buckets, or directions outside the printed section/table structure.

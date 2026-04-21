@@ -1,0 +1,8 @@
+This document is from iM Life.
+- Use the document-level order date as base_date.
+- Some rows can contain 설정금액, 해지금액, and 순유입금액 together for the same fund.
+- When a same-bucket net column such as 순유입금액 is present, use that net value as the final transfer_amount for that bucket and determine SUB or RED from its sign.
+- If a bucket has separate 설정금액 and 해지금액 but no same-bucket net column, keep SUB and RED as separate orders.
+- Ignore rows whose effective amount is 0, "-", or blank for that direction, and ignore subtotal/total rows.
+- Emit orders only from explicit fund rows with visible non-zero transaction cells.
+- Do not invent extra funds, buckets, or future slots that are not printed in the sheet.

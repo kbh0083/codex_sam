@@ -1,0 +1,8 @@
+This document is an AIA Life BUY & SELL REPORT.
+- "Buy / Amount" and "Sell / Amount" may both contain numeric values in the same row.
+- Treat Buy as SUB and Sell as RED, and keep them as separate orders unless a dedicated net settlement column is explicitly present.
+- Use the exact numeric amount from the Buy or Sell amount cell as transfer_amount evidence.
+- Ignore manager-identification columns such as "External Fund Manager" once the row itself has been identified.
+- Rows with "-", blank, or zero in the Buy or Sell amount cell are not transactions for that direction.
+- Emit orders only from rows whose fund identity and Buy/Sell amount cell are both explicitly visible.
+- Do not invent extra funds, duplicate mirrored rows, or additional buckets that are not printed in the report.

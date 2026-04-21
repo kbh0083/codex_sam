@@ -1,0 +1,34 @@
+This document is from IBK Pension Insurance.
+
+Document structure
+- Use the printed document date in the "기준일자" field as base_date.
+- Do not use the email Date header as base_date for this counterparty.
+- Extract only rows whose "운용사" value contains "삼성".
+- The key columns are:
+  - "펀드명"
+  - "운용사"
+  - "정산액"
+  - "예정 정산액 기준일+1"
+  - "예정 정산액 기준일+2"
+  - "예정 정산액 기준일+3"
+  - "펀드코드"
+
+Transaction rules
+- Treat "정산액" as one same-day T0 net slot for that row.
+- Treat "예정 정산액 기준일+1", "예정 정산액 기준일+2", and "예정 정산액 기준일+3" as future net slots for T+1, T+2, and T+3 respectively.
+- Use only the net amount columns "정산액" and "예정 정산액 기준일+N" as order evidence for this format.
+- Do not emit any separate T0 or future SUB/RED orders from side columns such as "설정액" and "해지액", even when "정산액" is blank.
+- Determine order_type from the sign of the selected net amount:
+  - negative = RED
+  - positive = SUB
+- Classify "정산액" as CONFIRMED internally.
+- Classify every "예정 정산액 기준일+N" slot as PENDING internally.
+- Ignore any row whose "정산액" and every visible future scheduled amount are 0, blank, or "-".
+
+Field handling
+- Use the printed "펀드코드" and "펀드명" values as they appear in the document.
+- Preserve the exact numeric string from the selected net amount cell.
+- Do not invent extra funds, extra slots, or separate same-day direction rows that are not directly supported by the document.
+
+Output discipline
+- Downstream saving for this counterparty uses only_pending=true, but the extraction stage must first produce the full internal order set.

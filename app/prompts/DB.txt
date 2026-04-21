@@ -1,0 +1,10 @@
+This document is from DB Life.
+- Use the document-level order date for the table as base_date.
+- The table is a same-day instruction sheet. Use same-day transaction rows only unless a dedicated future schedule column is explicitly present.
+- If a row has `증감금액`, treat it as the final net transfer_amount for that row and emit exactly one order for that fund.
+- In that case, use `유입금액` and `유출금액` only as supporting evidence for direction, and do not emit them as separate orders.
+- Only when `증감금액` is absent for that same bucket may separate `유입금액` / `유출금액` become separate SUB / RED orders.
+- Keep only Samsung-managed rows when the manager/운용사 column indicates 삼성, and ignore rows for other managers.
+- Ignore subtotal, total, and manager-summary rows even if they contain numeric aggregates.
+- Emit orders only when the Samsung-managed fund row and the non-zero amount cell are both explicitly visible.
+- Do not invent extra fund rows or separate buckets that are not printed in the instruction sheet.
