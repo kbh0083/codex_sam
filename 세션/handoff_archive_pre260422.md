@@ -1,14 +1,18 @@
-# Consolidated Handoff 26042001
+# Handoff Archive Pre260422
+
+- last updated: 2026-04-22
 
 ## 목적
-- `/Users/bhkim/Documents/codex_prj_sam_asset/세션` 폴더의 handoff 문서 5개를 중복 없이 통합한 현재 기준 인계 문서다.
-- 원본 문서:
+- `/Users/bhkim/Documents/codex_prj_sam_asset/세션` 폴더의 `handoff_26042201.md` 이전 handoff들을 하나로 통합한 archive 문서다.
+- 통합 대상 원본 문서(현재 세션 폴더에서는 삭제됨):
   - `handoff_26041301.md`
   - `handoff_26041401.md`
   - `handoff_26041501.md`
   - `handoff_26041601.md`
   - `handoff_26042001.md`
-- 이 문서는 날짜별 작업 로그가 아니라 새 세션에서 바로 판단해야 할 source of truth, 구현 상태, 검증 결과, 운영 배포 주의사항을 중심으로 정리한다.
+- 기존 `handoff_consolidated_26042001.md`의 역할을 이 archive가 대체한다.
+- `handoff_26042201.md`는 최신 실행 인계본이며, 다음 세션에서는 그 문서를 먼저 읽는다.
+- 이 문서는 과거 handoff를 보관용으로 압축한 archive이면서, 새 세션에서 다시 확인해야 할 source of truth와 운영 제약도 함께 정리한다.
 
 ## 기준 경로
 - 로컬 워크스페이스:
@@ -21,17 +25,44 @@
   - `/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/.venv/bin/python`
 
 ## 현재 최종 상태
-- 로컬 및 WAS의 변액보험 거래처별 추출 안정화 작업은 2026-04-20 하나생명 XLSX 전환 기준으로 검증 완료 상태다.
-- 최신 공식 WAS direct validation은 2026-04-20 하나생명 XLSX 전환 라운드의 `17 PASS / 0 FAIL`이다.
+- 로컬은 2026-04-22 기준 아래 변경 묶음까지 반영된 상태다.
+  - extractor 내부 `reason_code + reason_summary`
+  - stage별 `reason_code` parser whitelist
+  - `transfer_amount` post-validation reason 보강
+  - deterministic duplicate-copy precheck
+  - sequential LLM execution
+  - `*_llm_metrics.json` metrics sidecar
+  - 동양생명 active-family shortcut
+- WAS는 2026-04-21 메트라이프 selective merge와 메트라이프 DB prompt parity 업데이트까지 반영된 상태다.
+- 최신 공식 WAS direct validation 기준선은 2026-04-20 하나생명 XLSX 전환 라운드의 `17 PASS / 0 FAIL`이다.
+- 최신 focused WAS validation은 2026-04-21 9건 검수 라운드의 `9 PASS / 0 FAIL`이다.
 - 후속 금액 source-scale 보존 정책 변경 이후에는 focused output-contract 검증을 수행했고, 17-case direct validation은 아직 재실행하지 않았다.
-- `18_메트라이프_추가설정해지`는 공식 17-case에는 넣지 않고 mandatory targeted validation으로 통과했다.
+- 메트라이프 추가 targeted 케이스는 현재 2건이다.
+  - `18_메트라이프_추가설정`
+  - `19_메트라이프_추가설정해지`
 - 하나생명은 PDF 기준 계약에서 XLSX 기준 계약으로 전환됐다.
-- 하나생명 운영 배포용 prompt 변경은 `하나생명.txt` 1개뿐이다.
-- 현재 기준 남아 있는 제품 로직 actionable finding은 없다.
+- 운영 기준 prompt 실제 변경 거래처는 현재 하나생명과 메트라이프 2건이다.
+- 현재 기준 known actionable finding은 1건이다.
+  - 동양생명 후반 stage shortcut은 적용 완료됐고, 잔여 지연은 `instruction_document`/`fund_inventory` transport retry 쪽이다.
 - 2026-04-20 후속 작업에서 금액 최종 저장 포맷 정책을 다시 변경했다.
   - 기준은 “지시서에 표기된 소수 자릿수 유지”다.
   - 소수점 2자리 절삭/패딩은 backend에서 제거했고, UI에서 처리할 예정으로 본다.
   - `.00` 정수형 소수와 spreadsheet float-tail artifact 정리는 유지한다.
+- 2026-04-21 code review에서 document-side amount parser가 탭/NBSP를 놓치는 결함 1건을 찾았고 수정했다.
+  - 예: `KRW\t100`, `₩ 123`
+  - 로컬 unittest와 WAS 메트라이프 3건 재검수까지 통과했다.
+- 2026-04-22 로컬 live exact 기준:
+  - `동양생명_20260318` -> `52건`, `issues=[]`, exact same
+  - `동양생명_20260413` -> `48건`, `issues=[]`, exact same
+  - `카디프_251127` -> `base_date=2025-11-27`, `46건`, exact same
+- 2026-04-22 targeted live 5건 기준:
+  - guard 3건 `OK`
+  - 동양생명 2건 `OK`
+- 동양생명 live elapsed:
+  - `20260318` -> `85.335s`
+  - `20260413` -> `85.267s`
+- sidecar 기준 동양생명 2건의 `llm_batches_started`는 `instruction_document=1`, `fund_inventory=1`, `t_day=0`, `transfer_amount=0`이다.
+- 최신 로컬 deterministic/unit/component 기준은 `303 tests OK`다.
 - 현재 WAS repo는 clean이며, 금액 정책 변경분은 HEAD에 반영된 상태다.
   - 확인 기준 HEAD: `d7d82cc` (`병합된 PR 558: feat:변액일임 CSV 금액표시 수정`)
   - 직전 관련 HEAD: `51068e8` (`병합된 PR 557: feat:변액일임 지시서 금액 소수점 그대로 추출하도록 수정`)
@@ -61,6 +92,8 @@
 
 ## 핵심 계약
 - external API, payload schema, `DocumentLoadTaskPayload` shape는 변경하지 않는다.
+- `reason_code + reason_summary`는 내부 metadata다.
+- `*_llm_metrics.json`은 내부 debug artifact다.
 - 내부 추출 exactness와 final payload exactness를 분리해서 본다.
 - `only_pending=true` 거래처에서 loader `expected_order_count`와 final output row count의 단순 동일성은 보조 지표다.
 - 대표 baseline은 extraction 가능 여부를 결정하지 않는다.
@@ -74,13 +107,14 @@
 
 ## 테스트 수행 방법
 - 로컬/WAS 테스트 수행 명령과 보고서 작성 기준은 별도 문서로 분리했다.
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260420_로컬_WAS_테스트_수행_방안.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/readme/03_테스트_실행_가이드.md`
 - 핵심 원칙:
   - 로컬 테스트는 로컬 venv를 사용한다.
   - WAS 테스트는 WAS venv를 사용한다.
   - WAS 테스트 전 LLM `/models` 연결을 확인한다.
   - 데이터 추출 테스트 결과 보고서는 반드시 `test_report`에 저장한다.
   - 데이터 추출 테스트 결과 보고서에는 `retry_counts`와 `elapsed_seconds`를 포함한다.
+  - `retry_counts`와 `elapsed_seconds`는 `*_llm_metrics.json`을 우선 읽고, sidecar가 없을 때만 `_llm_pipeline.log` fallback을 사용한다.
 
 ## 변경/주의 거래처별 현재 규칙
 - 카디프:
@@ -123,8 +157,14 @@
   - `BBC180 SUB` 금액은 `22,684,941`이다.
 - 메트라이프:
   - `17_메트라이프`는 official 17-case에 포함된다.
-  - `18_메트라이프_추가설정해지`는 official 17-case 밖의 mandatory targeted validation이다.
-  - `18_메트라이프_추가설정해지` 기대 결과는 1건, 금액 `23,182,592`, `issues=[]`다.
+  - official 17-case 밖 targeted validation은 현재 2건이다.
+    - `18_메트라이프_추가설정`: 1건, `base_date=2026-04-09`, `SUB`, final amount `12,082,790`, `issues=[]`
+    - `19_메트라이프_추가설정해지`: 1건, `base_date=2026-04-08`, internal signed amount `-23,182,592`, final amount `23,182,592`, `issues=[]`
+  - accepted comparator 파일명은 기존 산출물 이름을 유지한다.
+    - 추가설정: `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/metlife_additional_sub_20260410_084740.json`
+    - 추가설정해지: `/Users/bhkim/Documents/codex_prj_sam_asset/output/correct_result/18_메트라이프_추가설정해지.json`
+  - 2026-04-21 이후 document-side amount 인식은 `₩`, `￦`, `KRW`, `원`, Unicode whitespace를 포함한 pure amount token까지 지원한다.
+  - explicit redemption/outflow column에 printed minus amount가 있어도 actionable instruction evidence로 본다.
 - KB:
   - true decimal 금액과 지시서 표기 소수 자릿수를 보존한다.
   - `50,572.49` 같은 실제 소수 금액을 `50,572`로 절삭하면 regression이다.
@@ -159,6 +199,8 @@
   - row-context가 있는 표에서는 authoritative mixed amount column만 order bucket으로 유지한다.
   - 하나생명형 표에서 `설정해지금액`이 있으면 sibling amount column 때문에 중복 bucket이 생기지 않게 suppress한다.
   - legacy XLS direct BIFF와 parser fallback을 보존한다.
+  - `_normalize_pipe_cell`, `_is_amount_string`, `_parse_numeric_amount_text`는 공통 document-side amount token 정규화를 사용한다.
+  - document-side amount token 정규화는 `₩`, `￦`, `KRW`, `원`, Unicode whitespace를 제거한 뒤 pure numeric token만 허용한다.
 - extractor:
   - base_date는 문서 단일 fan-out 구조를 우선 사용한다.
   - deterministic 우선순위는 문서별 구조에 맞춰 조정했다.
@@ -168,6 +210,8 @@
   - row-context direction deterministic recovery를 지원한다.
   - `ORDER_COVERAGE_ESTIMATE_MISMATCH`, fund ambiguity, manager warning 등 오진단성 warning cleanup을 보수적으로 수행한다.
   - prompt/response log, `Trace task_id`, retry 정책, 상태/사유 정규화는 WAS에서 보존한다.
+  - deterministic amount parser도 loader와 동일한 currency-decorated amount token 정규화를 공유한다.
+  - `instruction_document` stage prompt는 explicit negative redemption/outflow printed amount를 actionable evidence로 본다.
 - output contract:
   - 메트라이프 최종 저장 정규화를 유지한다.
   - 흥국생명-heungkuklife 정렬/정규화를 유지한다.
@@ -194,6 +238,12 @@
   - `/Users/bhkim/Documents/codex_prj_sam_asset/tests/test_document_loader_markdown.py`
   - `/Users/bhkim/Documents/codex_prj_sam_asset/tests/test_extractor_logic.py`
   - `/Users/bhkim/Documents/codex_prj_sam_asset/tests/test_component.py`
+- 이번 미병합 로컬 변경 묶음은 아래 다섯 축으로 보면 된다.
+  - extractor 내부 reason metadata
+  - duplicate-copy precheck
+  - sequential LLM execution
+  - metrics sidecar
+  - 동양생명 active-family shortcut
 
 ## WAS 최신 병합 상태
 - 2026-04-20 후속 금액 source-scale 보존 정책 반영 파일:
@@ -206,6 +256,15 @@
 - 2026-04-20 하나생명 XLSX 전환 라운드의 WAS 제품 코드 추가 반영 파일:
   - `/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/src/app/services/variable_annuity/extract/document_loader.py`
   - `/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/src/app/services/variable_annuity/extract/extractor.py`
+- 2026-04-21 메트라이프 selective merge 반영 파일:
+  - `/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/src/app/services/variable_annuity/extract/document_loader.py`
+  - `/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/src/app/services/variable_annuity/extract/extractor.py`
+  - `/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/src/app/services/variable_annuity/extract/prompts/extraction_prompts.yaml`
+- 2026-04-21 메트라이프 selective merge에서는 `parser.py`, `settings.py`, `.env`, `output_contract.py`를 건드리지 않았다.
+- 2026-04-22 기준 최신 로컬 변경 묶음은 아직 WAS에 selective merge하지 않았다.
+  - 우선 병합 후보는 extractor의 내부 reason metadata, duplicate-copy precheck, sequential execution, metrics sidecar, 동양생명 active-family shortcut이다.
+  - duplicate-copy guard의 source of truth는 prompt가 아니라 extractor 코드 helper다.
+  - metrics sidecar는 로컬 debug artifact이며, WAS 이식은 선택적으로 판단한다.
 - WAS 테스트 bootstrap 관련 변경:
   - `/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/tests/conftest.py`
 - `tests/conftest.py`는 기존 fixture/function logic을 수정하거나 새 함수를 추가한 것이 아니다.
@@ -222,6 +281,7 @@
 ## WAS DB Prompt 상태
 - 2026-04-16에는 WAS DB prompt 17건 parity 업데이트를 수행했다.
 - 2026-04-20에는 하나생명 prompt만 실제 변경됐다.
+- 2026-04-21에는 메트라이프 prompt 1건을 실제 변경했다.
 - 하나생명 prompt SHA:
   - before: `3eafcccb24c46bf86ebd2bc462ad870a0e1684c57f238a7ec81319986f8d426f`
   - after/local: `a58c63b49c8c96231e7dab49673a895ebc63957c41e67bb7af4978651ddf7299`
@@ -230,15 +290,26 @@
   - `only_pending=true`
   - `designated_password=null`
   - `delivery_type=null`
+- 메트라이프 prompt SHA:
+  - before: `bda7b2b55fefb8ac892fa13519d89a5e3bab714075c462892512b5ac6e9ad31b`
+  - after/local: `b14b5b77220342b2735fd75396ce387957683297122b60abcccff483515e8d5f`
+  - after/local length: `2775`
+- 보존해야 할 메트라이프 DB fields:
+  - `use_counterparty_prompt=true`
+  - `only_pending=true`
+  - `designated_password=null`
+  - `delivery_type=null`
 - `흥국생명-hanis` DB company name과 `흥국생명-hanais` file/case naming 차이는 실제 운영 데이터 차이다.
   - 무심코 rename하지 않는다.
 
 ## 운영 배포용 Prompt 변경 목록
-- 운영 배포 시 실제 내용이 변경된 거래처 prompt source file과 DB row는 아래 1건이다.
+- 운영 배포 시 실제 내용이 변경된 거래처 prompt source file과 DB row는 현재 아래 2건이다.
   - `/Users/bhkim/Documents/codex_prj_sam_asset/app/prompts/하나생명.txt`
   - `tb_variable_counterparties.company_name='하나생명'`
+- `/Users/bhkim/Documents/codex_prj_sam_asset/app/prompts/메트라이프생명.txt`
+- `tb_variable_counterparties.company_name='메트라이프생명'`
 - `counterparty_prompt_map.yaml`은 이번 운영 prompt 변경 대상이 아니다.
-- report에 17개 prompt parity가 기록되어 있어도 실제 변경 row는 하나생명 1건이다.
+- report에 prompt parity가 더 넓게 기록되어 있어도 실제 runtime 변경 row는 하나생명과 메트라이프 2건이다.
 
 ## 검증 이력 요약
 - 2026-04-13:
@@ -265,7 +336,8 @@
   - WAS helper regression `7 passed`
   - WAS direct validation `17 PASS / 0 FAIL`
   - WAS pipeline smoke `3/3`, `all_pass=true`
-  - `18_메트라이프_추가설정해지` PASS
+  - legacy case id `18_메트라이프_추가설정해지` PASS
+    - 현재 targeted case id 기준으로는 `19_메트라이프_추가설정해지`에 해당한다.
   - 하나생명 legacy PDF reject PASS
   - DB prompt parity `17/17`
 - 2026-04-20 후속 금액 source-scale 보존 정책 검증:
@@ -277,6 +349,26 @@
     - 이 테스트 파일은 검증 당시 사용된 focused test source이며, 현재 WAS repo에는 source file로 남아 있지 않다.
     - 재검증이 필요하면 동일 케이스를 새 focused test나 ad-hoc harness로 재생성해야 한다.
   - WAS pytest의 Pydantic/deprecation warning 12건은 기존 import 경로 warning이며 이번 변경 failure가 아니다.
+- 2026-04-21 메트라이프 selective merge:
+  - WAS `/v1/models` `200`
+  - WAS py_compile 통과
+  - YAML parse 통과
+  - 메트라이프 DB prompt parity 업데이트 완료
+  - `17_메트라이프`, `18_메트라이프_추가설정`, `19_메트라이프_추가설정해지` exact same PASS
+- 2026-04-21 WAS 9건 검수:
+  - 최종 `9 PASS / 0 FAIL`
+  - 메트라이프 3건 포함 9건 모두 `COMPLETED`
+  - `04_IM` baseline drift는 `file_name/source_path`의 Unicode NFC/NFD 차이뿐이며 주문 데이터는 exact same
+  - `13_한화생명`은 compact date evidence `기준일 : 20250826`를 원문 재검수로 확인했다
+- 2026-04-21 code review 후속 수정:
+  - document-side amount parser가 탭/NBSP를 놓치던 결함 1건 수정
+  - 로컬 `tests.test_document_loader_markdown`, `tests.test_extractor_logic` `321 tests OK`
+  - WAS 메트라이프 3건 재검수 PASS
+- 2026-04-22 로컬 동양생명/카디프 재검증:
+  - `동양생명_20260318` exact same, `52건`, `issues=[]`
+  - `동양생명_20260413` exact same, `48건`, `issues=[]`
+  - `카디프_251127` exact same, `46건`, `base_date=2025-11-27`
+  - 결론: `base_date` 문서 단일 fan-out은 정상 동작, 남은 병목은 동양생명 `t_day` retry 반복
 
 ## 최신 17-case
 - official local/WAS acceptance 대표 케이스:
@@ -297,7 +389,9 @@
   - `15_IBK`
   - `16_흥국생명-hanais`
   - `17_메트라이프`
-- `18_메트라이프_추가설정해지`는 mandatory targeted validation이며 official 17-case에 포함하지 않는다.
+- 아래 메트라이프 targeted case 2건은 official 17-case에 포함하지 않는다.
+  - `18_메트라이프_추가설정`
+  - `19_메트라이프_추가설정해지`
 
 ## 최신 2026-04-20 Direct Validation 주요 케이스 결과
 | Case | Orders | Issues | Retry | Elapsed | Comparator |
@@ -308,7 +402,22 @@
 | `13_한화생명` | 6 | `[]` | `{}` | `5.7s` | baseline exact same |
 | `15_IBK` | 1 | `[]` | `{}` | `12.99s` | baseline exact same |
 | `17_메트라이프` | 14 | `[]` | `{"t_day": 4}` | `70.6s` | baseline exact same |
-| `18_메트라이프_추가설정해지` | 1 | `[]` | `{}` | `5.67s` | exact same, official 17-case 밖 mandatory targeted |
+| `18_메트라이프_추가설정해지` | 1 | `[]` | `{}` | `5.67s` | exact same, 당시 legacy case id이며 현재 targeted case id 기준으로는 `19_메트라이프_추가설정해지` |
+
+## 최신 2026-04-21 WAS 9건 검수 결과
+| Case | Orders | Issues | Retry | Elapsed | Verdict |
+| --- | ---: | --- | --- | ---: | --- |
+| `17_메트라이프` | 14 | `[]` | `{"t_day": 2}` | `47.687s` | `PASS` |
+| `18_메트라이프_추가설정` | 1 | `[]` | `{}` | `4.951s` | `PASS` |
+| `19_메트라이프_추가설정해지` | 1 | `[]` | `{}` | `5.132s` | `PASS` |
+| `01_ABL` | 4 | `[]` | `{}` | `3.017s` | `PASS` |
+| `03_DB` | 3 | `[]` | `{}` | `2.941s` | `PASS` |
+| `04_IM` | 8 | `[]` | `{}` | `16.662s` | `PASS` |
+| `07_교보생명` | 2 | `[]` | `{}` | `8.958s` | `PASS` |
+| `12_하나생명` | 7 | `[]` | `{}` | `3.204s` | `PASS` |
+| `13_한화생명` | 6 | `[]` | `{}` | `1.983s` | `PASS` |
+- `04_IM`은 baseline exact compare에서 `file_name/source_path`의 Unicode normalization 차이만 있었다.
+- `13_한화생명`은 자동 evidence 탐지 초기 결과와 달리 원문 `기준일 : 20250826` 확인 후 최종 `PASS`로 확정했다.
 
 ## 보고서와 산출물
 - 2026-04-14 WAS direct extraction:
@@ -324,36 +433,78 @@
   - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_20260420_01.md`
 - 2026-04-20 데이터 추출 테스트 보고서:
   - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260420_WAS_병합_데이터추출_테스트_보고서.md`
+- 2026-04-21 메트라이프 WAS 병합 테스트 보고서:
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421_WAS_메트라이프_병합_데이터추출_테스트_보고서.md`
+- 2026-04-21 WAS 9건 데이터 추출 검수 보고서:
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421_WAS_9건_데이터추출_검수_보고서.md`
 - 거래처별 최대 2건 데이터 추출 테스트 보고서:
   - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260416_거래처별_최대2건_추출테스트_보고서.md`
-- 최신 WAS debug root:
+- 2026-04-20 accepted 병합 debug root:
   - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/was_merge_20260420_01`
-- 최신 WAS backup root:
+- 2026-04-20 accepted 병합 backup root:
   - `/Users/bhkim/Documents/codex_prj_sam_asset/output/was_backup/was_merge_20260420_01`
-- 최신 prompt update report:
+- 2026-04-20 prompt update report:
   - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/was_counterparty_prompt_update_20260420_01/update_report.json`
+- 2026-04-21 메트라이프 WAS merge debug root:
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/was_merge_20260421_01`
+- 2026-04-21 메트라이프 WAS backup root:
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/output/was_backup/was_merge_20260421_01`
+- 2026-04-21 prompt update report:
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/was_counterparty_prompt_update_20260421_01/update_report.json`
+- 2026-04-21 WAS 9건 validation root:
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/was_validation_20260421_01`
 
 ## 현재 WAS Repo 상태
-- 2026-04-20 문서 재검수 기준 WAS repo working tree는 clean이다.
+- 2026-04-21 기준 WAS repo working tree는 clean이다.
 - `git status --short --untracked-files=all` 출력은 비어 있다.
 - 금액 source-scale 보존 정책 변경분은 현재 HEAD에 반영되어 있다.
+- 2026-04-21 메트라이프 selective merge 반영분과 9건 검수 산출물은 repo 밖 debug/report 경로에 저장돼 있다.
 - `tests/test_variable_annuity_output_contract.py`는 검증 당시 사용된 focused test였지만 현재 WAS repo에는 존재하지 않는다.
 - 이전 handoff 작성 당시 보였던 `scripts/git-no-askpass.sh` untracked 항목도 현재 존재하지 않는다.
 
+## 현재 로컬 Repo 상태
+- 2026-04-22 기준 로컬 repo working tree는 dirty다.
+- 현재 수정/추가 파일:
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/README.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/app/document_loader.py`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/app/document_loaders/eml_loader.py`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/app/document_loaders/html_loader.py`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/app/document_loaders/mht_loader.py`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/app/extractor.py`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/app/prompts/extraction_prompts.yaml`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/app/prompts/메트라이프생명.txt`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/readme/00_시작_안내.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/readme/01_시스템_구성_가이드.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/readme/02_WAS_병합_가이드.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/readme/03_테스트_실행_가이드.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/tests/test_counterparty_live_regression.py`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/tests/test_document_loader_markdown.py`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/tests/test_extractor_logic.py`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/tests/test_service_guard.py`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_pre260422.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042201.md`
+- 이 변경들은 메트라이프 추가설정/추가설정해지 오판단 수정, 동양생명 `t_day` retry 정합성/성능 보강, `Settings.llm_*` runtime wiring 보강, 회귀 테스트 추가, 운영 문서 최신화에 해당한다.
+- 새 세션에서 로컬 작업을 이어갈 때는 이 변경을 임의로 revert하지 말고 현재 diff와 2026-04-22 handoff를 함께 본다.
+
 ## 다음 세션 시작 순서
-1. 이 통합 handoff를 먼저 읽는다.
-2. 필요한 경우 원본 handoff는 세부 이력 확인용으로만 연다.
-3. WAS repo에서 `git status --short --untracked-files=all`을 확인하고, 현재 HEAD가 금액 source-scale 보존 변경분을 포함하는지 본다.
-4. 운영 배포 요청이면 WAS repo 변경 scope와 하나생명 DB prompt 1건을 분리해서 본다.
-5. 배포 전 운영 DB row를 백업한다.
-6. 운영 LLM endpoint를 확인한다.
-7. 운영 환경에서 하나생명 XLSX 7건 targeted validation을 우선 수행한다.
-8. 가능하면 17-case 또는 운영 가능한 subset smoke를 수행한다.
-9. 모든 데이터 추출 결과 보고서에는 retry count와 elapsed time을 포함해 `test_report`에 저장한다.
+1. `/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042201.md`를 먼저 읽는다.
+2. 이 통합 handoff를 읽는다.
+3. 필요한 경우 원본 handoff는 세부 이력 확인용으로만 연다.
+4. 로컬 repo에서 `git status --short --untracked-files=all`을 확인하고, 최신 로컬 변경 묶음을 merge-first 기준으로 정리한다.
+5. WAS repo에서 `git status --short --untracked-files=all`을 확인하고 clean 상태를 재확인한다.
+6. LLM 터널을 확인한다.
+7. 로컬 변경을 WAS에 selective merge한다.
+8. guard 3건 + 동양생명 2건 focused validation을 수행한다.
+9. 배포 전 운영 DB row를 백업한다.
+10. 가능하면 official 17-case 또는 운영 가능한 subset smoke를 수행한다.
+11. 모든 데이터 추출 결과 보고서에는 retry count와 elapsed time을 포함해 `test_report`에 저장한다.
+12. merge가 끝난 뒤 refactor backlog를 정리한다.
 
 ## 현재 결론
-- 제품 로직 기준으로 추가 수정이 필요한 known actionable finding은 없다.
-- 금액 source-scale 보존 정책 변경분은 현재 WAS HEAD에 반영되어 있고, 로컬/WAS 검수와 focused 검증 기준 known finding은 없다.
-- 다음 큰 작업은 운영 배포 준비와 운영 환경 검증이다.
-- 운영 prompt 변경은 하나생명 1건으로 제한한다.
-- WAS 코드 배포 scope는 현재 repo 상태를 먼저 확인한 뒤 금액 source-scale 보존 변경분, 하나생명 XLSX 전환 관련 변경분, 하나생명 DB prompt 1건을 분리해서 판단한다.
+- 공통 `base_date` fan-out 성능 개선은 현재 로컬에서 정상 동작 중이다.
+- 동양생명/카디프 정확도는 현재 exact same 기준으로 통과 상태다.
+- 동양생명 후반 stage shortcut은 적용 완료됐고, sidecar 기준 `t_day`/`transfer_amount`는 현재 targeted live에서 실행되지 않는다.
+- 2026-04-21 메트라이프 selective merge, 메트라이프 DB prompt update, WAS 9건 검수까지는 완료됐다.
+- 다음 큰 작업은 최신 로컬 변경 묶음의 WAS selective merge와 focused validation이다.
+- 운영 prompt 변경 row는 현재 하나생명과 메트라이프 2건이다.
+- WAS 코드 배포 scope는 현재 repo 상태를 먼저 확인한 뒤 금액 source-scale 보존 변경분, 하나생명 XLSX 전환 관련 변경분, 메트라이프 selective merge 변경분, 최신 로컬 변경 묶음, DB prompt 2건을 분리해서 판단한다.

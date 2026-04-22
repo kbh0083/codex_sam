@@ -9,6 +9,7 @@ import re
 import tempfile
 import zipfile
 import zlib
+from dataclasses import dataclass
 from html import unescape
 from pathlib import Path
 from urllib.parse import unquote
@@ -37,6 +38,34 @@ _JS_STRING_CONCAT_RE = re.compile(
 )
 _BASE64_CANDIDATE_RE = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
 _URLSAFE_BASE64_CANDIDATE_RE = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
+
+
+@dataclass(slots=True)
+class HtmlTextBlockProjection:
+    lines: list[str]
+
+
+@dataclass(slots=True)
+class HtmlTableCellProjection:
+    text: str
+    rowspan: int
+    colspan: int
+    source_row: int
+    source_col: int
+    is_inherited: bool
+    row_kind: str | None = None
+
+
+@dataclass(slots=True)
+class HtmlTableRowProjection:
+    cells: list[HtmlTableCellProjection]
+    is_header: bool
+    row_kind: str | None = None
+
+
+@dataclass(slots=True)
+class HtmlTableBlockProjection:
+    rows: list[HtmlTableRowProjection]
 
 
 def _normalize_base64_chunk(s: str) -> str:
@@ -439,33 +468,129 @@ class HtmlDocumentLoaderMixin:
         """HTML 문자열을 raw_text와 markdown render hint로 함께 변환한다."""
         body_match = re.search(r"<body\b[^>]*>(.*?)</body>", html_text, flags=re.IGNORECASE | re.DOTALL)
         body_html = body_match.group(1) if body_match else html_text
-        table_blocks = self.HTML_TABLE_RE.findall(body_html)
-        body_without_tables = self.HTML_TABLE_RE.sub("\n", body_html)
-
         lines: list[str] = [f"[{section_label} {source_label}]"]
+        markdown_blocks: list[str] = []
         pipe_table_hints: list[dict[str, object]] = []
-        text_lines = self._extract_html_text_lines(body_without_tables)
-        if text_lines:
-            lines.extend(text_lines)
+        label_tokens: list[str] = []
+        table_row_tokens: list[str] = []
+        inherited_row_tokens: list[str] = []
+        row_kind_tokens: list[str] = []
+        canonical_blocks = self._extract_html_canonical_blocks(body_html)
 
-        for table_html in table_blocks:
-            table_lines, table_hint = self._extract_html_table_lines_with_hints(table_html)
-            if not table_lines:
+        for block in canonical_blocks:
+            block_lines: list[str]
+            if isinstance(block, HtmlTextBlockProjection):
+                block_lines = list(block.lines)
+                markdown_block = self._render_text_block(block.lines)
+                if markdown_block:
+                    markdown_blocks.append(markdown_block)
+                label_tokens.extend(line for line in block.lines if line.strip())
+            else:
+                block_lines, table_hint = self._extract_html_table_lines_with_hints_from_projection(block)
+                if not block_lines:
+                    continue
+                pipe_table_hints.append(table_hint)
+                markdown_block = self._render_lossless_html_table(block)
+                if markdown_block:
+                    markdown_blocks.append(markdown_block)
+                    markdown_lines = [line.strip() for line in markdown_block.splitlines() if line.strip().startswith("|")]
+                    table_row_tokens.extend(markdown_lines)
+                    inherited_row_tokens.extend(self._html_inherited_markdown_rows(block, markdown_lines))
+                    row_kind_tokens.extend(self._html_row_kind_tokens(block))
+                    label_tokens.extend(self._html_table_label_tokens(markdown_lines))
+            if not block_lines:
                 continue
             if len(lines) > 1 and lines[-1] != "":
                 lines.append("")
-            lines.extend(table_lines)
-            pipe_table_hints.append(table_hint)
+            lines.extend(block_lines)
 
         meaningful_lines = [line for line in lines if line.strip()]
         logger.info(
-            "Extracted text from HTML document: text_lines=%s table_count=%s",
-            len(text_lines),
-            len(table_blocks),
+            "Extracted text from HTML document: block_count=%s table_count=%s",
+            len(canonical_blocks),
+            len(pipe_table_hints),
         )
         if len(meaningful_lines) <= 1:
             raise ValueError("No extractable text found in HTML document.")
-        return "\n".join(lines).strip(), {"pipe_table_hints": pipe_table_hints}
+        render_hints: dict[str, object] = {
+            "pipe_table_hints": pipe_table_hints,
+            "markdown_blocks": markdown_blocks,
+            "html_markdown_audit": {
+                "label_tokens": self._dedupe_preserve_order(label_tokens),
+                "table_row_tokens": self._dedupe_preserve_order(table_row_tokens),
+                "inherited_row_tokens": self._dedupe_preserve_order(inherited_row_tokens),
+                "row_kind_tokens": self._dedupe_preserve_order(row_kind_tokens),
+            },
+        }
+        render_hints["preferred_markdown_text"] = self._compose_html_section_markdown(
+            section_label=section_label,
+            source_label=source_label,
+            preamble_lines=[],
+            markdown_blocks=markdown_blocks,
+        )
+        return "\n".join(lines).strip(), render_hints
+
+    @staticmethod
+    def _dedupe_preserve_order(values: list[str]) -> list[str]:
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            normalized = value.strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            deduped.append(normalized)
+        return deduped
+
+    def _compose_html_section_markdown(
+        self,
+        *,
+        section_label: str,
+        source_label: str,
+        preamble_lines: list[str],
+        markdown_blocks: list[str],
+    ) -> str:
+        section_header = f"[{section_label} {source_label}]"
+        if hasattr(self, "_format_markdown_heading"):
+            heading = self._format_markdown_heading(section_header, 1)
+        else:  # pragma: no cover - standalone fallback
+            heading = f"## {section_label} {source_label}"
+
+        blocks: list[str] = []
+        preamble_block = self._render_text_block(preamble_lines)
+        if preamble_block:
+            blocks.append(preamble_block)
+        blocks.extend(block for block in markdown_blocks if block.strip())
+        if not blocks:
+            return heading
+        return f"{heading}\n\n" + "\n\n".join(blocks)
+
+    def _extract_html_canonical_blocks(
+        self,
+        html_fragment: str,
+    ) -> list[HtmlTextBlockProjection | HtmlTableBlockProjection]:
+        blocks: list[HtmlTextBlockProjection | HtmlTableBlockProjection] = []
+        cursor = 0
+        for table_match in self.HTML_TABLE_RE.finditer(html_fragment):
+            text_fragment = html_fragment[cursor:table_match.start()]
+            text_block = self._build_html_text_block(text_fragment)
+            if text_block is not None:
+                blocks.append(text_block)
+            table_block = self._build_html_table_block(table_match.group(0))
+            if table_block is not None:
+                blocks.append(table_block)
+            cursor = table_match.end()
+
+        tail_block = self._build_html_text_block(html_fragment[cursor:])
+        if tail_block is not None:
+            blocks.append(tail_block)
+        return blocks
+
+    def _build_html_text_block(self, html_fragment: str) -> HtmlTextBlockProjection | None:
+        lines = self._extract_html_text_lines(html_fragment)
+        if not lines:
+            return None
+        return HtmlTextBlockProjection(lines=lines)
 
     def _extract_html_text_lines(self, html_fragment: str) -> list[str]:
         """표 바깥의 일반 본문 텍스트를 줄 단위로 추출한다.
@@ -496,7 +621,17 @@ class HtmlDocumentLoaderMixin:
 
     def _extract_html_table_lines_with_hints(self, table_html: str) -> tuple[list[str], dict[str, object]]:
         """HTML 표를 pipe row와 inherited-cell 힌트로 함께 변환한다."""
-        expanded_rows, inherited_rows = self._expand_html_table_with_inherited_mask(table_html)
+        projection = self._build_html_table_block(table_html)
+        if projection is None:
+            return [], {"inherited_rows": []}
+        return self._extract_html_table_lines_with_hints_from_projection(projection)
+
+    def _extract_html_table_lines_with_hints_from_projection(
+        self,
+        projection: HtmlTableBlockProjection,
+    ) -> tuple[list[str], dict[str, object]]:
+        expanded_rows = [[cell.text for cell in row.cells] for row in projection.rows]
+        inherited_rows = [[cell.is_inherited for cell in row.cells] for row in projection.rows]
         table_lines = [" | ".join(row) for row in expanded_rows if any(cell for cell in row)]
         filtered_inherited_rows = [
             row
@@ -516,58 +651,99 @@ class HtmlDocumentLoaderMixin:
 
     def _expand_html_table_with_inherited_mask(self, table_html: str) -> tuple[list[list[str]], list[list[bool]]]:
         """`rowspan/colspan` 전개와 함께 inherited-cell mask를 만든다."""
-        # HTML 표는 rowspan/colspan 때문에 "보이는 셀"과 "실제 DOM 셀" 개수가 다르다.
-        # 이 함수는 pending_cells 를 이용해 시각적으로 보이는 표를 2차원 배열로 복원한다.
-        pending_cells: dict[int, tuple[str, int]] = {}
-        expanded_rows: list[list[str]] = []
-        inherited_rows: list[list[bool]] = []
+        projection = self._build_html_table_block(table_html)
+        if projection is None:
+            return [], []
+        expanded_rows = [[cell.text for cell in row.cells] for row in projection.rows]
+        inherited_rows = [[cell.is_inherited for cell in row.cells] for row in projection.rows]
+        return expanded_rows, inherited_rows
+
+    def _build_html_table_block(self, table_html: str) -> HtmlTableBlockProjection | None:
+        pending_cells: dict[int, tuple[HtmlTableCellProjection, int]] = {}
+        expanded_rows: list[HtmlTableRowProjection] = []
         max_columns = 0
 
-        for row_html in self.HTML_ROW_RE.findall(table_html):
-            row_cells = self._parse_html_cells(row_html)
+        for source_row, row_html in enumerate(self.HTML_ROW_RE.findall(table_html)):
+            row_cells = self._parse_html_cells_with_metadata(row_html)
             if not row_cells:
                 continue
 
-            expanded_row: list[str] = []
-            inherited_row: list[bool] = []
+            expanded_row: list[HtmlTableCellProjection] = []
             column_index = 0
 
             def drain_pending() -> None:
-                """이전 row의 rowspan 잔여 셀을 현재 row에 채워 넣는다."""
                 nonlocal column_index
                 while column_index in pending_cells:
-                    text, remaining_rows = pending_cells[column_index]
-                    # HTML raw_text 는 LLM이 직접 읽는 백업 근거다. 한화 계열처럼
-                    # 금액/예정일 컬럼이 rowspan 으로 내려오는 표에서는 child row 의
-                    # 반복 숫자를 비워 버리면 실제 문서 정보가 손실된다. 정확도 우선으로
-                    # 시각적으로 보이는 공통 컨텍스트를 그대로 복제해 둔다.
-                    expanded_row.append(text)
-                    inherited_row.append(True)
+                    base_cell, remaining_rows = pending_cells[column_index]
+                    expanded_row.append(
+                        HtmlTableCellProjection(
+                            text=base_cell.text,
+                            rowspan=base_cell.rowspan,
+                            colspan=base_cell.colspan,
+                            source_row=base_cell.source_row,
+                            source_col=base_cell.source_col,
+                            is_inherited=True,
+                            row_kind=base_cell.row_kind,
+                        )
+                    )
                     if remaining_rows <= 1:
                         del pending_cells[column_index]
                     else:
-                        pending_cells[column_index] = (text, remaining_rows - 1)
+                        pending_cells[column_index] = (base_cell, remaining_rows - 1)
                     column_index += 1
 
-            for text, rowspan, colspan in row_cells:
+            row_is_header = all(cell_kind == "header" for cell_kind, *_rest in row_cells)
+            for source_col, (cell_kind, text, rowspan, colspan) in enumerate(row_cells):
                 drain_pending()
                 safe_colspan = max(1, colspan)
                 safe_rowspan = max(1, rowspan)
                 for _ in range(safe_colspan):
-                    expanded_row.append(text)
-                    inherited_row.append(False)
+                    cell = HtmlTableCellProjection(
+                        text=text,
+                        rowspan=safe_rowspan,
+                        colspan=safe_colspan,
+                        source_row=source_row,
+                        source_col=source_col,
+                        is_inherited=False,
+                    )
+                    expanded_row.append(cell)
                     if safe_rowspan > 1:
-                        pending_cells[column_index] = (text, safe_rowspan - 1)
+                        pending_cells[column_index] = (cell, safe_rowspan - 1)
                     column_index += 1
 
             drain_pending()
-            max_columns = max(max_columns, len(expanded_row))
-            expanded_rows.append(expanded_row)
-            inherited_rows.append(inherited_row)
+            if not any(cell.text for cell in expanded_row):
+                continue
 
-        normalized_rows = [row + [""] * (max_columns - len(row)) for row in expanded_rows]
-        normalized_inherited_rows = [row + [False] * (max_columns - len(row)) for row in inherited_rows]
-        return normalized_rows, normalized_inherited_rows
+            row_kind = None if row_is_header else self._infer_html_row_kind(expanded_row)
+            for cell in expanded_row:
+                cell.row_kind = row_kind
+            max_columns = max(max_columns, len(expanded_row))
+            expanded_rows.append(
+                HtmlTableRowProjection(
+                    cells=expanded_row,
+                    is_header=row_is_header,
+                    row_kind=row_kind,
+                )
+            )
+
+        if not expanded_rows:
+            return None
+
+        for row_index, row in enumerate(expanded_rows):
+            while len(row.cells) < max_columns:
+                row.cells.append(
+                    HtmlTableCellProjection(
+                        text="",
+                        rowspan=1,
+                        colspan=1,
+                        source_row=row_index,
+                        source_col=len(row.cells),
+                        is_inherited=False,
+                        row_kind=row.row_kind,
+                    )
+                )
+        return HtmlTableBlockProjection(rows=expanded_rows)
 
     def _parse_html_cells(self, row_html: str) -> list[tuple[str, int, int]]:
         """`<tr>` 내부의 각 셀을 `(text, rowspan, colspan)` 튜플로 읽는다."""
@@ -578,6 +754,113 @@ class HtmlDocumentLoaderMixin:
             colspan = self._html_span_value(attrs, "colspan")
             parsed_cells.append((text, rowspan, colspan))
         return parsed_cells
+
+    def _parse_html_cells_with_metadata(
+        self,
+        row_html: str,
+    ) -> list[tuple[str, str, int, int]]:
+        parsed_cells: list[tuple[str, str, int, int]] = []
+        for cell_tag, attrs, cell_html in self.HTML_CELL_RE.findall(row_html):
+            text = self._html_cell_text(cell_html)
+            rowspan = self._html_span_value(attrs, "rowspan")
+            colspan = self._html_span_value(attrs, "colspan")
+            parsed_cells.append(("header" if cell_tag.lower() == "h" else "body", text, rowspan, colspan))
+        return parsed_cells
+
+    def _infer_html_row_kind(self, cells: list[HtmlTableCellProjection]) -> str | None:
+        detector = getattr(self, "_looks_like_order_context_value", None)
+        if detector is None:
+            return None
+        for cell in cells:
+            value = cell.text.strip()
+            if not value:
+                continue
+            try:
+                if detector(value):
+                    return value
+            except Exception:  # pragma: no cover - defensive for standalone copies
+                return None
+        return None
+
+    def _render_lossless_html_table(self, block: HtmlTableBlockProjection) -> str:
+        rows = [[cell.text for cell in row.cells] for row in block.rows]
+        if not rows:
+            return ""
+
+        header_row_count = 0
+        for row in block.rows:
+            if row.is_header:
+                header_row_count += 1
+                continue
+            break
+
+        if 0 < header_row_count < len(rows):
+            header_rows = rows[:header_row_count]
+            body_rows = rows[header_row_count:]
+        else:
+            normalized_rows = self._normalize_pipe_rows(rows)
+            table_structure = self._infer_table_structure(normalized_rows)
+            if table_structure is None:
+                return self._render_text_block([" | ".join(row) for row in rows if any(cell for cell in row)])
+            _, header_start, data_start = table_structure
+            header_rows = normalized_rows[header_start:data_start]
+            body_rows = normalized_rows[data_start:]
+
+        if not header_rows:
+            header = [f"col_{index + 1}" for index in range(len(rows[0]))]
+        else:
+            header = self._collapse_header_rows(self._normalize_pipe_rows(header_rows))
+            header = self._normalize_lossless_html_headers(header, body_rows)
+
+        markdown_lines = [
+            f"| {' | '.join(self._escape_markdown_cell(cell or f'col_{index + 1}') for index, cell in enumerate(header))} |",
+            f"| {' | '.join('---' for _ in range(len(header)))} |",
+        ]
+        for row in body_rows:
+            markdown_lines.append(f"| {' | '.join(self._escape_markdown_cell(cell) for cell in row)} |")
+        return "\n".join(markdown_lines)
+
+    def _normalize_lossless_html_headers(self, header: list[str], body_rows: list[list[str]]) -> list[str]:
+        normalized = list(header)
+        for index, label in enumerate(normalized):
+            if self._is_order_context_label(label):
+                continue
+            if not self._column_has_order_context_values(body_rows, index):
+                continue
+            if label:
+                label_segments = {segment.strip() for segment in label.split("/") if segment.strip()}
+                if "구분" in label_segments:
+                    continue
+                normalized[index] = f"{label} / 구분"
+            else:
+                normalized[index] = "구분"
+        return normalized
+
+    def _html_inherited_markdown_rows(
+        self,
+        block: HtmlTableBlockProjection,
+        markdown_lines: list[str],
+    ) -> list[str]:
+        inherited_rows: list[str] = []
+        body_row_start = 2
+        markdown_body_lines = markdown_lines[body_row_start:]
+        body_rows = [row for row in block.rows if not row.is_header]
+        for row, markdown_line in zip(body_rows, markdown_body_lines):
+            if any(cell.is_inherited and cell.text for cell in row.cells):
+                inherited_rows.append(markdown_line)
+        return inherited_rows
+
+    def _html_row_kind_tokens(self, block: HtmlTableBlockProjection) -> list[str]:
+        return [
+            row.row_kind
+            for row in block.rows
+            if not row.is_header and row.row_kind
+        ]
+
+    def _html_table_label_tokens(self, markdown_lines: list[str]) -> list[str]:
+        if not markdown_lines:
+            return []
+        return [markdown_lines[0]]
 
     def _html_cell_text(self, cell_html: str) -> str:
         """셀 내부 HTML을 사람이 읽을 수 있는 한 줄 문자열로 정리한다."""

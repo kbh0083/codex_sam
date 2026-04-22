@@ -11,6 +11,11 @@ system_prompt: |-
   Document context may contain both a structured markdown view and a raw text backup. Use the raw text backup to resolve ambiguities created by formatting.
   Ignore total rows, summary rows, signature blocks, and approval-only pages.
   Only include rows or cells with factual evidence in the document.
+  Every stage response must include the top-level reason_summary required by the schema.
+  reason_summary must be one factual sentence, 160 characters or fewer, and must not describe hidden reasoning.
+  Each emitted item must include exactly one stage-specific reason_code from the allowed list for that stage.
+  Use reason_code only for the primary evidence source that justified the emitted item.
+  Use issues only for missing, conflicting, or invalid findings.
 
 user_prompt_template: |-
   Stage {stage_number}/{total_stage_count}: {stage_goal}
@@ -19,7 +24,7 @@ user_prompt_template: |-
   Task plan:
   1. Read the document carefully.
   2. Prefer the structured markdown view for layout, but check the raw text backup when the layout looks flattened or ambiguous.
-  3. Use the provided input items as the source of truth when they exist.
+  3. Treat the provided input items and any input reason_code as hints only. The document is the source of truth.
   4. Resolve only the fields required for this stage.
   5. Do not emit any field that is not in the schema.
   6. If evidence is missing, leave the field null and add an issue code.
@@ -51,9 +56,10 @@ retry_user_prompt_template: |-
   1. Keep every already-correct row unchanged unless it directly causes one of the listed issues.
   2. If Retry focus items JSON is non-empty, treat it as the exact repair scope and do not revisit unrelated funds or slots.
   3. Fix only the rows or slots related to the retry target issues and focus items.
-  4. Do not invent new funds, rows, slots, or schedule buckets.
-  5. Do not delete valid rows that are already supported by the document.
-  6. If a value still cannot be verified, leave it null or empty and keep a concise issue code.
+  4. Use input items, previous output items, previous reason_summary, and any previous reason_code only as hints. The document is the source of truth.
+  5. Do not invent new funds, rows, slots, or schedule buckets.
+  6. Do not delete valid rows that are already supported by the document.
+  7. If a value still cannot be verified, leave it null or empty and keep a concise issue code.
 
   Counterparty-specific guidance:
   {counterparty_guidance}
@@ -73,6 +79,9 @@ retry_user_prompt_template: |-
   Previous output items JSON:
   {previous_output_items_json}
 
+  Previous reason summary:
+  {previous_reason_summary_text}
+
   Retry focus items JSON:
   {retry_focus_items_json}
 
@@ -88,10 +97,13 @@ stages:
     goal: Decide whether this document itself is a variable-annuity order instruction document.
     instructions: |-
       - Return exactly one item.
+      - The item reason_code must be one of: INSTR_ORDER_ROWS_PRESENT, INSTR_NET_OR_SCHEDULE_PRESENT, INSTR_OUTFLOW_AMOUNT_PRESENT, NONINSTR_COVER_EMAIL, NONINSTR_ATTACHMENT_WRAPPER, NONINSTR_NO_ACTIONABLE_ROWS, NONINSTR_APPROVAL_NOTICE.
+      - Return a top-level reason_summary that states in one factual sentence why the document is or is not the instruction itself.
       - Set is_instruction_document=true only when this document itself contains actual fund order rows, order amounts, settlement buckets, or transaction instructions to be extracted.
       - Set is_instruction_document=false for cover emails, notices, approval-only messages, wrappers that only mention an attached instruction, or documents with no actual order rows.
       - If the document contains actual transaction rows or amount-bearing order tables, prefer true.
       - If a document has explicit fund rows and non-zero same-day settlement or net columns, or non-zero future scheduled amount columns, treat that as actionable instruction evidence and prefer true.
+      - If an explicit redemption, withdrawal, sell, or outflow amount column prints a non-zero amount with a leading minus sign, that is still actionable order evidence and should not be treated as "no transaction".
       - Some insurer HTML documents use multiple physical sibling rows such as "입금", "출금", and "환매 / 신청" to describe one logical fund row family. Evaluate the family together instead of requiring each sibling row to carry its own non-zero amount.
       - If structured markdown suppresses repeated shared values on later sibling rows, check the raw text backup before deciding false. When the same fund family clearly contains non-zero "펀드계", "정산액", or future "이체예상금액" values, classify the document as an instruction document.
       - If false, write a short reason explaining why the document is not the instruction itself.
@@ -99,14 +111,16 @@ stages:
     retry_instructions: |-
       - Re-check only the cues related to the listed retry issues.
       - If the previous output already says false, change it only when the document clearly contains actual order rows.
-      - Keep the reason concise and factual.
+      - Keep the item-level reason and the top-level reason_summary concise and factual.
     output_contract: |-
-      {"items":[{"is_instruction_document":true,"reason":"string or empty"}],"issues":["ISSUE_CODE"]}
+      {"items":[{"is_instruction_document":true,"reason":"string or empty","reason_code":"INSTR_ORDER_ROWS_PRESENT"}],"reason_summary":"string or empty","issues":["ISSUE_CODE"]}
 
   - number: 2
     name: fund_inventory
     goal: Extract all distinct fund_code and fund_name pairs from the document.
     instructions: |-
+      - Each item reason_code must be one of: FUND_MANAGER_SCOPED, FUND_NO_MANAGER_SCOPE, FUND_NET_AMOUNT_ROW, FUND_EXPLICIT_SUB_ROW, FUND_EXPLICIT_RED_ROW, FUND_CODE_ONLY_ROW, FUND_OTHER_VERIFIED.
+      - Return a top-level reason_summary that states the dominant inventory evidence used for this stage.
       - Extract every distinct fund shown in the document.
       - If the document has an 운용사, 운용사명, or manager column, include only funds whose manager value contains the keyword 삼성.
       - If the document has no manager information, include all distinct funds.
@@ -122,12 +136,15 @@ stages:
       - When one direction is zero and the other direction is non-zero, keep the fund seed and let later stages decide the surviving slot.
       - Do not add ghost funds that are not explicitly supported by the document.
     output_contract: |-
-      {"items":[{"fund_code":"string","fund_name":"string"}],"issues":["ISSUE_CODE"]}
+      {"items":[{"fund_code":"string","fund_name":"string","reason_code":"FUND_NET_AMOUNT_ROW"}],"reason_summary":"string or empty","issues":["ISSUE_CODE"]}
 
   - number: 3
     name: base_date
     goal: Resolve the document-level base_date for the previously extracted funds.
     instructions: |-
+      - Each item reason_code must be one of: DATE_DOC_HEADER, DATE_GRID_ALIGNED, DATE_SETTLEMENT_LABEL, DATE_SECTION_ROW, DATE_EMAIL_FALLBACK, DATE_OTHER_VERIFIED.
+      - Return a top-level reason_summary that states which date source governs the document-level base_date.
+      - If input items already contain reason_code from the previous stage, use it only as a hint and replace it when stronger document evidence conflicts.
       - Resolve one document-level base_date that governs the order rows.
       - Unless the document explicitly proves otherwise, apply the same base_date consistently to all input funds.
       - Use 기준일, 기준일자, T일, 결제일, settlement date, document date, or the explicit document header date when it governs the fund rows.
@@ -139,12 +156,15 @@ stages:
       - Keep previously correct base_date values unchanged.
       - Do not replace a verified base_date with a different date unless the previous value is clearly unsupported by the document.
     output_contract: |-
-      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null"}],"issues":["ISSUE_CODE"]}
+      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","reason_code":"DATE_DOC_HEADER"}],"reason_summary":"string or empty","issues":["ISSUE_CODE"]}
 
   - number: 4
     name: t_day
     goal: Enumerate distinct transaction slots for each fund and assign t_day values.
     instructions: |-
+      - Each item reason_code must be one of: SLOT_T0_NET, SLOT_T0_EXPLICIT_SUB, SLOT_T0_EXPLICIT_RED, SLOT_TPLUS_SCHEDULE, SLOT_BUSINESS_DAY_HEADER, SLOT_SECTION_DIRECTION, SLOT_OTHER_VERIFIED.
+      - Return a top-level reason_summary that states whether this stage mainly used same-day net evidence, future schedule buckets, or explicit direction columns.
+      - If input items already contain reason_code from the previous stage, use it only as a hint and replace it when stronger document evidence conflicts.
       - For each input fund, enumerate every transaction slot that has a non-empty and non-zero monetary cell.
       - A slot is one settlement bucket per fund and per 결제일(base_date or t_day).
       - If the same fund and same bucket has a settlement/net column such as 결제금액, 순유입금액, 순투입금액, 정산액, 당일이체금액, 실행금액, or 이체예정금액, emit one slot for that bucket.
@@ -178,12 +198,15 @@ stages:
       - If only one explicit direction column has a non-zero amount, emit only that surviving slot and do not add T_DAY_MISSING for the zero side.
       - Do not add extra sibling slots or alternate slot_ids that are not directly supported by the document.
     output_contract: |-
-      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_1","evidence_label":"source column or cue"}],"issues":["ISSUE_CODE"]}
+      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_NET","evidence_label":"source column or cue","reason_code":"SLOT_T0_NET"}],"reason_summary":"string or empty","issues":["ISSUE_CODE"]}
 
   - number: 5
     name: transfer_amount
     goal: Resolve transfer_amount for each previously identified transaction slot.
     instructions: |-
+      - Each item reason_code must be one of: AMOUNT_NET_COLUMN, AMOUNT_EXPLICIT_SUB, AMOUNT_EXPLICIT_RED, AMOUNT_SCHEDULE_BUCKET, AMOUNT_SIGNED_OUTFLOW, AMOUNT_OTHER_VERIFIED.
+      - Return a top-level reason_summary that states whether this stage mainly used net columns, explicit direction columns, or schedule buckets.
+      - If input items already contain reason_code from the previous stage, use it only as a hint and replace it when stronger document evidence conflicts.
       - For each input slot, use evidence_label to locate the correct monetary cells for that settlement bucket.
       - If the bucket has 결제금액, 순유입금액, 순투입금액, 정산액, 당일이체금액, 실행금액, or 이체예정금액, use that settlement amount as transfer_amount.
       - If the slot comes from an explicit inflow column such as 설정금액, 입금액, 투입금액, Buy, or Subscription, use that exact column amount as a positive transfer_amount.
@@ -206,12 +229,15 @@ stages:
       - Do not invent fallback amounts or replace missing values with 0.
       - If the previous response used the wrong section or wrong bucket, correct it using the exact evidence_label and schedule bucket from the document.
     output_contract: |-
-      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_1","evidence_label":"source column or cue","transfer_amount":"numeric string or null"}],"issues":["ISSUE_CODE"]}
+      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_NET","evidence_label":"source column or cue","transfer_amount":"numeric string or null","reason_code":"AMOUNT_NET_COLUMN"}],"reason_summary":"string or empty","issues":["ISSUE_CODE"]}
 
   - number: 6
     name: settle_class
     goal: Resolve CONFIRMED or PENDING for each transaction slot.
     instructions: |-
+      - Each item reason_code must be one of: SETTLE_SAME_DAY_LABEL, SETTLE_FUTURE_LABEL, SETTLE_BUSINESS_DAY_HEADER, SETTLE_PROCESSED_RESULT, SETTLE_TDAY_FALLBACK, SETTLE_OTHER_VERIFIED.
+      - Return a top-level reason_summary that states the dominant settle_class decision basis for this stage.
+      - If input items already contain reason_code from the previous stage, use it only as a hint and replace it when stronger document evidence conflicts.
       - Use evidence_label and t_day together.
       - Use only CONFIRMED or PENDING.
       - 당일, 확정, 실행, 당일이체, 당일투입, 당일인출 map to CONFIRMED.
@@ -233,12 +259,15 @@ stages:
       - Preserve already-correct CONFIRMED same-day settlement/net slots while repairing future schedule slots, and preserve already-correct PENDING future schedule slots while repairing same-day settlement/net slots.
       - Use document wording first, then t_day as a fallback only when the wording is absent.
     output_contract: |-
-      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_1","evidence_label":"source column or cue","transfer_amount":"numeric string or null","settle_class":"CONFIRMED|PENDING|null"}],"issues":["ISSUE_CODE"]}
+      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_NET","evidence_label":"source column or cue","transfer_amount":"numeric string or null","settle_class":"CONFIRMED|PENDING|null","reason_code":"SETTLE_SAME_DAY_LABEL"}],"reason_summary":"string or empty","issues":["ISSUE_CODE"]}
 
   - number: 7
     name: order_type
     goal: Resolve SUB or RED for each transaction slot.
     instructions: |-
+      - Each item reason_code must be one of: ORDER_SIGN_POSITIVE, ORDER_SIGN_NEGATIVE, ORDER_LABEL_SUB, ORDER_LABEL_RED, ORDER_SECTION_SUB, ORDER_SECTION_RED, ORDER_TRANSACTION_TYPE, ORDER_OTHER_VERIFIED.
+      - Return a top-level reason_summary that states the dominant order_type decision basis for this stage.
+      - If input items already contain reason_code from the previous stage, use it only as a hint and replace it when stronger document evidence conflicts.
       - Use evidence_label, transfer_amount, and the document headers together.
       - Use only SUB or RED.
       - This stage resolves the raw direction of the source amount so the final aggregation can build one signed transfer_amount per settlement bucket.
@@ -253,4 +282,4 @@ stages:
       - Keep previously correct direction values unchanged.
       - Use the amount-bearing section or column only; do not switch to a blank opposite section just to clear an issue.
     output_contract: |-
-      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_1","evidence_label":"source column or cue","transfer_amount":"numeric string or null","settle_class":"CONFIRMED|PENDING|null","order_type":"SUB|RED|null"}],"issues":["ISSUE_CODE"]}
+      {"items":[{"fund_code":"string","fund_name":"string","base_date":"YYYY-MM-DD or null","t_day":0,"slot_id":"T0_NET","evidence_label":"source column or cue","transfer_amount":"numeric string or null","settle_class":"CONFIRMED|PENDING|null","order_type":"SUB|RED|null","reason_code":"ORDER_SIGN_POSITIVE"}],"reason_summary":"string or empty","issues":["ISSUE_CODE"]}

@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import logging
 import re
 import time
 import unicodedata
-from contextvars import ContextVar
+from contextvars import ContextVar, copy_context
 from datetime import datetime
 from threading import RLock
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from string import Formatter
-from typing import Any, TypeVar
+from typing import Any, ClassVar, TypeVar
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -21,7 +23,7 @@ import yaml
 
 from app.amount_normalization import canonicalize_transfer_amount, format_source_transfer_amount
 from app.config import Settings
-from app.document_loader import DocumentLoadTaskPayload, TargetFundScope, normalize_fund_name_key
+from app.document_loader import DocumentLoadTaskPayload, DocumentLoader, TargetFundScope, normalize_fund_name_key
 from app.schemas import ExtractionResult, OrderExtraction, OrderType, SettleClass
 
 logger = logging.getLogger(__name__)
@@ -71,11 +73,12 @@ VA_LLM_CHUNK_SIZE_CHARS = 12000
 # 1단계(instruction_document)는 최대 1회, 나머지 단계는 최대 2회 재호출한다.
 INSTRUCTION_DOCUMENT_STAGE_ISSUE_RETRY_ATTEMPTS = 1
 OTHER_STAGE_ISSUE_RETRY_ATTEMPTS = 2
+MAX_PARALLEL_LLM_BATCH_WORKERS = 1
 STAGE_SPECIFIC_MAX_TOKENS: dict[str, int] = {
     "instruction_document": 4096,
     "base_date": 4096,
-    "settle_class": 4096,
-    "order_type": 2048,
+    "settle_class": 8192,
+    "order_type": 4096,
 }
 T_DAY_STAGE_BATCH_SIZE = 6
 INTERNAL_RETRY_FINDING_PREFIX = "_RETRY_"
@@ -83,6 +86,131 @@ _ACTIVE_EXTRACT_LOG_PATH: ContextVar[Path | None] = ContextVar(
     "_ACTIVE_EXTRACT_LOG_PATH",
     default=None,
 )
+_ACTIVE_EXTRACT_METRICS: ContextVar[Any | None] = ContextVar(
+    "_ACTIVE_EXTRACT_METRICS",
+    default=None,
+)
+_ACTIVE_STAGE_RETRY_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar(
+    "_ACTIVE_STAGE_RETRY_CONTEXT",
+    default=None,
+)
+REASON_SUMMARY_MAX_CHARS = 160
+STAGE_ITEM_METADATA_FIELDS = frozenset({"reason_code"})
+STAGE_RESULT_METADATA_FIELDS = frozenset({"reason_summary"})
+INSTRUCTION_DOCUMENT_REASON_CODES = frozenset(
+    {
+        "INSTR_ORDER_ROWS_PRESENT",
+        "INSTR_NET_OR_SCHEDULE_PRESENT",
+        "INSTR_OUTFLOW_AMOUNT_PRESENT",
+        "NONINSTR_COVER_EMAIL",
+        "NONINSTR_ATTACHMENT_WRAPPER",
+        "NONINSTR_NO_ACTIONABLE_ROWS",
+        "NONINSTR_APPROVAL_NOTICE",
+    }
+)
+FUND_INVENTORY_REASON_CODES = frozenset(
+    {
+        "FUND_MANAGER_SCOPED",
+        "FUND_NO_MANAGER_SCOPE",
+        "FUND_NET_AMOUNT_ROW",
+        "FUND_EXPLICIT_SUB_ROW",
+        "FUND_EXPLICIT_RED_ROW",
+        "FUND_CODE_ONLY_ROW",
+        "FUND_OTHER_VERIFIED",
+    }
+)
+BASE_DATE_REASON_CODES = frozenset(
+    {
+        "DATE_DOC_HEADER",
+        "DATE_GRID_ALIGNED",
+        "DATE_SETTLEMENT_LABEL",
+        "DATE_SECTION_ROW",
+        "DATE_EMAIL_FALLBACK",
+        "DATE_OTHER_VERIFIED",
+    }
+)
+T_DAY_REASON_CODES = frozenset(
+    {
+        "SLOT_T0_NET",
+        "SLOT_T0_EXPLICIT_SUB",
+        "SLOT_T0_EXPLICIT_RED",
+        "SLOT_TPLUS_SCHEDULE",
+        "SLOT_BUSINESS_DAY_HEADER",
+        "SLOT_SECTION_DIRECTION",
+        "SLOT_OTHER_VERIFIED",
+    }
+)
+TRANSFER_AMOUNT_REASON_CODES = frozenset(
+    {
+        "AMOUNT_NET_COLUMN",
+        "AMOUNT_EXPLICIT_SUB",
+        "AMOUNT_EXPLICIT_RED",
+        "AMOUNT_SCHEDULE_BUCKET",
+        "AMOUNT_SIGNED_OUTFLOW",
+        "AMOUNT_OTHER_VERIFIED",
+    }
+)
+SETTLE_CLASS_REASON_CODES = frozenset(
+    {
+        "SETTLE_SAME_DAY_LABEL",
+        "SETTLE_FUTURE_LABEL",
+        "SETTLE_BUSINESS_DAY_HEADER",
+        "SETTLE_PROCESSED_RESULT",
+        "SETTLE_TDAY_FALLBACK",
+        "SETTLE_OTHER_VERIFIED",
+    }
+)
+ORDER_TYPE_REASON_CODES = frozenset(
+    {
+        "ORDER_SIGN_POSITIVE",
+        "ORDER_SIGN_NEGATIVE",
+        "ORDER_LABEL_SUB",
+        "ORDER_LABEL_RED",
+        "ORDER_SECTION_SUB",
+        "ORDER_SECTION_RED",
+        "ORDER_TRANSACTION_TYPE",
+        "ORDER_OTHER_VERIFIED",
+    }
+)
+COUNTERPARTY_DUPLICATE_COPY_REASONS = {
+    "카디프": "duplicate XLSX copy; use PDF attachment",
+    "하나생명": "duplicate PDF copy; use XLSX attachment",
+    "흥국생명-hanais": "duplicate PDF copy; use XLSX attachment",
+}
+HANAIS_DUPLICATE_PDF_HINT_TOKENS = (
+    "duplicate pdf copy",
+    "use xlsx attachment",
+    "xlsx attachment for extraction",
+    "xlsx 첨부",
+    "xlsx attachment",
+    "pdf 사본",
+)
+
+
+def _normalize_reason_code_value(value: object) -> str | None:
+    """자유서술이 섞여도 내부 reason_code는 짧은 상수형 태그로 정규화한다."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    text = unicodedata.normalize("NFC", text).upper()
+    text = re.sub(r"[\s\-]+", "_", text)
+    text = re.sub(r"[^A-Z0-9_]+", "", text)
+    text = re.sub(r"_+", "_", text).strip("_")
+    if not text or len(text) > 64:
+        return None
+    return text
+
+
+def _normalize_reason_summary_value(value: object) -> str:
+    """stage-level 요약은 한 줄 factual summary만 유지한다."""
+    if value is None:
+        return ""
+    text = unicodedata.normalize("NFC", " ".join(str(value).split()))
+    if not text:
+        return ""
+    return text[:REASON_SUMMARY_MAX_CHARS].rstrip()
 
 
 def apply_only_pending_filter(result: ExtractionResult, *, only_pending: bool) -> ExtractionResult:
@@ -120,8 +248,42 @@ class StageModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class FundSeedItem(StageModel):
+class StageItemModel(StageModel):
+    """다음 stage에 전파되는 item-level reason metadata를 공통 처리한다."""
+    allowed_reason_codes: ClassVar[frozenset[str] | None] = None
+    reason_code: str | None = None
+
+    @field_validator("reason_code", mode="before")
+    @classmethod
+    def _normalize_reason_code(cls, value: object) -> str | None:
+        normalized = _normalize_reason_code_value(value)
+        allowed_reason_codes = getattr(cls, "allowed_reason_codes", None)
+        if normalized is not None and allowed_reason_codes and normalized not in allowed_reason_codes:
+            raise ValueError(f"Invalid reason_code for {cls.__name__}: {normalized}")
+        return normalized
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """reason_code가 비어 있으면 item JSON에서 생략한다."""
+        payload = super().model_dump(*args, **kwargs)
+        if payload.get("reason_code") is None:
+            payload.pop("reason_code", None)
+        return payload
+
+
+class StageResultModel(StageModel):
+    """stage-level reason summary와 issue 목록을 공통 처리한다."""
+    reason_summary: str = ""
+    issues: list[str] = Field(default_factory=list)
+
+    @field_validator("reason_summary", mode="before")
+    @classmethod
+    def _normalize_reason_summary(cls, value: object) -> str:
+        return _normalize_reason_summary_value(value)
+
+
+class FundSeedItem(StageItemModel):
     """Stage 1이 발견한 펀드 inventory 후보 1건이다."""
+    allowed_reason_codes: ClassVar[frozenset[str]] = FUND_INVENTORY_REASON_CODES
     fund_code: str = ""
     fund_name: str = ""
 
@@ -134,14 +296,14 @@ class FundSeedItem(StageModel):
         return str(value).strip()
 
 
-class FundSeedResult(StageModel):
+class FundSeedResult(StageResultModel):
     """Stage 1 `fund_inventory` 응답 전체 계약이다."""
     items: list[FundSeedItem] = Field(default_factory=list)
-    issues: list[str] = Field(default_factory=list)
 
 
-class InstructionDocumentItem(StageModel):
+class InstructionDocumentItem(StageItemModel):
     """문서 자체가 실제 지시서인지 판단한 결과 1건이다."""
+    allowed_reason_codes: ClassVar[frozenset[str]] = INSTRUCTION_DOCUMENT_REASON_CODES
     is_instruction_document: bool | None = None
     reason: str = ""
 
@@ -154,14 +316,14 @@ class InstructionDocumentItem(StageModel):
         return str(value).strip()
 
 
-class InstructionDocumentResult(StageModel):
+class InstructionDocumentResult(StageResultModel):
     """사전 문서 판별 stage 응답 전체 계약이다."""
     items: list[InstructionDocumentItem] = Field(default_factory=list)
-    issues: list[str] = Field(default_factory=list)
 
 
-class FundBaseDateItem(StageModel):
+class FundBaseDateItem(StageItemModel):
     """Stage 2가 펀드별 기준일을 붙인 결과 1건이다."""
+    allowed_reason_codes: ClassVar[frozenset[str]] = BASE_DATE_REASON_CODES
     fund_code: str = ""
     fund_name: str = ""
     base_date: str | None = None
@@ -175,14 +337,14 @@ class FundBaseDateItem(StageModel):
         return str(value).strip()
 
 
-class FundBaseDateResult(StageModel):
+class FundBaseDateResult(StageResultModel):
     """Stage 2 `base_date` 응답 전체 계약이다."""
     items: list[FundBaseDateItem] = Field(default_factory=list)
-    issues: list[str] = Field(default_factory=list)
 
 
-class FundSlotItem(StageModel):
+class FundSlotItem(StageItemModel):
     """Stage 3이 확정한 거래 slot 후보 1건이다."""
+    allowed_reason_codes: ClassVar[frozenset[str]] = T_DAY_REASON_CODES
     fund_code: str = ""
     fund_name: str = ""
     base_date: str | None = None
@@ -208,14 +370,14 @@ class FundSlotItem(StageModel):
         return text or None
 
 
-class FundSlotResult(StageModel):
+class FundSlotResult(StageResultModel):
     """Stage 3 `t_day` 응답 전체 계약이다."""
     items: list[FundSlotItem] = Field(default_factory=list)
-    issues: list[str] = Field(default_factory=list)
 
 
-class FundAmountItem(StageModel):
+class FundAmountItem(StageItemModel):
     """Stage 4가 slot별 금액을 붙인 결과 1건이다."""
+    allowed_reason_codes: ClassVar[frozenset[str]] = TRANSFER_AMOUNT_REASON_CODES
     fund_code: str = ""
     fund_name: str = ""
     base_date: str | None = None
@@ -242,14 +404,14 @@ class FundAmountItem(StageModel):
         return text or None
 
 
-class FundAmountResult(StageModel):
+class FundAmountResult(StageResultModel):
     """Stage 4 `transfer_amount` 응답 전체 계약이다."""
     items: list[FundAmountItem] = Field(default_factory=list)
-    issues: list[str] = Field(default_factory=list)
 
 
-class FundSettleItem(StageModel):
+class FundSettleItem(StageItemModel):
     """Stage 5가 settle_class를 붙인 결과 1건이다."""
+    allowed_reason_codes: ClassVar[frozenset[str]] = SETTLE_CLASS_REASON_CODES
     fund_code: str = ""
     fund_name: str = ""
     base_date: str | None = None
@@ -277,14 +439,14 @@ class FundSettleItem(StageModel):
         return text or None
 
 
-class FundSettleResult(StageModel):
+class FundSettleResult(StageResultModel):
     """Stage 5 `settle_class` 응답 전체 계약이다."""
     items: list[FundSettleItem] = Field(default_factory=list)
-    issues: list[str] = Field(default_factory=list)
 
 
-class FundResolvedItem(StageModel):
+class FundResolvedItem(StageItemModel):
     """Stage 6까지 완료된 주문 후보 1건이다."""
+    allowed_reason_codes: ClassVar[frozenset[str]] = ORDER_TYPE_REASON_CODES
     fund_code: str = ""
     fund_name: str = ""
     base_date: str | None = None
@@ -313,10 +475,9 @@ class FundResolvedItem(StageModel):
         return text or None
 
 
-class FundResolvedResult(StageModel):
+class FundResolvedResult(StageResultModel):
     """Stage 6 `order_type` 응답 전체 계약이다."""
     items: list[FundResolvedItem] = Field(default_factory=list)
-    issues: list[str] = Field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -332,6 +493,34 @@ class LLMExtractionOutcome:
     """추출 결과와 invalid raw response artifact를 함께 담는 반환 객체다."""
     result: ExtractionResult
     invalid_response_artifacts: list[InvalidResponseArtifact] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class _ExtractMetricsState:
+    """문서 1건 추출 동안 쌓는 내부 관측성 메타데이터."""
+    started_at_monotonic: float
+    stage_retry_invocations: dict[str, int] = field(default_factory=dict)
+    transport_retry_attempts: dict[str, int] = field(default_factory=dict)
+    llm_batches_started: dict[str, int] = field(default_factory=dict)
+    lock: RLock = field(default_factory=RLock, repr=False)
+
+    def increment_bucket(self, bucket_name: str, stage_name: str, increment: int = 1) -> None:
+        """stage별 카운터 버킷을 thread-safe 하게 증가시킨다."""
+        if increment <= 0:
+            return
+        with self.lock:
+            bucket = getattr(self, bucket_name)
+            bucket[stage_name] = bucket.get(stage_name, 0) + increment
+
+    def snapshot(self) -> dict[str, Any]:
+        """sidecar 저장용 직렬화 가능한 metrics 스냅샷을 만든다."""
+        with self.lock:
+            return {
+                "total_elapsed_seconds": round(max(0.0, time.monotonic() - self.started_at_monotonic), 3),
+                "stage_retry_invocations": dict(sorted(self.stage_retry_invocations.items())),
+                "transport_retry_attempts": dict(sorted(self.transport_retry_attempts.items())),
+                "llm_batches_started": dict(sorted(self.llm_batches_started.items())),
+            }
 
 
 class ExtractionOutcomeError(ValueError):
@@ -424,6 +613,54 @@ def build_extract_llm_log_path(*, debug_output_dir: Path, source_name: str) -> P
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     source_stem = Path(source_name).stem or "document"
     return debug_output_dir / f"{source_stem}_{timestamp}_llm_pipeline.log"
+
+
+def build_extract_llm_metrics_path(*, log_path: Path) -> Path:
+    """문서 1건 추출 로그 옆에 저장할 metrics sidecar 경로를 만든다."""
+    if log_path.name.endswith("_llm_pipeline.log"):
+        stem = log_path.name.removesuffix("_llm_pipeline.log")
+    else:
+        stem = log_path.stem
+    return log_path.with_name(f"{stem}_llm_metrics.json")
+
+
+def _record_extract_metric(bucket_name: str, stage_name: str, increment: int = 1) -> None:
+    """현재 활성 추출 metrics 상태에 stage별 카운터를 기록한다."""
+    state = _ACTIVE_EXTRACT_METRICS.get()
+    if not isinstance(state, _ExtractMetricsState):
+        return
+    state.increment_bucket(bucket_name, stage_name, increment)
+
+
+def _record_stage_retry_invocation(stage_name: str) -> None:
+    _record_extract_metric("stage_retry_invocations", stage_name)
+
+
+def _record_transport_retry_attempt(stage_name: str) -> None:
+    _record_extract_metric("transport_retry_attempts", stage_name)
+
+
+def _record_llm_batch_started(stage_name: str) -> None:
+    _record_extract_metric("llm_batches_started", stage_name)
+
+
+def _write_extract_metrics_sidecar(
+    *,
+    log_path: Path | None,
+    metrics_state: _ExtractMetricsState,
+) -> None:
+    """현재 추출 metrics 스냅샷을 로그 옆 JSON sidecar 로 남긴다."""
+    if log_path is None:
+        return
+    metrics_path = build_extract_llm_metrics_path(log_path=log_path)
+    try:
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        metrics_path.write_text(
+            json.dumps(metrics_state.snapshot(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as exc:  # pragma: no cover - observability helper only
+        logger.warning("Failed to write extract metrics sidecar %s: %s", metrics_path, exc)
 
 
 def _append_local_llm_prompt_log(
@@ -529,6 +766,7 @@ REQUIRED_RETRY_USER_PROMPT_FIELDS = {
 
 OPTIONAL_RETRY_USER_PROMPT_FIELDS = {
     "counterparty_guidance",
+    "previous_reason_summary_text",
 }
 
 SENSITIVE_COUNTERPARTY_GUIDANCE_STAGES = frozenset({"base_date", "transfer_amount", "order_type"})
@@ -927,24 +1165,124 @@ class FundOrderExtractor:
         self._prompt_lock = RLock()
         # __init__ 직후에는 비어 있는 bundle 로 시작하고, 마지막에 정상 YAML 을 강제로 로드한다.
         self.prompt_bundle = PromptBundle(system_prompt="", user_prompt_template="", retry_user_prompt_template="", stages={})
+        self.llm_temperature = float(getattr(settings, "llm_temperature", VA_LLM_TEMPERATURE))
+        self.llm_max_tokens = int(getattr(settings, "llm_max_tokens", VA_LLM_MAX_TOKENS))
+        self.llm_timeout_seconds = int(getattr(settings, "llm_timeout_seconds", VA_LLM_TIMEOUT_SECONDS))
         self.llm = ChatOpenAI(
             model=settings.llm_model,
             base_url=settings.llm_base_url,
             api_key=settings.llm_api_key,
-            temperature=VA_LLM_TEMPERATURE,
-            max_tokens=VA_LLM_MAX_TOKENS,
-            timeout=VA_LLM_TIMEOUT_SECONDS,
+            temperature=self.llm_temperature,
+            max_tokens=self.llm_max_tokens,
+            timeout=self.llm_timeout_seconds,
         )
-        self.stage_batch_size = VA_LLM_STAGE_BATCH_SIZE
-        self.llm_retry_attempts = VA_LLM_RETRY_ATTEMPTS
-        self.llm_retry_backoff_seconds = VA_LLM_RETRY_BACKOFF_SECONDS
-        self.llm_chunk_size_chars = VA_LLM_CHUNK_SIZE_CHARS
+        self.stage_batch_size = max(1, int(getattr(settings, "llm_stage_batch_size", VA_LLM_STAGE_BATCH_SIZE)))
+        self.llm_parallel_workers = max(
+            1,
+            min(
+                MAX_PARALLEL_LLM_BATCH_WORKERS,
+                int(getattr(settings, "llm_parallel_workers", MAX_PARALLEL_LLM_BATCH_WORKERS)),
+            ),
+        )
+        self.llm_retry_attempts = max(1, int(getattr(settings, "llm_retry_attempts", VA_LLM_RETRY_ATTEMPTS)))
+        self.llm_retry_backoff_seconds = max(
+            0.0,
+            float(getattr(settings, "llm_retry_backoff_seconds", VA_LLM_RETRY_BACKOFF_SECONDS)),
+        )
+        self.llm_chunk_size_chars = max(1, int(getattr(settings, "llm_chunk_size_chars", VA_LLM_CHUNK_SIZE_CHARS)))
         # stage issue retry는 운영 설정이 아니라 단계별 코드 상수로 고정한다.
         self.llm_instruction_document_retry_attempts = INSTRUCTION_DOCUMENT_STAGE_ISSUE_RETRY_ATTEMPTS
         self.llm_stage_issue_retry_attempts = OTHER_STAGE_ISSUE_RETRY_ATTEMPTS
-        self._active_stage_retry_context: dict[str, Any] | None = None
         self.system_prompt = ""
         self._refresh_prompt_bundle(force=True)
+
+    @staticmethod
+    def _document_has_sheet_loader_shape(
+        *,
+        raw_text: str | None,
+        markdown_text: str | None,
+    ) -> bool:
+        """loader 산출물이 sheet/spreadsheet 기반 문서인지 본다."""
+        combined = "\n".join(part for part in (markdown_text, raw_text) if part)
+        if not combined:
+            return False
+        return "[SHEET " in combined or "## Sheet " in combined
+
+    @staticmethod
+    def _document_has_page_loader_shape(
+        *,
+        raw_text: str | None,
+        markdown_text: str | None,
+    ) -> bool:
+        """loader 산출물이 page/PDF 기반 문서인지 본다."""
+        combined = "\n".join(part for part in (markdown_text, raw_text) if part)
+        if not combined:
+            return False
+        return "[PAGE " in combined or "## Page " in combined
+
+    @staticmethod
+    def _document_has_hanais_duplicate_pdf_hint(
+        *,
+        raw_text: str | None,
+        markdown_text: str | None,
+    ) -> bool:
+        """흥국생명-hanais duplicate PDF 안내 문구를 deterministic 하게 감지한다."""
+        normalized_text = " ".join(
+            unicodedata.normalize("NFC", part).lower()
+            for part in (markdown_text, raw_text)
+            if part
+        )
+        if not normalized_text:
+            return False
+        compact_text = re.sub(r"\s+", " ", normalized_text)
+        return any(token in compact_text for token in HANAIS_DUPLICATE_PDF_HINT_TOKENS)
+
+    def _detect_pre_llm_non_instruction_reason(
+        self,
+        task_payload: DocumentLoadTaskPayload,
+    ) -> str | None:
+        """LLM stage 1 이전에 deterministic duplicate-copy guard를 먼저 적용한다."""
+        if task_payload.non_instruction_reason:
+            return task_payload.non_instruction_reason
+
+        try:
+            prompt_name = resolve_counterparty_prompt_name(
+                task_payload.source_path,
+                document_text=task_payload.markdown_text or task_payload.raw_text,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to resolve counterparty prompt during pre-LLM duplicate-copy guard for source=%s; "
+                "skipping deterministic duplicate-copy precheck: %s",
+                task_payload.file_name,
+                exc,
+            )
+            return None
+        if prompt_name is None:
+            return None
+
+        if prompt_name == "카디프" and self._document_has_sheet_loader_shape(
+            raw_text=task_payload.raw_text,
+            markdown_text=task_payload.markdown_text,
+        ):
+            return COUNTERPARTY_DUPLICATE_COPY_REASONS[prompt_name]
+        if prompt_name == "하나생명" and self._document_has_page_loader_shape(
+            raw_text=task_payload.raw_text,
+            markdown_text=task_payload.markdown_text,
+        ):
+            return COUNTERPARTY_DUPLICATE_COPY_REASONS[prompt_name]
+        if prompt_name == "흥국생명-hanais" and (
+            self._document_has_page_loader_shape(
+                raw_text=task_payload.raw_text,
+                markdown_text=task_payload.markdown_text,
+            )
+            or self._document_has_hanais_duplicate_pdf_hint(
+                raw_text=task_payload.raw_text,
+                markdown_text=task_payload.markdown_text,
+            )
+        ):
+            return COUNTERPARTY_DUPLICATE_COPY_REASONS[prompt_name]
+        return None
 
     def extract(
         self,
@@ -954,6 +1292,7 @@ class FundOrderExtractor:
         target_fund_scope: TargetFundScope | None = None,
         counterparty_guidance: str | None = None,
         expected_order_count: int | None = None,
+        markdown_loss_detected: bool = False,
     ) -> LLMExtractionOutcome:
         """문서 1건에 대한 end-to-end staged extraction 을 수행한다.
 
@@ -971,7 +1310,7 @@ class FundOrderExtractor:
             primary_text="\n\n==== SECTION ====\n\n".join(chunk for chunk in chunks if chunk.strip()).strip(),
             raw_text=raw_text,
         )
-        structured_markdown_text = markdown_text or self._structured_markdown_view(full_text)
+        structured_markdown_text = None if markdown_loss_detected else (markdown_text or self._structured_markdown_view(full_text))
         issues: list[str] = []
         artifacts: list[InvalidResponseArtifact] = []
 
@@ -1006,11 +1345,12 @@ class FundOrderExtractor:
             counterparty_guidance=counterparty_guidance,
         )
         seeds = self._filter_fund_seeds_by_scope(seeds, target_fund_scope)
-        seeds = self._augment_fund_seeds_from_document(
-            document_text=full_text,
-            seeds=seeds,
-            target_fund_scope=target_fund_scope,
-        )
+        if not markdown_loss_detected:
+            seeds = self._augment_fund_seeds_from_document(
+                document_text=full_text,
+                seeds=seeds,
+                target_fund_scope=target_fund_scope,
+            )
         if not seeds:
             direct_result = self._recover_direct_orders_from_document(
                 document_text=full_text,
@@ -1061,6 +1401,7 @@ class FundOrderExtractor:
         structure_shortcut_orders = self._build_structure_shortcut_orders_after_base_date(
             base_dates=base_dates,
             raw_text=raw_text or full_text,
+            markdown_text=structured_markdown_text,
             target_fund_scope=target_fund_scope,
             expected_order_count=expected_order_count,
         )
@@ -1085,13 +1426,15 @@ class FundOrderExtractor:
             )
             return LLMExtractionOutcome(result=result, invalid_response_artifacts=artifacts)
 
-        markdown_shortcut_orders = self._build_markdown_shortcut_orders_after_base_date(
-            base_dates=base_dates,
-            markdown_text=structured_markdown_text,
-            raw_text=raw_text or full_text,
-            target_fund_scope=target_fund_scope,
-            expected_order_count=expected_order_count,
-        )
+        markdown_shortcut_orders: list[OrderExtraction] = []
+        if structured_markdown_text:
+            markdown_shortcut_orders = self._build_markdown_shortcut_orders_after_base_date(
+                base_dates=base_dates,
+                markdown_text=structured_markdown_text,
+                raw_text=raw_text or full_text,
+                target_fund_scope=target_fund_scope,
+                expected_order_count=expected_order_count,
+            )
         if markdown_shortcut_orders:
             shortcut_issues = self._remove_issues_by_code(list(issues), "DUPLICATE_FUND_CODE_IN_OUTPUT")
             shortcut_issues = self._remove_issues_by_code(shortcut_issues, "AMBIGUOUS_PENDING_DATE_IN_BIGO")
@@ -1136,6 +1479,13 @@ class FundOrderExtractor:
             input_items=[item.model_dump(mode="json") for item in base_dates],
             output_items=slots,
         )
+        slots, forced_t_day_issues = self._reconcile_t_day_stage_output(
+            document_text=full_text,
+            input_items=[item.model_dump(mode="json") for item in base_dates],
+            output_items=slots,
+        )
+        for issue in forced_t_day_issues:
+            self._append_unique(issues, issue)
         if slots and self._t_day_document_slots_are_complete(
             document_text=full_text,
             input_items=[item.model_dump(mode="json") for item in base_dates],
@@ -1166,6 +1516,7 @@ class FundOrderExtractor:
             artifacts=artifacts,
             counterparty_guidance=counterparty_guidance,
         )
+        amounts = self._post_validate_transfer_amount_items(amounts)
         if not amounts:
             direct_result = self._recover_direct_orders_from_document(
                 document_text=full_text,
@@ -1315,24 +1666,32 @@ class FundOrderExtractor:
         - 최종 결과와 모순되는 stale blocking issue 정리
         - 실제로 저장을 막아야 하는 blocking issue만 검사
         """
+        metrics_state = _ExtractMetricsState(started_at_monotonic=time.monotonic())
         log_token = _ACTIVE_EXTRACT_LOG_PATH.set(extract_log_path)
+        metrics_token = _ACTIVE_EXTRACT_METRICS.set(metrics_state)
         try:
-            if task_payload.non_instruction_reason:
+            pre_llm_non_instruction_reason = self._detect_pre_llm_non_instruction_reason(task_payload)
+            if pre_llm_non_instruction_reason:
                 raise ValueError(
                     "Document is not a variable-annuity order instruction. "
-                    f"path={task_payload.source_path} reason={task_payload.non_instruction_reason}"
+                    f"path={task_payload.source_path} reason={pre_llm_non_instruction_reason}"
                 )
 
             if task_payload.allow_empty_result or task_payload.scope_excludes_all_funds:
                 return LLMExtractionOutcome(result=ExtractionResult(orders=[], issues=[]))
 
+            extract_kwargs: dict[str, Any] = {
+                "chunks": list(task_payload.chunks),
+                "raw_text": task_payload.raw_text,
+                "markdown_text": task_payload.markdown_text,
+                "target_fund_scope": task_payload.target_fund_scope,
+                "counterparty_guidance": counterparty_guidance,
+                "expected_order_count": task_payload.expected_order_count,
+            }
+            if task_payload.markdown_loss_detected:
+                extract_kwargs["markdown_loss_detected"] = True
             extraction_outcome = self.extract(
-                chunks=list(task_payload.chunks),
-                raw_text=task_payload.raw_text,
-                markdown_text=task_payload.markdown_text,
-                target_fund_scope=task_payload.target_fund_scope,
-                counterparty_guidance=counterparty_guidance,
-                expected_order_count=task_payload.expected_order_count,
+                **extract_kwargs,
             )
             extraction_result = extraction_outcome.result
 
@@ -1432,6 +1791,11 @@ class FundOrderExtractor:
                 )
             return extraction_outcome
         finally:
+            _write_extract_metrics_sidecar(
+                log_path=extract_log_path,
+                metrics_state=metrics_state,
+            )
+            _ACTIVE_EXTRACT_METRICS.reset(metrics_token)
             _ACTIVE_EXTRACT_LOG_PATH.reset(log_token)
 
     def _can_downgrade_coverage_mismatch(
@@ -1481,7 +1845,7 @@ class FundOrderExtractor:
           같은 stale blocking issue를 제거할지 판단
         """
         return self._can_independently_corroborate_final_orders_from_text(
-            markdown_text=task_payload.markdown_text,
+            markdown_text=None if task_payload.markdown_loss_detected else task_payload.markdown_text,
             raw_text=task_payload.raw_text,
             target_fund_scope=task_payload.target_fund_scope,
             extraction_result=extraction_result,
@@ -1536,7 +1900,7 @@ class FundOrderExtractor:
     ) -> list[OrderExtraction]:
         """LLM stage chain과 독립적인 문서 파서로 최종 주문을 재구성한다."""
         corroborated_orders = self._build_deterministic_markdown_orders(
-            markdown_text=task_payload.markdown_text,
+            markdown_text="" if task_payload.markdown_loss_detected else task_payload.markdown_text,
             raw_text=task_payload.raw_text,
             target_fund_scope=task_payload.target_fund_scope,
         )
@@ -1676,6 +2040,8 @@ class FundOrderExtractor:
         - 기존 LLM 결과가 expected coverage를 못 맞췄거나,
           같은 거래 묶음을 더 정확한 내용으로 교정한다.
         """
+        if task_payload.markdown_loss_detected:
+            return None
         if task_payload.expected_order_count <= 0:
             return None
 
@@ -1767,7 +2133,7 @@ class FundOrderExtractor:
         total_stage_count = len(prompt_bundle.stages)
         all_items: list[FundSeedItem] = []
 
-        for chunk_index, chunk in enumerate(chunks, start=1):
+        def _invoke_chunk(chunk_index: int, chunk: str) -> tuple[_StageInvocation, list[str], str | None]:
             logger.info(
                 "Stage %s/%s: extracting fund seeds from chunk %s/%s",
                 stage.number,
@@ -1775,7 +2141,7 @@ class FundOrderExtractor:
                 chunk_index,
                 len(chunks),
             )
-            response, stage_issues, stage_partial_issue = self._invoke_stage_with_issue_retry(
+            return self._invoke_stage_with_issue_retry(
                 prompt_bundle=prompt_bundle,
                 stage=stage,
                 document_text=self._compose_document_context(chunk, raw_text),
@@ -1785,6 +2151,12 @@ class FundOrderExtractor:
                 target_fund_scope=target_fund_scope,
                 counterparty_guidance=counterparty_guidance,
             )
+
+        for chunk_index, chunk_result in self._execute_indexed_llm_tasks(
+            list(enumerate(chunks, start=1)),
+            _invoke_chunk,
+        ):
+            response, stage_issues, stage_partial_issue = chunk_result
             if response.parsed is None:
                 self._append_unique(issues, "LLM_INVALID_RESPONSE_FORMAT")
                 if response.raw_response:
@@ -1895,7 +2267,17 @@ class FundOrderExtractor:
                 if signature in seen:
                     continue
                 seen.add(signature)
-                derived.append(FundSeedItem(fund_code=fund_code, fund_name=fund_name))
+                derived.append(
+                    FundSeedItem(
+                        fund_code=fund_code,
+                        fund_name=fund_name,
+                        reason_code=self._derive_document_fund_seed_reason_code(
+                            header=header,
+                            row=row,
+                            target_fund_scope=target_fund_scope,
+                        ),
+                    )
+                )
 
         return derived
 
@@ -1980,7 +2362,7 @@ class FundOrderExtractor:
         batches = list(self._chunk_list(input_items, effective_batch_size))
         total_stage_count = len(prompt_bundle.stages)
 
-        for batch_index, batch in enumerate(batches, start=1):
+        def _invoke_batch(batch_index: int, batch: list[dict[str, Any]]) -> tuple[_StageInvocation, list[str], str | None]:
             logger.info(
                 "Stage %s/%s: %s batch %s/%s (items=%s)",
                 stage.number,
@@ -1990,7 +2372,7 @@ class FundOrderExtractor:
                 len(batches),
                 len(batch),
             )
-            response, stage_issues, stage_partial_issue = self._invoke_stage_with_issue_retry(
+            return self._invoke_stage_with_issue_retry(
                 prompt_bundle=prompt_bundle,
                 stage=stage,
                 document_text=document_text,
@@ -1999,6 +2381,12 @@ class FundOrderExtractor:
                 response_model=response_model,
                 counterparty_guidance=counterparty_guidance,
             )
+
+        for batch_index, batch_result in self._execute_indexed_llm_tasks(
+            list(enumerate(batches, start=1)),
+            _invoke_batch,
+        ):
+            response, stage_issues, stage_partial_issue = batch_result
             if response.parsed is None:
                 self._append_unique(issues, "LLM_INVALID_RESPONSE_FORMAT")
                 if response.raw_response:
@@ -2016,6 +2404,55 @@ class FundOrderExtractor:
             collected.extend(response.parsed.items)
 
         return self._dedupe_stage_items(collected)
+
+    @staticmethod
+    def _run_llm_task_in_context(
+        context: Any,
+        worker: Callable[[int, Any], T],
+        task_index: int,
+        payload: Any,
+    ) -> T:
+        """worker thread 안에서도 호출 시점의 contextvars를 유지한다."""
+        return context.run(worker, task_index, payload)
+
+    def _effective_parallel_llm_workers(self) -> int:
+        """실제 동시 LLM 호출 수는 최대 2개로 제한한다."""
+        configured = getattr(self, "llm_parallel_workers", 1)
+        try:
+            return max(1, min(MAX_PARALLEL_LLM_BATCH_WORKERS, int(configured)))
+        except (TypeError, ValueError):
+            return 1
+
+    def _execute_indexed_llm_tasks(
+        self,
+        indexed_payloads: list[tuple[int, Any]],
+        worker: Callable[[int, Any], T],
+    ) -> list[tuple[int, T]]:
+        """독립적인 LLM batch/chunk 호출을 최대 2개까지 병렬 실행하고 순서를 복원한다."""
+        if not indexed_payloads:
+            return []
+
+        max_workers = min(self._effective_parallel_llm_workers(), len(indexed_payloads))
+        if max_workers <= 1:
+            return [(task_index, worker(task_index, payload)) for task_index, payload in indexed_payloads]
+
+        results_by_index: dict[int, T] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_index = {
+                executor.submit(
+                    self._run_llm_task_in_context,
+                    copy_context(),
+                    worker,
+                    task_index,
+                    payload,
+                ): task_index
+                for task_index, payload in indexed_payloads
+            }
+            for future in as_completed(future_to_index):
+                task_index = future_to_index[future]
+                results_by_index[task_index] = future.result()
+
+        return [(task_index, results_by_index[task_index]) for task_index, _ in indexed_payloads]
 
     def _resolve_document_base_date_for_seeds(
         self,
@@ -2039,11 +2476,15 @@ class FundOrderExtractor:
             deterministic_base_date,
         ):
             logger.info("Resolved document base_date deterministically: %s", deterministic_base_date)
-            base_dates = self._fan_out_document_base_date_to_funds(seeds=seeds, base_date=deterministic_base_date)
+            base_dates = self._fan_out_document_base_date_to_funds(
+                seeds=seeds,
+                base_date=deterministic_base_date,
+                reason_code=self._derive_document_base_date_reason_code(reference_text, deterministic_base_date),
+            )
             logger.info("Fanned out document base_date to %s fund seed(s)", len(base_dates))
             return base_dates
 
-        llm_base_date = self._resolve_document_base_date_via_one_shot_llm(
+        llm_base_date, llm_reason_code = self._resolve_document_base_date_via_one_shot_llm(
             prompt_bundle=prompt_bundle,
             base_date_stage=base_date_stage,
             seeds=seeds,
@@ -2056,7 +2497,11 @@ class FundOrderExtractor:
             return None
 
         logger.info("Resolved document base_date via one-shot LLM: %s", llm_base_date)
-        base_dates = self._fan_out_document_base_date_to_funds(seeds=seeds, base_date=llm_base_date)
+        base_dates = self._fan_out_document_base_date_to_funds(
+            seeds=seeds,
+            base_date=llm_base_date,
+            reason_code=llm_reason_code or self._derive_document_base_date_reason_code(reference_text, llm_base_date),
+        )
         logger.info("Fanned out document base_date to %s fund seed(s)", len(base_dates))
         return base_dates
 
@@ -2070,7 +2515,7 @@ class FundOrderExtractor:
         raw_text: str,
         artifacts: list[InvalidResponseArtifact],
         counterparty_guidance: str | None = None,
-    ) -> str | None:
+    ) -> tuple[str | None, str | None]:
         """대표 seed 1건만 넣어 문서 단일 base_date를 1회 LLM으로 확인한다."""
         representative_seed = next(
             (
@@ -2081,7 +2526,7 @@ class FundOrderExtractor:
             None,
         )
         if representative_seed is None:
-            return None
+            return None, None
 
         total_stage_count = len(prompt_bundle.stages)
         logger.info(
@@ -2107,9 +2552,9 @@ class FundOrderExtractor:
                         stage_name=base_date_stage.name,
                     )
                 )
-            return None
+            return None, None
         if stage_issues or partial_issue is not None:
-            return None
+            return None, None
 
         normalized_base_dates = {
             self._normalize_date(item.base_date)
@@ -2117,28 +2562,41 @@ class FundOrderExtractor:
             if self._normalize_date(item.base_date) is not None
         }
         if len(normalized_base_dates) != 1:
-            return None
+            return None, None
 
         candidate = next(iter(normalized_base_dates))
         if self._date_looks_like_reference_only_in_text(raw_text, candidate):
-            return None
-        return candidate
+            return None, None
+
+        item_reason_code = next(
+            (
+                _normalize_reason_code_value(getattr(item, "reason_code", None))
+                for item in invocation.parsed.items
+                if self._normalize_date(item.base_date) == candidate
+                and _normalize_reason_code_value(getattr(item, "reason_code", None)) is not None
+            ),
+            None,
+        )
+        return candidate, item_reason_code
 
     def _fan_out_document_base_date_to_funds(
         self,
         *,
         seeds: list[FundSeedItem],
         base_date: str,
+        reason_code: str | None = None,
     ) -> list[FundBaseDateItem]:
         """문서 단일 base_date를 Stage 2 seed 전체에 동일하게 부여한다."""
         normalized_base_date = self._normalize_date(base_date)
         if normalized_base_date is None:
             return []
+        normalized_reason_code = _normalize_reason_code_value(reason_code) or "DATE_OTHER_VERIFIED"
         return [
             FundBaseDateItem(
                 fund_code=seed.fund_code,
                 fund_name=seed.fund_name,
                 base_date=normalized_base_date,
+                reason_code=normalized_reason_code,
             )
             for seed in seeds
         ]
@@ -2356,10 +2814,11 @@ class FundOrderExtractor:
             return None, None
 
         first_item = items[0]
+        reason_summary = self._normalize_text(getattr(response.parsed, "reason_summary", "")) or None
         if first_item.is_instruction_document is True:
             return True, None
         if first_item.is_instruction_document is False:
-            return False, self._normalize_text(first_item.reason) or None
+            return False, reason_summary or self._normalize_text(first_item.reason) or None
         return None, None
 
     def _invoke_stage_with_issue_retry(
@@ -2394,23 +2853,32 @@ class FundOrderExtractor:
         best_stage_issues: list[str] = []
         best_partial_issue: str | None = None
         best_score: tuple[int, int, int, int] | None = None
+        _record_llm_batch_started(stage.name)
 
         stage_retry_attempts = self._stage_issue_retry_attempt_limit(stage.name)
         total_attempts = stage_retry_attempts + 1
 
         for attempt in range(1, total_attempts + 1):
             retry_context = None
+            if attempt > 1:
+                _record_stage_retry_invocation(stage.name)
             if (
                 attempt > 1
                 and best_invocation is not None
                 and best_invocation.parsed is not None
                 and (best_stage_issues or best_partial_issue is not None)
             ):
+                normalized_best_parsed = self._normalize_stage_retry_parsed(
+                    stage_name=stage.name,
+                    document_text=document_text,
+                    input_items=input_items or [],
+                    parsed=best_invocation.parsed,
+                )
                 retry_context = self._build_stage_retry_context(
                     stage=stage,
                     document_text=document_text,
                     input_items=input_items,
-                    previous_parsed=best_invocation.parsed,
+                    previous_parsed=normalized_best_parsed,
                     stage_issues=best_stage_issues,
                     partial_issue=best_partial_issue,
                     attempt_number=attempt - 1,
@@ -2426,7 +2894,7 @@ class FundOrderExtractor:
                         json.dumps(retry_context["target_issues"], ensure_ascii=False),
                     )
 
-            self._active_stage_retry_context = retry_context
+            retry_context_token = _ACTIVE_STAGE_RETRY_CONTEXT.set(retry_context)
             try:
                 invocation = self._invoke_stage(
                     prompt_bundle=prompt_bundle,
@@ -2438,8 +2906,22 @@ class FundOrderExtractor:
                     counterparty_guidance=counterparty_guidance,
                 )
             finally:
-                self._active_stage_retry_context = None
+                _ACTIVE_STAGE_RETRY_CONTEXT.reset(retry_context_token)
 
+            invocation = self._reconcile_stage_retry_invocation_output(
+                stage_name=stage.name,
+                document_text=document_text,
+                input_items=input_items or [],
+                invocation=invocation,
+            )
+            invocation = self._merge_focused_stage_retry_invocation_output(
+                stage_name=stage.name,
+                document_text=document_text,
+                input_items=input_items or [],
+                current_parsed=best_invocation.parsed if best_invocation is not None else None,
+                invocation=invocation,
+                retry_context=retry_context,
+            )
             stage_issues, partial_issue = self._collect_stage_findings(
                 stage=stage,
                 document_text=document_text,
@@ -2488,6 +2970,7 @@ class FundOrderExtractor:
                             attempt - 1,
                             stage_retry_attempts,
                         )
+                    self._log_stage_reason_summary(stage_name=stage.name, batch_index=batch_index, parsed=invocation.parsed)
                     return invocation, [], None
                 if attempt >= total_attempts:
                     break
@@ -2506,6 +2989,7 @@ class FundOrderExtractor:
             )
 
         assert best_invocation is not None  # _invoke_stage() always returns an invocation object.
+        self._log_stage_reason_summary(stage_name=stage.name, batch_index=batch_index, parsed=best_invocation.parsed)
         return best_invocation, best_stage_issues, best_partial_issue
 
     def _collect_stage_findings(
@@ -2557,10 +3041,22 @@ class FundOrderExtractor:
         if previous_parsed is None:
             return None
 
+        previous_parsed = self._normalize_stage_retry_parsed(
+            stage_name=stage.name,
+            document_text=document_text,
+            input_items=input_items or [],
+            parsed=previous_parsed,
+        )
         previous_output_items = [
             item.model_dump(mode="json") if hasattr(item, "model_dump") else item
             for item in getattr(previous_parsed, "items", [])
         ]
+        previous_output_items = self._normalize_stage_retry_previous_output_items(
+            stage_name=stage.name,
+            document_text=document_text,
+            input_items=input_items or [],
+            previous_output_items=previous_output_items,
+        )
         raw_issues = list(stage_issues)
         if partial_issue is not None:
             raw_issues.append(partial_issue)
@@ -2594,17 +3090,33 @@ class FundOrderExtractor:
             retry_target_issues=target_issues,
             target_fund_scope=target_fund_scope,
         )
+        previous_output_items = self._normalize_stage_retry_context_previous_output_items(
+            stage_name=stage.name,
+            document_text=document_text,
+            input_items=input_items or [],
+            previous_output_items=previous_output_items,
+            focus_items=focus_items,
+        )
         previous_output_items = self._subset_retry_previous_output_items(
             stage_name=stage.name,
             previous_output_items=previous_output_items,
             focus_items=focus_items,
         )
+        previous_output_items = self._normalize_stage_retry_context_previous_output_items(
+            stage_name=stage.name,
+            document_text=document_text,
+            input_items=input_items or [],
+            previous_output_items=previous_output_items,
+            focus_items=focus_items,
+        )
+        previous_reason_summary = _normalize_reason_summary_value(getattr(previous_parsed, "reason_summary", ""))
         return {
             "attempt_number": attempt_number,
             "max_attempts": self._stage_issue_retry_attempt_limit(stage.name),
             "target_issues": target_issues,
             "previous_output_items": previous_output_items,
             "focus_items": focus_items,
+            "previous_reason_summary": previous_reason_summary,
         }
 
     def _effective_stage_batch_size(
@@ -2623,10 +3135,11 @@ class FundOrderExtractor:
         기본값은 전역 `VA_LLM_MAX_TOKENS`를 그대로 쓰고, 응답 shape가 단순한 stage만
         더 낮은 상한을 사용한다. 이 최적화는 거래처명이 아니라 stage 성격에만 의존한다.
         """
+        llm_max_tokens = int(getattr(self, "llm_max_tokens", VA_LLM_MAX_TOKENS))
         configured = STAGE_SPECIFIC_MAX_TOKENS.get(stage_name)
         if configured is None:
-            return VA_LLM_MAX_TOKENS
-        return min(VA_LLM_MAX_TOKENS, int(configured))
+            return llm_max_tokens
+        return min(llm_max_tokens, int(configured))
 
     def _subset_retry_previous_output_items(
         self,
@@ -3158,17 +3671,22 @@ class FundOrderExtractor:
             fallback_missing_families.append(dict(item))
         return fallback_missing_families
 
-    @staticmethod
-    def _dedupe_retry_focus_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _dedupe_retry_focus_items(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Retry focus item JSON은 등장 순서를 유지한 채 dict 단위로 dedupe 한다."""
-        seen: set[str] = set()
+        index_by_dump: dict[str, int] = {}
         deduped: list[dict[str, Any]] = []
         for item in items:
-            key = json.dumps(item, ensure_ascii=False, sort_keys=True)
-            if key in seen:
+            key = json.dumps(
+                self._stage_item_payload_without_metadata(item),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            existing_index = index_by_dump.get(key)
+            if existing_index is not None:
+                deduped[existing_index] = self._merge_stage_item_reason_code(deduped[existing_index], item)
                 continue
-            seen.add(key)
-            deduped.append(item)
+            index_by_dump[key] = len(deduped)
+            deduped.append(dict(item))
         return deduped
 
     def _derive_retry_findings_from_stage_items(
@@ -3287,6 +3805,19 @@ class FundOrderExtractor:
             return True
         if candidate_parsed is None:
             return False
+        if stage.name == "t_day":
+            current_parsed = self._normalize_stage_retry_parsed(
+                stage_name=stage.name,
+                document_text=document_text,
+                input_items=input_items or [],
+                parsed=current_parsed,
+            )
+            candidate_parsed = self._normalize_stage_retry_parsed(
+                stage_name=stage.name,
+                document_text=document_text,
+                input_items=input_items or [],
+                parsed=candidate_parsed,
+            )
 
         current_items = self._stage_items_by_signature(stage.name, getattr(current_parsed, "items", []))
         candidate_items = self._stage_items_by_signature(stage.name, getattr(candidate_parsed, "items", []))
@@ -3449,6 +3980,461 @@ class FundOrderExtractor:
         pattern = boundary + separator.join(escaped_pieces) + r"(?![0-9A-Za-z가-힣])"
         return re.search(pattern, document_text, flags=re.IGNORECASE) is not None
 
+    def _reconcile_stage_retry_invocation_output(
+        self,
+        *,
+        stage_name: str,
+        document_text: str,
+        input_items: list[dict[str, Any]],
+        invocation: "_StageInvocation",
+    ) -> "_StageInvocation":
+        """Retry 판단 전에 stage output을 stage-specific invariant에 맞게 정리한다."""
+        if invocation.parsed is None:
+            return invocation
+
+        if stage_name == "t_day":
+            parsed = self._normalize_stage_retry_parsed(
+                stage_name=stage_name,
+                document_text=document_text,
+                input_items=input_items,
+                parsed=invocation.parsed,
+            )
+        elif stage_name == "transfer_amount":
+            parsed = invocation.parsed.model_copy(
+                update={
+                    "items": self._post_validate_transfer_amount_items(
+                        list(getattr(invocation.parsed, "items", []))
+                    )
+                }
+            )
+        else:
+            return invocation
+        return _StageInvocation(parsed=parsed, raw_response=invocation.raw_response)
+
+    def _merge_focused_stage_retry_invocation_output(
+        self,
+        *,
+        stage_name: str,
+        document_text: str,
+        input_items: list[dict[str, Any]],
+        current_parsed: BaseModel | None,
+        invocation: "_StageInvocation",
+        retry_context: dict[str, Any] | None,
+    ) -> "_StageInvocation":
+        """Focused retry가 subset만 반환해도 현재 best 위에 안전하게 overlay 한다."""
+        if (
+            invocation.parsed is None
+            or current_parsed is None
+            or retry_context is None
+            or stage_name != "t_day"
+            or not list(getattr(invocation.parsed, "items", []))
+        ):
+            return invocation
+
+        current_parsed = self._normalize_stage_retry_parsed(
+            stage_name=stage_name,
+            document_text=document_text,
+            input_items=input_items,
+            parsed=current_parsed,
+        )
+        merged_items = self._merge_t_day_retry_items(
+            current_items=list(getattr(current_parsed, "items", [])),
+            candidate_items=list(getattr(invocation.parsed, "items", [])),
+        )
+        merged_items, forced_issues = self._reconcile_t_day_stage_output(
+            document_text=document_text,
+            input_items=input_items,
+            output_items=merged_items,
+        )
+        merged_issues = self._unique_preserve_order(
+            [self._normalize_text(issue) for issue in getattr(invocation.parsed, "issues", []) if self._normalize_text(issue)]
+            + forced_issues
+        )
+        parsed = invocation.parsed.model_copy(
+            update={
+                "items": merged_items,
+                "issues": merged_issues,
+            }
+        )
+        return _StageInvocation(parsed=parsed, raw_response=invocation.raw_response)
+
+    def _normalize_stage_retry_parsed(
+        self,
+        *,
+        stage_name: str,
+        document_text: str,
+        input_items: list[dict[str, Any]],
+        parsed: BaseModel | None,
+    ) -> BaseModel | None:
+        """Retry 판단/구성에 쓰는 parsed payload를 stage invariant에 맞게 정규화한다."""
+        if parsed is None:
+            return parsed
+        if stage_name == "transfer_amount":
+            return parsed.model_copy(
+                update={
+                    "items": self._post_validate_transfer_amount_items(
+                        list(getattr(parsed, "items", []))
+                    )
+                }
+            )
+        if stage_name != "t_day":
+            return parsed
+
+        normalized_items, forced_issues = self._normalize_stage_retry_previous_output_items_with_issues(
+            stage_name=stage_name,
+            document_text=document_text,
+            input_items=input_items,
+            previous_output_items=[
+                item.model_dump(mode="json") if hasattr(item, "model_dump") else item
+                for item in getattr(parsed, "items", [])
+            ],
+        )
+        normalized_issues = self._unique_preserve_order(
+            [self._normalize_text(issue) for issue in getattr(parsed, "issues", []) if self._normalize_text(issue)]
+            + forced_issues
+        )
+        return parsed.model_copy(
+            update={
+                "items": [FundSlotItem.model_validate(item) for item in normalized_items],
+                "issues": normalized_issues,
+            }
+        )
+
+    def _normalize_stage_retry_previous_output_items(
+        self,
+        *,
+        stage_name: str,
+        document_text: str,
+        input_items: list[dict[str, Any]],
+        previous_output_items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Retry prompt용 previous output을 stage-specific invariant에 맞게 다시 정리한다."""
+        normalized_items, _ = self._normalize_stage_retry_previous_output_items_with_issues(
+            stage_name=stage_name,
+            document_text=document_text,
+            input_items=input_items,
+            previous_output_items=previous_output_items,
+        )
+        return normalized_items
+
+    def _normalize_stage_retry_context_previous_output_items(
+        self,
+        *,
+        stage_name: str,
+        document_text: str,
+        input_items: list[dict[str, Any]],
+        previous_output_items: list[dict[str, Any]],
+        focus_items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Retry prompt용 previous output을 focus repair scope까지 반영해 정리한다."""
+        normalized_items, _ = self._normalize_stage_retry_previous_output_items_with_issues(
+            stage_name=stage_name,
+            document_text=document_text,
+            input_items=input_items,
+            previous_output_items=previous_output_items,
+        )
+        if stage_name != "t_day" or not normalized_items or not focus_items:
+            return normalized_items
+
+        current_items = [FundSlotItem.model_validate(item) for item in normalized_items]
+        candidate_items: list[FundSlotItem] = []
+        expected_slot_ids_by_family: dict[tuple[Any, ...], set[str]] = {}
+
+        for item in focus_items:
+            family_key = self._stage_partial_item_signature("t_day", item)
+            expected_slot_ids = {
+                self._normalize_text(slot_id)
+                for slot_id in list(item.get("retry_expected_family_slots") or [])
+                if self._normalize_text(slot_id)
+            }
+            if expected_slot_ids:
+                expected_slot_ids_by_family.setdefault(family_key, set()).update(expected_slot_ids)
+
+            slot_id = self._normalize_text(item.get("slot_id"))
+            t_day = item.get("t_day")
+            if not slot_id or not isinstance(t_day, int):
+                continue
+            candidate_items.append(FundSlotItem.model_validate(item))
+
+        if candidate_items:
+            current_items = self._merge_t_day_retry_items(
+                current_items=current_items,
+                candidate_items=candidate_items,
+            )
+
+        if expected_slot_ids_by_family:
+            filtered_items: list[FundSlotItem] = []
+            for item in current_items:
+                item_dict = item.model_dump(mode="json")
+                family_key = self._stage_partial_item_signature("t_day", item_dict)
+                expected_slot_ids = expected_slot_ids_by_family.get(family_key)
+                if expected_slot_ids is not None and self._normalize_text(item_dict.get("slot_id")) not in expected_slot_ids:
+                    continue
+                filtered_items.append(item)
+            current_items = filtered_items
+
+        reconciled_items, _ = self._reconcile_t_day_stage_output(
+            document_text=document_text,
+            input_items=input_items,
+            output_items=current_items,
+        )
+        return self._dedupe_retry_focus_items([item.model_dump(mode="json") for item in reconciled_items])
+
+    def _normalize_stage_retry_previous_output_items_with_issues(
+        self,
+        *,
+        stage_name: str,
+        document_text: str,
+        input_items: list[dict[str, Any]],
+        previous_output_items: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        """Retry prompt로 다시 넣기 전 previous output을 stage별 계약으로 정규화한다."""
+        normalized_items = [dict(item) for item in previous_output_items]
+        if not normalized_items:
+            return normalized_items, []
+        if stage_name == "transfer_amount":
+            hydrated_items = [FundAmountItem.model_validate(item) for item in normalized_items]
+            post_validated_items = self._post_validate_transfer_amount_items(hydrated_items)
+            return (
+                self._dedupe_retry_focus_items([item.model_dump(mode="json") for item in post_validated_items]),
+                [],
+            )
+        if stage_name != "t_day":
+            return self._dedupe_retry_focus_items(normalized_items), []
+
+        hydrated_items = [FundSlotItem.model_validate(item) for item in normalized_items]
+        reconciled_items, forced_issues = self._reconcile_t_day_stage_output(
+            document_text=document_text,
+            input_items=input_items,
+            output_items=hydrated_items,
+        )
+        return (
+            self._dedupe_retry_focus_items([item.model_dump(mode="json") for item in reconciled_items]),
+            forced_issues,
+        )
+
+    def _reconcile_t_day_stage_output(
+        self,
+        *,
+        document_text: str,
+        input_items: list[dict[str, Any]],
+        output_items: list[FundSlotItem],
+    ) -> tuple[list[FundSlotItem], list[str]]:
+        """같은 logical evidence cell을 가리키는 stale t_day sibling을 하나로 정리한다."""
+        if not output_items:
+            return output_items, []
+
+        _ = input_items
+        grouped_indexes: dict[tuple[tuple[Any, ...], str], list[int]] = {}
+        for index, item in enumerate(output_items):
+            item_dict = item.model_dump(mode="json")
+            evidence_label = self._normalize_text(item_dict.get("evidence_label"))
+            if not evidence_label:
+                continue
+            family_key = self._stage_partial_item_signature("t_day", item_dict)
+            grouped_indexes.setdefault((family_key, evidence_label), []).append(index)
+
+        winner_by_group: dict[tuple[tuple[Any, ...], str], int] = {}
+        forced_issues: list[str] = []
+        removed_count = 0
+        ambiguous_groups = 0
+        for group_key, indexes in grouped_indexes.items():
+            signatures = {
+                self._stage_item_signature("t_day", output_items[index].model_dump(mode="json"))
+                for index in indexes
+            }
+            if len(signatures) <= 1:
+                continue
+
+            scored_indexes = [
+                (
+                    self._t_day_retry_evidence_item_score(
+                        document_text,
+                        output_items[index].model_dump(mode="json"),
+                    ),
+                    index,
+                )
+                for index in indexes
+            ]
+            best_score = max(score for score, _ in scored_indexes)
+            winner_candidates = [index for score, index in scored_indexes if score == best_score]
+            winner_by_group[group_key] = winner_candidates[0]
+            removed_count += len(indexes) - 1
+            if len(winner_candidates) > 1:
+                ambiguous_groups += 1
+                self._append_unique(forced_issues, "T_DAY_STAGE_PARTIAL")
+
+        if not winner_by_group:
+            return self._dedupe_stage_items(output_items), forced_issues
+
+        reconciled: list[FundSlotItem] = []
+        emitted_groups: set[tuple[tuple[Any, ...], str]] = set()
+        for index, item in enumerate(output_items):
+            item_dict = item.model_dump(mode="json")
+            evidence_label = self._normalize_text(item_dict.get("evidence_label"))
+            if not evidence_label:
+                reconciled.append(item)
+                continue
+            group_key = (self._stage_partial_item_signature("t_day", item_dict), evidence_label)
+            winner_index = winner_by_group.get(group_key)
+            if winner_index is None:
+                reconciled.append(item)
+                continue
+            if group_key in emitted_groups:
+                continue
+            reconciled.append(output_items[winner_index])
+            emitted_groups.add(group_key)
+
+        logger.info(
+            "Reconciled %s conflicting t_day evidence group(s); removed %s stale item(s)%s",
+            len(winner_by_group),
+            removed_count,
+            f"; ambiguous_groups={ambiguous_groups}" if ambiguous_groups else "",
+        )
+        return self._dedupe_stage_items(reconciled), forced_issues
+
+    def _merge_t_day_retry_items(
+        self,
+        *,
+        current_items: list[FundSlotItem],
+        candidate_items: list[FundSlotItem],
+    ) -> list[FundSlotItem]:
+        """Retry subset를 기존 t_day family 위에 overlay 해 stale evidence를 교체한다."""
+        if not current_items:
+            return candidate_items
+        if not candidate_items:
+            return current_items
+
+        merged_by_family: dict[tuple[Any, ...], list[FundSlotItem]] = {}
+        candidate_families: set[tuple[Any, ...]] = set()
+        current_families: dict[tuple[Any, ...], list[FundSlotItem]] = {}
+        for item in current_items:
+            family_key = self._stage_partial_item_signature("t_day", item.model_dump(mode="json"))
+            current_families.setdefault(family_key, []).append(item)
+
+        for family_key, family_items in current_families.items():
+            merged_by_family[family_key] = list(family_items)
+
+        for candidate_item in candidate_items:
+            candidate_dict = candidate_item.model_dump(mode="json")
+            family_key = self._stage_partial_item_signature("t_day", candidate_dict)
+            candidate_families.add(family_key)
+            family_items = merged_by_family.setdefault(family_key, [])
+            family_items = [
+                existing_item
+                for existing_item in family_items
+                if self._stage_items_are_complete("t_day", [existing_item.model_dump(mode="json")])
+            ]
+
+            candidate_signature = self._stage_item_signature("t_day", candidate_dict)
+            candidate_label = self._normalize_text(candidate_dict.get("evidence_label"))
+            family_items = [
+                existing_item
+                for existing_item in family_items
+                if (
+                    self._stage_item_signature("t_day", existing_item.model_dump(mode="json")) != candidate_signature
+                    and (
+                        not candidate_label
+                        or self._normalize_text(existing_item.evidence_label) != candidate_label
+                    )
+                )
+            ]
+            family_items.append(candidate_item)
+            merged_by_family[family_key] = family_items
+
+        merged: list[FundSlotItem] = []
+        emitted_families: set[tuple[Any, ...]] = set()
+        for item in current_items:
+            family_key = self._stage_partial_item_signature("t_day", item.model_dump(mode="json"))
+            if family_key not in candidate_families:
+                merged.append(item)
+                continue
+            if family_key in emitted_families:
+                continue
+            merged.extend(merged_by_family.get(family_key, []))
+            emitted_families.add(family_key)
+
+        for family_key in candidate_families - emitted_families:
+            merged.extend(merged_by_family.get(family_key, []))
+
+        return self._dedupe_stage_items(merged)
+
+    def _t_day_retry_evidence_item_score(
+        self,
+        document_text: str,
+        item: dict[str, Any],
+    ) -> tuple[int, int, int, int]:
+        """같은 evidence cell 안에서 더 신뢰할 수 있는 t_day item을 고른다."""
+        evidence_label = self._normalize_text(item.get("evidence_label"))
+        t_day = item.get("t_day")
+        explicit_t_day = (
+            self._explicit_t_day_from_evidence_label(
+                evidence_label,
+                self._normalize_date(item.get("base_date")),
+            )
+            if evidence_label
+            else None
+        )
+        explicit_match = int(explicit_t_day is not None and isinstance(t_day, int) and t_day == explicit_t_day)
+        has_document_evidence = int(self._t_day_item_has_document_evidence(document_text, item))
+        slot_is_consistent = int(self._t_day_slot_id_matches_t_day(item))
+        populated_fields = self._t_day_item_populated_field_count(item)
+        return (explicit_match, has_document_evidence, slot_is_consistent, populated_fields)
+
+    def _t_day_slot_id_matches_t_day(self, item: dict[str, Any]) -> bool:
+        """slot_id가 현재 t_day/slot kind와 자기 일관성을 가지는지 본다."""
+        t_day = item.get("t_day")
+        if not isinstance(t_day, int):
+            return False
+        slot_id = self._normalize_text(item.get("slot_id"))
+        if not slot_id:
+            return False
+        slot_kind = self._actual_t_day_slot_kind(item)
+        return slot_id == self._deterministic_t_day_slot_id(t_day=t_day, slot_kind=slot_kind)
+
+    def _t_day_item_populated_field_count(self, item: dict[str, Any]) -> int:
+        """동점 해소용으로 t_day item의 populated field 수를 센다."""
+        populated = 0
+        if self._normalize_text(item.get("fund_code")):
+            populated += 1
+        if self._normalize_text(item.get("fund_name")):
+            populated += 1
+        if self._normalize_date(item.get("base_date")) is not None:
+            populated += 1
+        if isinstance(item.get("t_day"), int):
+            populated += 1
+        if self._normalize_text(item.get("slot_id")):
+            populated += 1
+        if self._normalize_text(item.get("evidence_label")):
+            populated += 1
+        return populated
+
+    def _candidate_supersedes_current_t_day_evidence(
+        self,
+        *,
+        document_text: str,
+        current_item: dict[str, Any],
+        candidate_item: dict[str, Any],
+    ) -> bool:
+        """같은 evidence cell의 corrected retry item이 stale current item을 덮을 수 있는지 본다."""
+        current_label = self._normalize_text(current_item.get("evidence_label"))
+        candidate_label = self._normalize_text(candidate_item.get("evidence_label"))
+        if not current_label or current_label != candidate_label:
+            return False
+        if self._stage_partial_item_signature("t_day", current_item) != self._stage_partial_item_signature(
+            "t_day",
+            candidate_item,
+        ):
+            return False
+        if self._stage_item_signature("t_day", current_item) == self._stage_item_signature("t_day", candidate_item):
+            return False
+
+        current_score = self._t_day_retry_evidence_item_score(document_text, current_item)
+        candidate_score = self._t_day_retry_evidence_item_score(document_text, candidate_item)
+        if candidate_score <= current_score:
+            return False
+        return any(candidate_score[:3])
+
     def _can_supersede_t_day_retry_result(
         self,
         *,
@@ -3459,6 +4445,9 @@ class FundOrderExtractor:
         current_partial_issue: str | None,
     ) -> bool:
         """Stage 3은 같은 fund/base_date family에서 slot이 분화될 수 있어 별도 비교가 필요하다."""
+        if self._t_day_output_has_duplicate_evidence(list(candidate_items.values())):
+            return False
+
         current_families = self._group_stage_items_by_family("t_day", current_items.values())
         candidate_families = self._group_stage_items_by_family("t_day", candidate_items.values())
         expected_family_slots = self._derive_expected_t_day_family_slots(
@@ -3509,16 +4498,7 @@ class FundOrderExtractor:
                 self._stage_item_signature("t_day", item)
                 for item in current_family_items
             }
-            seen_candidate_t_day_evidence: set[tuple[int, str]] = set()
             for candidate_item in candidate_family_items:
-                evidence_label = self._normalize_text(candidate_item.get("evidence_label"))
-                t_day = candidate_item.get("t_day")
-                if evidence_label and isinstance(t_day, int):
-                    evidence_key = (t_day, evidence_label)
-                    if evidence_key in seen_candidate_t_day_evidence:
-                        return False
-                    seen_candidate_t_day_evidence.add(evidence_key)
-
                 candidate_signature = self._stage_item_signature("t_day", candidate_item)
                 if candidate_signature in current_family_signatures:
                     continue
@@ -3531,6 +4511,11 @@ class FundOrderExtractor:
                         current_item=current_item,
                         candidate_item=candidate_item,
                     ) in {"same", "improved"}
+                    or self._candidate_supersedes_current_t_day_evidence(
+                        document_text=document_text,
+                        current_item=current_item,
+                        candidate_item=candidate_item,
+                    )
                     for candidate_item in candidate_family_items
                 ):
                     return False
@@ -3550,7 +4535,10 @@ class FundOrderExtractor:
         if not isinstance(t_day, int) or t_day < 0:
             return False
 
-        explicit_t_day = self._explicit_t_day_from_label(evidence_label)
+        explicit_t_day = self._explicit_t_day_from_evidence_label(
+            evidence_label,
+            self._normalize_date(item.get("base_date")),
+        )
         if explicit_t_day is not None:
             return t_day == explicit_t_day
 
@@ -3772,6 +4760,11 @@ class FundOrderExtractor:
                                 t_day=t_day,
                                 slot_id=slot_id,
                                 evidence_label=evidence_label,
+                                reason_code=self._deterministic_t_day_reason_code(
+                                    t_day=t_day,
+                                    slot_id=slot_id,
+                                    evidence_label=evidence_label,
+                                ),
                             ),
                         )
 
@@ -3841,6 +4834,63 @@ class FundOrderExtractor:
         )
         if not deterministic_items:
             return output_items
+
+        expected_family_slots = self._derive_expected_t_day_family_slots(document_text, input_items)
+        deterministic_items_by_family = self._group_stage_items_by_family(
+            "t_day",
+            [item.model_dump(mode="json") for item in deterministic_items],
+        )
+        current_items_by_family = self._group_stage_items_by_family(
+            "t_day",
+            [item.model_dump(mode="json") for item in output_items],
+        )
+        deterministic_actual_slots = self._derive_actual_t_day_family_slots(
+            [item.model_dump(mode="json") for item in deterministic_items]
+        )
+        current_actual_slots = self._derive_actual_t_day_family_slots(
+            [item.model_dump(mode="json") for item in output_items]
+        )
+        if expected_family_slots:
+            replaced_family_count = 0
+            partially_replaced_items: list[FundSlotItem] = []
+            emitted_families: set[tuple[Any, ...]] = set()
+            for item in output_items:
+                family_key = self._stage_partial_item_signature("t_day", item.model_dump(mode="json"))
+                if family_key in emitted_families:
+                    continue
+                emitted_families.add(family_key)
+                expected_slots = expected_family_slots.get(family_key)
+                deterministic_family = deterministic_items_by_family.get(family_key, [])
+                if (
+                    expected_slots
+                    and deterministic_family
+                    and deterministic_actual_slots.get(family_key, set()) == expected_slots
+                    and current_actual_slots.get(family_key, set()) != expected_slots
+                ):
+                    partially_replaced_items.extend(
+                        FundSlotItem.model_validate(deterministic_item)
+                        for deterministic_item in deterministic_family
+                    )
+                    replaced_family_count += 1
+                    continue
+                partially_replaced_items.extend(
+                    FundSlotItem.model_validate(output_family_item)
+                    for output_family_item in current_items_by_family.get(family_key, [])
+                )
+
+            if replaced_family_count:
+                logger.info(
+                    "Replaced %s incomplete t_day family/families with deterministic slot(s) from structured markdown evidence",
+                    replaced_family_count,
+                )
+                output_items = self._dedupe_stage_items(partially_replaced_items)
+                if self._t_day_document_slots_are_complete(
+                    document_text=document_text,
+                    input_items=input_items,
+                    output_items=output_items,
+                ):
+                    return output_items
+
         if not self._t_day_document_slots_are_complete(
             document_text=document_text,
             input_items=input_items,
@@ -3937,6 +4987,10 @@ class FundOrderExtractor:
                     transfer_amount=item.transfer_amount,
                     settle_class=item.settle_class,
                     order_type=order_type.value,
+                    reason_code=self._deterministic_order_type_reason_code(
+                        transfer_amount=item.transfer_amount or "",
+                        evidence_label=item.evidence_label or "",
+                    ),
                 )
             )
 
@@ -3969,6 +5023,10 @@ class FundOrderExtractor:
                     evidence_label=item.evidence_label,
                     transfer_amount=item.transfer_amount,
                     settle_class=settle_class.value,
+                    reason_code=self._deterministic_settle_reason_code(
+                        t_day=item.t_day,
+                        evidence_label=item.evidence_label or "",
+                    ),
                 )
             )
 
@@ -4845,9 +5903,10 @@ class FundOrderExtractor:
     @staticmethod
     def _parse_numeric_amount_text_for_deterministic(value: str | None) -> Decimal | None:
         """deterministic markdown 경로에서 한글 단위 금액까지 안정적으로 읽는다."""
-        if value is None:
+        normalized_token = DocumentLoader._normalize_document_amount_token(value)
+        if normalized_token is None:
             return None
-        normalized = value.strip().replace(",", "").replace(" ", "")
+        normalized = normalized_token.replace(",", "")
         if not normalized or normalized in {"-", "/", "--"}:
             return None
         try:
@@ -5102,11 +6161,55 @@ class FundOrderExtractor:
             section_orders=section_orders,
         )
 
+    def _canonical_fund_families_from_base_dates(
+        self,
+        base_dates: list[FundBaseDateItem],
+    ) -> set[tuple[str, str]]:
+        """base_date stage가 발견한 fund family 집합을 canonical form으로 만든다."""
+        return {
+            self._canonical_fund_identity(item.fund_code, item.fund_name)
+            for item in base_dates
+            if self._normalize_text(item.fund_code) or self._normalize_text(item.fund_name)
+        }
+
+    def _canonical_fund_families_from_orders(
+        self,
+        orders: list[OrderExtraction],
+    ) -> set[tuple[str, str]]:
+        """결정론적으로 복구한 order list를 family 집합으로 축약한다."""
+        return {
+            self._canonical_fund_identity(order.fund_code, order.fund_name)
+            for order in orders
+            if self._normalize_text(order.fund_code) or self._normalize_text(order.fund_name)
+        }
+
+    def _shortcut_active_fund_families_from_document(
+        self,
+        *,
+        document_text: str | None,
+        target_fund_scope: TargetFundScope | None,
+        fallback_orders: list[OrderExtraction],
+    ) -> set[tuple[str, str]]:
+        """문서에 실제 non-zero transaction evidence가 있는 family 집합을 구한다."""
+        if document_text:
+            derived_families = {
+                self._canonical_fund_identity(item.fund_code, item.fund_name)
+                for item in self._derive_document_fund_seed_items(
+                    document_text=document_text,
+                    target_fund_scope=target_fund_scope,
+                )
+                if self._normalize_text(item.fund_code) or self._normalize_text(item.fund_name)
+            }
+            if derived_families:
+                return derived_families
+        return self._canonical_fund_families_from_orders(fallback_orders)
+
     def _build_structure_shortcut_orders_after_base_date(
         self,
         *,
         base_dates: list[FundBaseDateItem],
         raw_text: str,
+        markdown_text: str | None,
         target_fund_scope: TargetFundScope | None,
         expected_order_count: int | None,
     ) -> list[OrderExtraction]:
@@ -5137,11 +6240,7 @@ class FundOrderExtractor:
             return []
         base_date = next(iter(normalized_base_dates))
 
-        expected_families = {
-            self._canonical_fund_identity(item.fund_code, item.fund_name)
-            for item in base_dates
-            if self._normalize_text(item.fund_code) or self._normalize_text(item.fund_name)
-        }
+        expected_families = self._canonical_fund_families_from_base_dates(base_dates)
         if not expected_families:
             return []
 
@@ -5164,12 +6263,15 @@ class FundOrderExtractor:
         ):
             return []
 
-        actual_families = {
-            self._canonical_fund_identity(order.fund_code, order.fund_name)
-            for order in structure_orders
-            if self._normalize_text(order.fund_code) or self._normalize_text(order.fund_name)
-        }
-        if actual_families != expected_families:
+        actual_families = self._canonical_fund_families_from_orders(structure_orders)
+        if not actual_families or not actual_families.issubset(expected_families):
+            return []
+        active_families = self._shortcut_active_fund_families_from_document(
+            document_text=markdown_text,
+            target_fund_scope=target_fund_scope,
+            fallback_orders=structure_orders,
+        )
+        if actual_families != active_families:
             return []
         return structure_orders
 
@@ -5192,11 +6294,7 @@ class FundOrderExtractor:
         ):
             return []
 
-        expected_families = {
-            self._canonical_fund_identity(item.fund_code, item.fund_name)
-            for item in base_dates
-            if self._normalize_text(item.fund_code) or self._normalize_text(item.fund_name)
-        }
+        expected_families = self._canonical_fund_families_from_base_dates(base_dates)
         if not expected_families:
             return []
 
@@ -5233,12 +6331,15 @@ class FundOrderExtractor:
         ):
             return []
 
-        actual_families = {
-            self._canonical_fund_identity(order.fund_code, order.fund_name)
-            for order in markdown_orders
-            if self._normalize_text(order.fund_code) or self._normalize_text(order.fund_name)
-        }
-        if actual_families != expected_families:
+        actual_families = self._canonical_fund_families_from_orders(markdown_orders)
+        if not actual_families or not actual_families.issubset(expected_families):
+            return []
+        active_families = self._shortcut_active_fund_families_from_document(
+            document_text=markdown_text,
+            target_fund_scope=target_fund_scope,
+            fallback_orders=markdown_orders,
+        )
+        if actual_families != active_families:
             return []
         return markdown_orders
 
@@ -5620,6 +6721,36 @@ class FundOrderExtractor:
             return None
         return int(match.group(1))
 
+    def _explicit_t_day_from_evidence_label(
+        self,
+        label: str,
+        base_date: str | None,
+    ) -> int | None:
+        """evidence label이 직접 가리키는 future bucket을 보수적으로 계산한다."""
+        explicit_t_day = self._explicit_t_day_from_label(label)
+        if explicit_t_day is not None:
+            return explicit_t_day
+        if base_date is None:
+            return None
+
+        month_day = self._extract_month_day_from_label(label)
+        if month_day is None:
+            return None
+
+        normalized_base_date = self._normalize_date(base_date)
+        if normalized_base_date is None:
+            return None
+        try:
+            base_datetime = datetime.strptime(normalized_base_date, "%Y-%m-%d")
+            target_datetime = datetime(base_datetime.year, month_day[0], month_day[1])
+        except ValueError:
+            return None
+
+        delta = (target_datetime.date() - base_datetime.date()).days
+        if delta <= 0:
+            return None
+        return delta
+
     def _deterministic_future_bucket_key(self, label: str, base_date: str) -> str | None:
         """date/business-day label을 future bucket 식별자로 정규화한다.
 
@@ -5901,7 +7032,7 @@ class FundOrderExtractor:
         우선 provider 의 JSON mode 를 사용하고, 실패하면 prompt-only 로 한 번 더 시도한다.
         두 번 다 실패하면 parsed=None 으로 반환하고, 상위 호출부가 issue/artifact 처리한다.
         """
-        retry_context = getattr(self, "_active_stage_retry_context", None)
+        retry_context = _ACTIVE_STAGE_RETRY_CONTEXT.get()
         user_prompt = (
             self._build_retry_user_prompt(
                 prompt_bundle=prompt_bundle,
@@ -5987,6 +7118,8 @@ class FundOrderExtractor:
         log_path = _ACTIVE_EXTRACT_LOG_PATH.get()
 
         for attempt in range(1, self.llm_retry_attempts + 1):
+            if attempt > 1:
+                _record_transport_retry_attempt(stage_name)
             try:
                 if attempt == 1:
                     if use_json_mode:
@@ -6205,6 +7338,7 @@ class FundOrderExtractor:
                     ensure_ascii=False,
                     indent=2,
                 ),
+                previous_reason_summary_text=retry_context.get("previous_reason_summary", ""),
                 input_items_json=input_block,
                 document_text=document_text,
                 retry_attempt_number=retry_context.get("attempt_number", 1),
@@ -6504,21 +7638,19 @@ class FundOrderExtractor:
 
     def _t_day_output_has_duplicate_evidence(self, output_items: list[Any]) -> bool:
         """Stage 3 output 안에서 같은 family의 duplicate slot hallucination을 감지한다."""
-        grouped: dict[tuple[Any, ...], dict[tuple[int, str], tuple[Any, ...]]] = {}
+        grouped: dict[tuple[Any, ...], dict[str, tuple[Any, ...]]] = {}
         for item in output_items:
             normalized_item = item.model_dump(mode="json") if hasattr(item, "model_dump") else item
             family_key = self._stage_partial_item_signature("t_day", normalized_item)
             evidence_label = self._normalize_text(normalized_item.get("evidence_label"))
-            t_day = normalized_item.get("t_day")
-            if not evidence_label or not isinstance(t_day, int):
+            if not evidence_label:
                 continue
-            evidence_key = (t_day, evidence_label)
             signature = self._stage_item_signature("t_day", normalized_item)
             seen = grouped.setdefault(family_key, {})
-            previous_signature = seen.get(evidence_key)
+            previous_signature = seen.get(evidence_label)
             if previous_signature is not None and previous_signature != signature:
                 return True
-            seen[evidence_key] = signature
+            seen[evidence_label] = signature
         return False
 
     @staticmethod
@@ -6777,27 +7909,280 @@ class FundOrderExtractor:
             result.append(item)
         return result
 
+    @staticmethod
+    def _stage_item_payload_without_metadata(item: Any) -> dict[str, Any]:
+        """stage item identity 비교 시 reason metadata는 제외한다."""
+        payload = item.model_dump(mode="json") if hasattr(item, "model_dump") else dict(item)
+        return {
+            key: value
+            for key, value in payload.items()
+            if key not in STAGE_ITEM_METADATA_FIELDS and key not in STAGE_RESULT_METADATA_FIELDS
+        }
+
+    @staticmethod
+    def _stage_item_reason_code(item: Any) -> str | None:
+        """stage item에서 내부 reason_code를 읽어 정규화한다."""
+        if hasattr(item, "reason_code"):
+            return _normalize_reason_code_value(getattr(item, "reason_code"))
+        if isinstance(item, dict):
+            return _normalize_reason_code_value(item.get("reason_code"))
+        return None
+
+    def _merge_stage_item_reason_code(self, existing_item: Any, candidate_item: Any) -> Any:
+        """logical duplicate item 병합 시 첫 non-empty reason_code를 유지한다."""
+        merged_reason_code = self._stage_item_reason_code(existing_item) or self._stage_item_reason_code(candidate_item)
+        if hasattr(existing_item, "model_copy"):
+            return existing_item.model_copy(update={"reason_code": merged_reason_code})
+        merged_item = dict(existing_item)
+        if merged_reason_code is None:
+            merged_item.pop("reason_code", None)
+        else:
+            merged_item["reason_code"] = merged_reason_code
+        return merged_item
+
+    @staticmethod
+    def _log_stage_reason_summary(*, stage_name: str, batch_index: int, parsed: BaseModel | None) -> None:
+        """stage-level reason_summary를 로그로 남긴다."""
+        if parsed is None:
+            return
+        reason_summary = _normalize_reason_summary_value(getattr(parsed, "reason_summary", ""))
+        if not reason_summary:
+            return
+        logger.info(
+            "Stage %s batch %s reason_summary: %s",
+            stage_name,
+            batch_index,
+            reason_summary,
+        )
+
+    def _derive_document_fund_seed_reason_code(
+        self,
+        *,
+        header: list[str],
+        row: list[str],
+        target_fund_scope: TargetFundScope | None,
+    ) -> str:
+        """Structured markdown로 보강한 stage 1 seed의 primary reason_code를 정한다."""
+        amount_headers: list[str] = []
+        for index, cell in enumerate(row):
+            amount = self._normalize_amount(cell)
+            if amount is None or self._is_effectively_zero_amount(amount):
+                continue
+            label = self._normalize_text(header[index]) if index < len(header) else ""
+            if label and not self._looks_like_document_amount_label(label):
+                continue
+            if label:
+                amount_headers.append(label)
+
+        if any(self._is_execution_evidence(label) for label in amount_headers):
+            return "FUND_NET_AMOUNT_ROW"
+
+        order_hints = {
+            self._order_type_hint_from_header_label(label)
+            for label in amount_headers
+            if self._order_type_hint_from_header_label(label) is not None
+        }
+        if order_hints == {OrderType.SUB}:
+            return "FUND_EXPLICIT_SUB_ROW"
+        if order_hints == {OrderType.RED}:
+            return "FUND_EXPLICIT_RED_ROW"
+        if target_fund_scope is not None and target_fund_scope.manager_column_present:
+            return "FUND_MANAGER_SCOPED"
+        if target_fund_scope is not None:
+            return "FUND_NO_MANAGER_SCOPE"
+        return "FUND_OTHER_VERIFIED"
+
+    @classmethod
+    def _derive_document_base_date_reason_code(cls, raw_text: str, base_date: str | None) -> str:
+        """문서 단일 base_date가 어떤 근거에서 왔는지 짧은 reason_code로 요약한다."""
+        normalized_base_date = cls._normalize_date(base_date)
+        if not raw_text or normalized_base_date is None:
+            return "DATE_OTHER_VERIFIED"
+        if cls._detect_title_adjacent_base_date_from_text(raw_text) == normalized_base_date:
+            return "DATE_DOC_HEADER"
+        section_nav_dates = cls._collect_section_nav_dates_from_text(raw_text)
+        if section_nav_dates == [normalized_base_date]:
+            return "DATE_SECTION_ROW"
+        transaction_row_dates = cls._collect_transaction_row_dates_from_text(raw_text)
+        if transaction_row_dates == [normalized_base_date]:
+            return "DATE_GRID_ALIGNED"
+        if cls._detect_asia_seoul_base_date_from_text(raw_text) == normalized_base_date:
+            return "DATE_EMAIL_FALLBACK"
+        if cls._date_looks_like_actual_base_date_hint_in_text(raw_text, normalized_base_date):
+            return "DATE_SETTLEMENT_LABEL"
+        if cls._detect_base_date_from_text(raw_text, include_asia_seoul=False) == normalized_base_date:
+            return "DATE_DOC_HEADER"
+        return "DATE_OTHER_VERIFIED"
+
+    def _deterministic_t_day_reason_code(
+        self,
+        *,
+        t_day: int,
+        slot_id: str,
+        evidence_label: str,
+    ) -> str:
+        """Deterministic t_day slot 생성 시 primary reason_code를 정한다."""
+        normalized_label = self._normalize_text(evidence_label)
+        lowered_label = normalized_label.lower()
+        if t_day >= 1:
+            if bool(re.search(r"익+영업일", lowered_label)) or bool(re.search(r"제\s*\d+\s*영업일", lowered_label)):
+                return "SLOT_BUSINESS_DAY_HEADER"
+            return "SLOT_TPLUS_SCHEDULE"
+        if self._is_execution_evidence(normalized_label) or self._normalize_text(slot_id).endswith("_NET"):
+            return "SLOT_T0_NET"
+        section_order_type = self._section_order_type_hint(normalized_label)
+        if section_order_type is not None and not self._is_explicit_order_evidence(normalized_label):
+            return "SLOT_SECTION_DIRECTION"
+        header_order_type = self._order_type_hint_from_header_label(normalized_label)
+        if header_order_type is OrderType.SUB:
+            return "SLOT_T0_EXPLICIT_SUB"
+        if header_order_type is OrderType.RED:
+            return "SLOT_T0_EXPLICIT_RED"
+        return "SLOT_OTHER_VERIFIED"
+
+    def _deterministic_settle_reason_code(
+        self,
+        *,
+        t_day: int | None,
+        evidence_label: str,
+    ) -> str:
+        """Deterministic settle_class 생성 시 primary reason_code를 정한다."""
+        normalized_label = self._normalize_text(evidence_label)
+        lowered_label = normalized_label.lower()
+        if self._evidence_implies_schedule(normalized_label):
+            if bool(re.search(r"익+영업일", lowered_label)) or bool(re.search(r"제\s*\d+\s*영업일", lowered_label)):
+                return "SETTLE_BUSINESS_DAY_HEADER"
+            return "SETTLE_FUTURE_LABEL"
+        if any(
+            token in lowered_label
+            for token in ("정산액", "결제금액", "실행금액", "execution", "settlement", "결제일", "processed")
+        ):
+            return "SETTLE_PROCESSED_RESULT"
+        if any(
+            token in lowered_label
+            for token in (
+                "당일",
+                "확정",
+                "당일이체",
+                "당일투입",
+                "당일인출",
+                "설정금액",
+                "해지금액",
+                "입금액",
+                "출금액",
+                "buy",
+                "sell",
+                "subscription",
+                "redemption",
+            )
+        ):
+            return "SETTLE_SAME_DAY_LABEL"
+        if t_day is not None:
+            return "SETTLE_TDAY_FALLBACK"
+        return "SETTLE_OTHER_VERIFIED"
+
+    def _deterministic_order_type_reason_code(
+        self,
+        *,
+        transfer_amount: str,
+        evidence_label: str,
+    ) -> str:
+        """Deterministic order_type 생성 시 primary reason_code를 정한다."""
+        normalized_amount = self._canonicalize_amount_text(transfer_amount) or ""
+        if normalized_amount.startswith("-"):
+            return "ORDER_SIGN_NEGATIVE"
+        if normalized_amount.startswith("+"):
+            return "ORDER_SIGN_POSITIVE"
+
+        normalized_label = self._normalize_text(evidence_label)
+        section_order_type = self._section_order_type_hint(normalized_label)
+        if section_order_type is not None and not self._is_explicit_order_evidence(normalized_label):
+            return "ORDER_SECTION_SUB" if section_order_type is OrderType.SUB else "ORDER_SECTION_RED"
+
+        header_order_type = self._order_type_hint_from_header_label(normalized_label)
+        if header_order_type is OrderType.SUB:
+            return "ORDER_LABEL_SUB"
+        if header_order_type is OrderType.RED:
+            return "ORDER_LABEL_RED"
+
+        lowered_label = normalized_label.lower()
+        if "transaction type" in lowered_label or "buy&sell" in lowered_label or lowered_label == "구분":
+            return "ORDER_TRANSACTION_TYPE"
+        return "ORDER_OTHER_VERIFIED"
+
+    def _infer_transfer_amount_reason_code(self, item: FundAmountItem | dict[str, Any]) -> str:
+        """Stage 4 item의 primary amount evidence source를 deterministic 하게 분류한다."""
+        if isinstance(item, dict):
+            evidence_label = self._normalize_text(item.get("evidence_label"))
+            t_day_value = item.get("t_day")
+            transfer_amount = item.get("transfer_amount")
+        else:
+            evidence_label = self._normalize_text(item.evidence_label)
+            t_day_value = item.t_day
+            transfer_amount = item.transfer_amount
+
+        t_day = t_day_value if isinstance(t_day_value, int) else None
+        normalized_amount = self._canonicalize_amount_text(transfer_amount) or ""
+
+        if self._is_execution_evidence(evidence_label):
+            return "AMOUNT_NET_COLUMN"
+        if (t_day is not None and t_day >= 1) or self._evidence_implies_schedule(evidence_label):
+            return "AMOUNT_SCHEDULE_BUCKET"
+
+        header_order_type = self._order_type_hint_from_header_label(evidence_label)
+        if header_order_type is OrderType.SUB:
+            return "AMOUNT_EXPLICIT_SUB"
+        if header_order_type is OrderType.RED:
+            return "AMOUNT_EXPLICIT_RED"
+        if normalized_amount.startswith("-"):
+            return "AMOUNT_SIGNED_OUTFLOW"
+        return "AMOUNT_OTHER_VERIFIED"
+
+    def _post_validate_transfer_amount_items(self, items: list[FundAmountItem]) -> list[FundAmountItem]:
+        """Stage 4 output의 reason_code를 deterministic rule로 보정/보강한다."""
+        post_validated: list[FundAmountItem] = []
+        for item in items:
+            inferred_reason_code = self._infer_transfer_amount_reason_code(item)
+            current_reason_code = _normalize_reason_code_value(item.reason_code)
+            if current_reason_code is None or current_reason_code == "AMOUNT_OTHER_VERIFIED":
+                reason_code = inferred_reason_code
+            else:
+                reason_code = current_reason_code
+            post_validated.append(item.model_copy(update={"reason_code": reason_code}))
+        return post_validated
+
     def _dedupe_fund_seeds(self, items: list[FundSeedItem]) -> list[FundSeedItem]:
         """Stage 1 fund seed를 `(fund_code, fund_name)` 기준으로 중복 제거한다."""
         result: list[FundSeedItem] = []
-        seen: set[tuple[str, str]] = set()
+        index_by_key: dict[tuple[str, str], int] = {}
         for item in items:
             key = (self._normalize_text(item.fund_code), self._normalize_text(item.fund_name))
-            if not all(key) or key in seen:
+            if not all(key):
                 continue
-            seen.add(key)
-            result.append(FundSeedItem(fund_code=key[0], fund_name=key[1]))
+            normalized_item = item.model_copy(update={"fund_code": key[0], "fund_name": key[1]})
+            existing_index = index_by_key.get(key)
+            if existing_index is not None:
+                result[existing_index] = self._merge_stage_item_reason_code(result[existing_index], normalized_item)
+                continue
+            index_by_key[key] = len(result)
+            result.append(normalized_item)
         return result
 
     def _dedupe_stage_items(self, items: list[Any]) -> list[Any]:
         """같은 stage item이 여러 batch/chunk에서 반복될 때 하나만 남긴다."""
         result: list[Any] = []
-        seen: set[str] = set()
+        index_by_dump: dict[str, int] = {}
         for item in items:
-            dumped = json.dumps(item.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
-            if dumped in seen:
+            dumped = json.dumps(
+                self._stage_item_payload_without_metadata(item),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            existing_index = index_by_dump.get(dumped)
+            if existing_index is not None:
+                result[existing_index] = self._merge_stage_item_reason_code(result[existing_index], item)
                 continue
-            seen.add(dumped)
+            index_by_dump[dumped] = len(result)
             result.append(item)
         return result
 

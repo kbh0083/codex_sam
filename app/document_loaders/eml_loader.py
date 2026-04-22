@@ -141,7 +141,18 @@ class EmlDocumentLoaderMixin:
         body_candidates = self._collect_eml_body_candidates(message, source_label=file_path.name)
         if body_candidates:
             _, body_lines, render_hints = max(body_candidates, key=lambda item: item[0])
-            return "\n".join(header_lines + [""] + body_lines).strip(), render_hints
+            merged_render_hints = render_hints
+            if isinstance(render_hints, dict):
+                markdown_blocks = render_hints.get("markdown_blocks")
+                if isinstance(markdown_blocks, list):
+                    merged_render_hints = dict(render_hints)
+                    merged_render_hints["preferred_markdown_text"] = self._compose_html_section_markdown(
+                        section_label="EML",
+                        source_label=file_path.name,
+                        preamble_lines=header_lines[1:],
+                        markdown_blocks=[str(block) for block in markdown_blocks],
+                    )
+            return "\n".join(header_lines + [""] + body_lines).strip(), merged_render_hints
 
         raise ValueError("No extractable text found in EML document.")
 

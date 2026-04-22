@@ -10,9 +10,13 @@
 - 문서는 항상 두 형태로 관리됩니다.
   - `raw_text`: 원문 보존용
   - `markdown_text`: LLM 입력용 구조화 표현
-- 추출은 항상 `6단계 staged LLM extraction`으로 수행합니다.
+- 추출은 항상 `7-stage LLM extraction`을 기본으로 수행합니다.
+  - `instruction_document -> fund_inventory -> base_date -> t_day -> transfer_amount -> settle_class -> order_type`
+  - `base_date` 이후에는 구조 기반 shortcut과 markdown shortcut으로 일부 stage를 건너뛸 수 있습니다.
 - 결과는 저장 전에 `coverage 검증`과 `blocking issue 검증`을 통과해야 합니다.
 - 통보문/안내 메일처럼 지시서가 아닌 문서는 추출 전에 명시적 예외로 차단합니다.
+- 문서측 금액 판별은 `₩`, `￦`, `KRW`, `원`, Unicode whitespace가 섞인 순수 금액 셀도 인식합니다.
+  - 이 정규화는 `structured markdown`, coverage, deterministic document parser에만 적용되고 `raw_text` 원문 보존은 유지합니다.
 - CLI는 검증을 통과한 결과만 JSON/CSV로 생성합니다.
 - 다른 서버에서 재사용할 때는 `ExtractionComponent`를 진입점으로 사용하면 같은 검증/병합/CSV 규칙과 handler A/B 경로를 그대로 공유할 수 있습니다.
 - `ExtractionService`를 직접 쓰더라도 내부적으로는 동일하게 `DocumentLoader 결과 JSON 저장 -> 재로딩 -> FundOrderExtractor` 경로를 탑니다.
@@ -38,10 +42,10 @@
 최근에는 처음 합류한 개발자도 빠르게 흐름을 따라갈 수 있도록
 핵심 helper 레벨까지 한국어 주석을 자세히 보강했다.
 
-처음 보는 개발자를 위한 개별 가이드는 아래 문서를 보면 된다.
+처음 보는 개발자를 위한 문서 체계는 아래 순서로 보면 된다.
 
-- [DocumentLoader 가이드](/Users/bhkim/Documents/codex_prj_sam_asset/readme/DocumentLoader_가이드.md)
-- [FundOrderExtractor 가이드](/Users/bhkim/Documents/codex_prj_sam_asset/readme/FundOrderExtractor_가이드.md)
+- [시작 안내](/Users/bhkim/Documents/codex_prj_sam_asset/readme/00_시작_안내.md)
+- [시스템 구성 가이드](/Users/bhkim/Documents/codex_prj_sam_asset/readme/01_시스템_구성_가이드.md)
 
 - [app/document_loader.py](/Users/bhkim/Documents/codex_prj_sam_asset/app/document_loader.py)
   - markdown 변환, coverage, identity dedupe가 왜 그렇게 동작하는지 설명
@@ -50,7 +54,7 @@
 - [app/document_loaders/html_loader.py](/Users/bhkim/Documents/codex_prj_sam_asset/app/document_loaders/html_loader.py)
   - rowspan/colspan 전개와 repeated value blanking 이유 설명
 - [app/extractor.py](/Users/bhkim/Documents/codex_prj_sam_asset/app/extractor.py)
-  - 6단계 stage 모델, evidence 집계, final issue 정리 의도 설명
+  - 7-stage 모델, evidence 집계, final issue 정리 의도 설명
 
 새 문서 변형이 들어왔을 때는 함수 이름만 보기보다,
 해당 helper 위 주석에서 "어떤 오탐/누락을 막기 위해 존재하는지"를 먼저 읽는 편이
@@ -80,12 +84,12 @@
    - [app/document_loaders/html_loader.py](/Users/bhkim/Documents/codex_prj_sam_asset/app/document_loaders/html_loader.py)
    - [app/document_loaders/excel_loader.py](/Users/bhkim/Documents/codex_prj_sam_asset/app/document_loaders/excel_loader.py)
 6. [app/extractor.py](/Users/bhkim/Documents/codex_prj_sam_asset/app/extractor.py)
-   - 6단계 staged LLM extraction
+   - 7-stage LLM extraction
    - YAML prompt 로드, 응답 파싱, 정규화, 충돌 해소
 7. [app/schemas.py](/Users/bhkim/Documents/codex_prj_sam_asset/app/schemas.py)
    - 최종 데이터 계약
 8. [app/prompts/extraction_prompts.yaml](/Users/bhkim/Documents/codex_prj_sam_asset/app/prompts/extraction_prompts.yaml)
-   - system prompt, 공통 user prompt template, 6단계 stage prompt 정의
+   - system prompt, 공통 user prompt template, 7-stage prompt 정의
 
 ## 런타임 아키텍처
 
@@ -100,12 +104,13 @@ CLI / Host Application
     -> Handler B
       -> DocumentLoadTaskPayload(JSON reload)
       -> FundOrderExtractor
-        -> Stage 1: fund_inventory
-        -> Stage 2: base_date
-        -> Stage 3: t_day / slot_id / evidence_label
-        -> Stage 4: transfer_amount
-        -> Stage 5: settle_class
-        -> Stage 6: order_type
+        -> Stage 1: instruction_document
+        -> Stage 2: fund_inventory
+        -> Stage 3: base_date
+        -> Stage 4: t_day / slot_id / evidence_label
+        -> Stage 5: transfer_amount
+        -> Stage 6: settle_class
+        -> Stage 7: order_type
       -> deterministic normalization
       -> coverage validation
       -> blocking issue validation
@@ -159,16 +164,16 @@ PDF는 단순 `extract_text()`만으로는 품질이 부족해서, 추가 보정
 
 즉 PDF 로더는 단순 텍스트 추출기가 아니라, **LLM이 읽기 좋은 거래 지시서 표현을 만드는 전처리기** 역할을 합니다.
 
-### 4. 6단계 staged LLM extraction
+### 4. 7-stage LLM extraction
 
-[app/extractor.py](/Users/bhkim/Documents/codex_prj_sam_asset/app/extractor.py) 는 한 번에 전체 주문을 만들지 않고, 다음 6단계로 나눠 처리합니다.
+[app/extractor.py](/Users/bhkim/Documents/codex_prj_sam_asset/app/extractor.py) 는 한 번에 전체 주문을 만들지 않고, 다음 7단계로 나눠 처리합니다.
 
 프롬프트 원문은 코드에 직접 하드코딩하지 않고 [app/prompts/extraction_prompts.yaml](/Users/bhkim/Documents/codex_prj_sam_asset/app/prompts/extraction_prompts.yaml) 에서 읽습니다.
 즉 system prompt, 공통 user wrapper, stage별 지시문 수정은 YAML 파일만 변경하면 됩니다.
 YAML 로드 시에는 공통 user prompt template의 placeholder를 바로 검증하므로, 오타가 있으면 추출 단계 진입 전에 명확한 예외로 실패합니다.
 또한 long-running 프로세스에서도 YAML 파일 수정 시 다음 추출 요청에서 자동으로 다시 로드합니다.
 운영 중 YAML 파일이 일시적으로 깨져도, 이미 로드된 마지막 정상 프롬프트가 있으면 그 버전으로 계속 처리하고 경고 로그만 남깁니다.
-각 추출 요청은 시작 시점의 프롬프트 스냅샷을 고정해서 stage 1~6 전체를 같은 버전으로 처리합니다.
+각 추출 요청은 시작 시점의 프롬프트 스냅샷을 고정해서 stage 1~7 전체를 같은 버전으로 처리합니다.
 
 ### 4-1. 현재 CLI와 WAS가 같은 경로를 타는 이유
 
@@ -213,18 +218,21 @@ WAS에서는 queue 기반으로 handler A/B를 따로 구현해야 해서 실행
 ./.venv/bin/python main.py -f /path/to/order.pdf --only-pending
 ```
 
-1. `fund_inventory`
+1. `instruction_document`
+   - 실제 변액일임 주문 지시서인지 판정
+   - explicit RED/outflow 컬럼의 non-zero 음수 printed amount도 actionable order evidence로 본다
+2. `fund_inventory`
    - `fund_code`, `fund_name` 전수 수집
-2. `base_date`
+3. `base_date`
    - 각 fund의 기준일 추출
-3. `t_day`
+4. `t_day`
    - 거래 slot 나열
    - `t_day`, `slot_id`, `evidence_label` 생성
-4. `transfer_amount`
+5. `transfer_amount`
    - slot별 금액 확정
-5. `settle_class`
+6. `settle_class`
    - `CONFIRMED` / `PENDING`
-6. `order_type`
+7. `order_type`
    - `SUB` / `RED`
 
 ### 5. evidence_label의 역할
@@ -356,12 +364,12 @@ payload = component.extract_document_payload(
 
 WAS 포팅 상세 설명과 최소 샘플 구조는 아래 문서를 같이 보면 됩니다.
 
-- [readme/WAS_포팅_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/WAS_포팅_가이드.md)
-- [readme/DocumentLoader_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/DocumentLoader_가이드.md)
+- [readme/02_WAS_병합_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/02_WAS_병합_가이드.md)
+- [readme/01_시스템_구성_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/01_시스템_구성_가이드.md)
 - [examples/was_minimal/README.md](/Users/bhkim/Documents/codex_prj_sam_asset/examples/was_minimal/README.md)
 
 `DocumentLoader`만 따로 떼어 쓰고 싶다면,
-[readme/DocumentLoader_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/DocumentLoader_가이드.md)를 먼저 보면 된다.
+[readme/01_시스템_구성_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/01_시스템_구성_가이드.md)의 `DocumentLoader 단독 사용 빠른 참조`부터 보면 된다.
 
 포팅 시 기준을 짧게 정리하면 이렇다.
 - `DocumentLoader` 소스 위치는 복사한 패키지 기준으로 결정된다.

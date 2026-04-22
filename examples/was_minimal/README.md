@@ -33,4 +33,4 @@ Controller
 - 추출/병합 규칙은 `ExtractionComponent`를 통해 공통 재사용한다.
 - WAS로 포팅할 때 CLI 로직을 다시 옮기지 않아도 된다.
 
-자세한 설명은 [WAS_포팅_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/WAS_포팅_가이드.md)를 함께 보면 된다.
+자세한 설명은 [02_WAS_병합_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/02_WAS_병합_가이드.md)를 함께 보면 된다.

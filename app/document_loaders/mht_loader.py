@@ -60,6 +60,11 @@ class MhtDocumentLoaderMixin:
 
         text_parts: list[str] = []
         pipe_table_hints: list[dict[str, object]] = []
+        markdown_blocks: list[str] = []
+        label_tokens: list[str] = []
+        table_row_tokens: list[str] = []
+        inherited_row_tokens: list[str] = []
+        row_kind_tokens: list[str] = []
         for html in html_parts:
             if not html:
                 continue
@@ -79,14 +84,48 @@ class MhtDocumentLoaderMixin:
                         for table_hint in raw_pipe_table_hints
                         if isinstance(table_hint, dict)
                     )
+                raw_markdown_blocks = render_hints.get("markdown_blocks")
+                if isinstance(raw_markdown_blocks, list):
+                    markdown_blocks.extend(str(block) for block in raw_markdown_blocks if str(block).strip())
+                raw_audit = render_hints.get("html_markdown_audit")
+                if isinstance(raw_audit, dict):
+                    label_tokens.extend(
+                        str(token) for token in raw_audit.get("label_tokens", []) if str(token).strip()
+                    )
+                    table_row_tokens.extend(
+                        str(token) for token in raw_audit.get("table_row_tokens", []) if str(token).strip()
+                    )
+                    inherited_row_tokens.extend(
+                        str(token) for token in raw_audit.get("inherited_row_tokens", []) if str(token).strip()
+                    )
+                    row_kind_tokens.extend(
+                        str(token) for token in raw_audit.get("row_kind_tokens", []) if str(token).strip()
+                    )
             body_text = self._strip_mht_header_from_raw_text(html_raw_text, file_path.name)
             if body_text:
                 text_parts.append(body_text)
         normalized_text = "\n\n".join(part for part in text_parts if part).strip()
         if not normalized_text:
             return "", None
-        if pipe_table_hints:
-            return normalized_text, {"pipe_table_hints": pipe_table_hints}
+        if pipe_table_hints or markdown_blocks:
+            render_hints: dict[str, object] = {
+                "pipe_table_hints": pipe_table_hints,
+                "markdown_blocks": markdown_blocks,
+                "html_markdown_audit": {
+                    "label_tokens": self._dedupe_preserve_order(label_tokens),
+                    "table_row_tokens": self._dedupe_preserve_order(table_row_tokens),
+                    "inherited_row_tokens": self._dedupe_preserve_order(inherited_row_tokens),
+                    "row_kind_tokens": self._dedupe_preserve_order(row_kind_tokens),
+                },
+            }
+            if markdown_blocks:
+                render_hints["preferred_markdown_text"] = self._compose_html_section_markdown(
+                    section_label="MHT",
+                    source_label=file_path.name,
+                    preamble_lines=[],
+                    markdown_blocks=markdown_blocks,
+                )
+            return normalized_text, render_hints
         return normalized_text, None
 
     @staticmethod

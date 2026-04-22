@@ -13,6 +13,11 @@ from app.document_loader import DocumentLoadTaskPayload, DocumentLoader, TargetF
 from pdfminer.pdfdocument import PDFPasswordIncorrect
 from pdfplumber.utils.exceptions import PdfminerException
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DOCUMENT_DIR = REPO_ROOT / "document"
+METLIFE_ADDITIONAL_SUB_PATH = DOCUMENT_DIR / "메트라이프생명_0408_추가_추가설정.eml"
+METLIFE_ADDITIONAL_RED_PATH = DOCUMENT_DIR / "메트라이프생명_추가설정해지_0408.eml"
+
 
 class DocumentLoaderMarkdownTests(unittest.TestCase):
     """`DocumentLoader`의 markdown/coverage 변환 규칙을 회귀 테스트한다."""
@@ -194,6 +199,19 @@ class DocumentLoaderMarkdownTests(unittest.TestCase):
         estimated = self.loader.estimate_order_cell_count(raw_text)
 
         self.assertEqual(estimated, 1)
+
+    def test_currency_decorated_amount_tokens_are_recognized_for_document_side_parsing(self) -> None:
+        self.assertTrue(self.loader._is_amount_string("₩12,082,790"))
+        self.assertTrue(self.loader._is_amount_string("-₩23 ,182,592"))
+        self.assertTrue(self.loader._is_amount_string("KRW\t100"))
+        self.assertTrue(self.loader._is_amount_string("₩\u00a0123"))
+        self.assertEqual(self.loader._parse_numeric_amount_text("₩12,082,790"), 12082790.0)
+        self.assertEqual(self.loader._parse_numeric_amount_text("-₩23 ,182,592"), -23182592.0)
+        self.assertEqual(self.loader._parse_numeric_amount_text("KRW\t100"), 100.0)
+        self.assertEqual(self.loader._parse_numeric_amount_text("₩\u00a0123"), 123.0)
+        self.assertTrue(self.loader._is_zero_amount("₩0"))
+        self.assertEqual(self.loader._normalize_pipe_cell("₩\u00a0123"), "123")
+        self.assertEqual(self.loader._normalize_pipe_cell("-₩23 ,182,592"), "-23,182,592")
 
     def test_prefer_plain_pdf_text_uses_table_when_table_coverage_is_better(self) -> None:
         plain_text = (
@@ -395,10 +413,12 @@ class DocumentLoaderMarkdownTests(unittest.TestCase):
             extracted = self.loader.load(html_path)
             markdown = extracted.markdown_text
 
-        self.assertIn("| 펀드코드 | 펀드명 | 구분 |", markdown)
+        self.assertIn("투자일임/수익증권 / 구분", markdown)
         self.assertIn("| V2201S | VUL적립 성장주식형 | 입금 | 21,187,951 | -36,400,000 |", markdown)
-        self.assertIn("| V2201S | VUL적립 성장주식형 | 출금 |  |  |", markdown)
-        self.assertIn("| V2201S | VUL적립 성장주식형 | 환매 / 신청 |  |  |", markdown)
+        self.assertIn("| V2201S | VUL적립 성장주식형 | 출금 | 21,187,951 | -36,400,000 |", markdown)
+        self.assertIn("| V2201S | VUL적립 성장주식형 | 환매 / 신청 | 21,187,951 | -36,400,000 |", markdown)
+        self.assertFalse(extracted.markdown_loss_detected)
+        self.assertEqual(extracted.effective_llm_text_kind, "markdown_text")
 
     def test_build_markdown_does_not_blank_same_amount_rows_without_html_inheritance_hints(self) -> None:
         raw_text = (
@@ -477,7 +497,7 @@ class DocumentLoaderMarkdownTests(unittest.TestCase):
         self.assertIn("11-28-2025 | 151128 | AIA VUL Alpha | 1,311,285 | 55,901,379", extracted.raw_text)
         self.assertIn("## EML sample.eml", extracted.markdown_text)
 
-    def test_load_eml_html_body_preserves_hanhwa_rowspan_raw_text_and_suppresses_inherited_markdown_amounts(self) -> None:
+    def test_load_eml_html_body_preserves_hanhwa_rowspan_context_in_markdown(self) -> None:
         message = EmailMessage()
         message["Subject"] = "한화 html body"
         message.add_alternative(
@@ -501,7 +521,8 @@ class DocumentLoaderMarkdownTests(unittest.TestCase):
         self.assertIn("V2201S | VUL적립 성장주식형 | 입금 | 21,187,951 | -36,400,000", extracted.raw_text)
         self.assertIn("V2201S | VUL적립 성장주식형 | 출금 | 21,187,951 | -36,400,000", extracted.raw_text)
         self.assertIn("| V2201S | VUL적립 성장주식형 | 입금 | 21,187,951 | -36,400,000 |", extracted.markdown_text)
-        self.assertIn("| V2201S | VUL적립 성장주식형 | 출금 |  |  |", extracted.markdown_text)
+        self.assertIn("| V2201S | VUL적립 성장주식형 | 출금 | 21,187,951 | -36,400,000 |", extracted.markdown_text)
+        self.assertFalse(extracted.markdown_loss_detected)
 
     def test_load_mht_extracts_main_html_body_with_unicode_charset(self) -> None:
         html = """<html><body>
@@ -538,7 +559,7 @@ class DocumentLoaderMarkdownTests(unittest.TestCase):
         self.assertIn("5440 | 삼성혼합형 | 12,345,678", extracted.raw_text)
         self.assertIn("## MHT sample.mht", extracted.markdown_text)
 
-    def test_load_mht_preserves_html_rowspan_render_hints_in_markdown(self) -> None:
+    def test_load_mht_preserves_html_rowspan_context_in_markdown(self) -> None:
         html = """<html><body>
         <table>
           <tr><th>펀드코드</th><th>펀드명</th><th>구분</th><th>펀드계</th><th>익영업일 이체예상금액</th></tr>
@@ -570,7 +591,34 @@ class DocumentLoaderMarkdownTests(unittest.TestCase):
         self.assertIn("V2201S | VUL적립 성장주식형 | 입금 | 21,187,951 | -36,400,000", extracted.raw_text)
         self.assertIn("V2201S | VUL적립 성장주식형 | 출금 | 21,187,951 | -36,400,000", extracted.raw_text)
         self.assertIn("| V2201S | VUL적립 성장주식형 | 입금 | 21,187,951 | -36,400,000 |", extracted.markdown_text)
-        self.assertIn("| V2201S | VUL적립 성장주식형 | 출금 |  |  |", extracted.markdown_text)
+        self.assertIn("| V2201S | VUL적립 성장주식형 | 출금 | 21,187,951 | -36,400,000 |", extracted.markdown_text)
+        self.assertFalse(extracted.markdown_loss_detected)
+
+    def test_build_task_payload_falls_back_to_raw_chunks_when_html_markdown_audit_fails(self) -> None:
+        html = """<!doctype html>
+<html lang="ko">
+  <body>
+    <table>
+      <tr><th>펀드코드</th><th>펀드명</th><th>구분</th><th>설정금액</th></tr>
+      <tr><td>V2201S</td><td>VUL적립 성장주식형</td><td>입금</td><td>21,187,951</td></tr>
+    </table>
+  </body>
+</html>
+"""
+        with TemporaryDirectory() as tmp_dir:
+            html_path = Path(tmp_dir) / "audit-fail.html"
+            html_path.write_text(html, encoding="utf-8")
+
+            with patch.object(self.loader, "_audit_html_markdown_loss", return_value=["html_label_missing"]):
+                payload = self.loader.build_task_payload(html_path, chunk_size_chars=12000)
+
+        self.assertTrue(payload.markdown_loss_detected)
+        self.assertEqual(payload.markdown_loss_reasons, ("html_label_missing",))
+        self.assertEqual(payload.effective_llm_text_kind, "raw_text")
+        self.assertEqual(
+            payload.chunks,
+            tuple(self.loader.split_for_llm(payload.raw_text, chunk_size_chars=12000)),
+        )
 
     def test_load_xls_uses_biff_parser_and_skips_hidden_rows_cols(self) -> None:
         fake_sheet = MagicMock()
@@ -947,6 +995,30 @@ class DocumentLoaderMarkdownTests(unittest.TestCase):
 
         self.assertTrue(payload.allow_empty_result)
         self.assertIsNone(payload.non_instruction_reason)
+
+    def test_build_task_payload_counts_metlife_additional_subscription_email_as_one_order(self) -> None:
+        if not METLIFE_ADDITIONAL_SUB_PATH.exists():
+            self.skipTest(f"missing actual MetLife fixture: {METLIFE_ADDITIONAL_SUB_PATH}")
+
+        payload = self.loader.build_task_payload(METLIFE_ADDITIONAL_SUB_PATH, chunk_size_chars=12000)
+
+        self.assertEqual(payload.expected_order_count, 1)
+        self.assertIsNone(payload.non_instruction_reason)
+        self.assertFalse(payload.allow_empty_result)
+        self.assertIn("| / | MyFund Vul 혼합안정형 (주식)-삼성 |", payload.markdown_text)
+        self.assertIn("| 현금 | 12,082,790 |", payload.markdown_text)
+
+    def test_build_task_payload_counts_metlife_additional_redemption_email_as_one_order(self) -> None:
+        if not METLIFE_ADDITIONAL_RED_PATH.exists():
+            self.skipTest(f"missing actual MetLife fixture: {METLIFE_ADDITIONAL_RED_PATH}")
+
+        payload = self.loader.build_task_payload(METLIFE_ADDITIONAL_RED_PATH, chunk_size_chars=12000)
+
+        self.assertEqual(payload.expected_order_count, 1)
+        self.assertIsNone(payload.non_instruction_reason)
+        self.assertFalse(payload.allow_empty_result)
+        self.assertIn("| / | MyFund Vul 혼합안정형 (주식)-삼성 |", payload.markdown_text)
+        self.assertIn("| 현금 | -23,182,592 |", payload.markdown_text)
 
     def test_load_eml_prefers_plain_body_when_html_preview_is_weaker(self) -> None:
         message = EmailMessage()

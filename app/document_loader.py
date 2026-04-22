@@ -7,6 +7,7 @@ from dataclasses import asdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from typing import Literal
 
 # `DocumentLoader`는 두 가지 배포 형태를 동시에 지원해야 한다.
 #
@@ -80,6 +81,9 @@ class ExtractedDocumentText:
     raw_text: str
     markdown_text: str
     content_type: str
+    markdown_loss_detected: bool = False
+    markdown_loss_reasons: tuple[str, ...] = ()
+    effective_llm_text_kind: Literal["markdown_text", "raw_text"] = "markdown_text"
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +135,9 @@ class DocumentLoadTaskPayload:
     scope_excludes_all_funds: bool
     expected_order_count: int
     target_fund_scope: TargetFundScope
+    markdown_loss_detected: bool = False
+    markdown_loss_reasons: tuple[str, ...] = ()
+    effective_llm_text_kind: Literal["markdown_text", "raw_text"] = "markdown_text"
 
     def to_dict(self) -> dict[str, Any]:
         """JSON 직렬화 가능한 dict로 변환한다.
@@ -148,6 +155,7 @@ class DocumentLoadTaskPayload:
             "fund_names": sorted(self.target_fund_scope.fund_names),
             "canonical_fund_names": sorted(self.target_fund_scope.canonical_fund_names),
         }
+        payload["markdown_loss_reasons"] = list(self.markdown_loss_reasons)
         return payload
 
     @classmethod
@@ -174,6 +182,11 @@ class DocumentLoadTaskPayload:
             scope_excludes_all_funds=bool(payload.get("scope_excludes_all_funds", False)),
             expected_order_count=int(payload.get("expected_order_count", 0)),
             target_fund_scope=target_scope,
+            markdown_loss_detected=bool(payload.get("markdown_loss_detected", False)),
+            markdown_loss_reasons=tuple(str(reason) for reason in payload.get("markdown_loss_reasons", [])),
+            effective_llm_text_kind=str(payload.get("effective_llm_text_kind", "markdown_text"))
+            if str(payload.get("effective_llm_text_kind", "markdown_text")) in {"markdown_text", "raw_text"}
+            else "markdown_text",
         )
 
     def write_json(self, file_path: Path) -> dict[str, Any]:
@@ -330,6 +343,12 @@ class DocumentLoader(
         "mac용 outlook",
         "outlook for mac",
     )
+    HTML_MARKDOWN_LOSS_REASON_CODES = (
+        "html_inherited_context_missing",
+        "html_table_shape_collapsed",
+        "html_label_missing",
+        "html_row_kind_missing",
+    )
     STRONG_INSTRUCTION_MARKERS = (
         "운용지시서",
         "지시서",
@@ -354,44 +373,62 @@ class DocumentLoader(
             raise ValueError(f"Unsupported file type: {suffix}")
         if suffix == ".pdf":
             raw_text = self._load_pdf(file_path, pdf_password=pdf_password)
-            return ExtractedDocumentText(
+            return self._build_extracted_document(
                 raw_text=raw_text,
-                markdown_text=self.build_markdown(raw_text),
                 content_type="application/pdf",
             )
         if suffix == ".eml":
             raw_text, render_hints = self._load_eml_with_render_hints(file_path)
-            return ExtractedDocumentText(
+            return self._build_extracted_document(
                 raw_text=raw_text,
-                markdown_text=self.build_markdown(raw_text, render_hints=render_hints),
                 content_type="message/rfc822",
+                render_hints=render_hints,
             )
         if suffix in {".mht", ".mhtml"}:
             raw_text, render_hints = self._load_mht_with_render_hints(file_path)
-            return ExtractedDocumentText(
+            return self._build_extracted_document(
                 raw_text=raw_text,
-                markdown_text=self.build_markdown(raw_text, render_hints=render_hints),
                 content_type="multipart/related",
+                render_hints=render_hints,
             )
         if suffix in {".html", ".htm"}:
             raw_text, render_hints = self._load_html_with_render_hints(file_path, html_password=pdf_password)
-            return ExtractedDocumentText(
+            return self._build_extracted_document(
                 raw_text=raw_text,
-                markdown_text=self.build_markdown(raw_text, render_hints=render_hints),
                 content_type="text/html",
+                render_hints=render_hints,
             )
         if suffix == ".xls":
             raw_text = self._load_legacy_workbook(file_path)
-            return ExtractedDocumentText(
+            return self._build_extracted_document(
                 raw_text=raw_text,
-                markdown_text=self.build_markdown(raw_text),
                 content_type="application/vnd.ms-excel",
             )
         raw_text = self._load_workbook(file_path)
+        return self._build_extracted_document(
+            raw_text=raw_text,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    def _build_extracted_document(
+        self,
+        *,
+        raw_text: str,
+        content_type: str,
+        render_hints: dict[str, Any] | None = None,
+    ) -> ExtractedDocumentText:
+        markdown_text = self.build_markdown(raw_text, render_hints=render_hints)
+        markdown_loss_reasons = tuple(self._audit_html_markdown_loss(markdown_text, render_hints))
+        effective_llm_text_kind: Literal["markdown_text", "raw_text"] = (
+            "raw_text" if markdown_loss_reasons else "markdown_text"
+        )
         return ExtractedDocumentText(
             raw_text=raw_text,
-            markdown_text=self.build_markdown(raw_text),
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            markdown_text=markdown_text,
+            content_type=content_type,
+            markdown_loss_detected=bool(markdown_loss_reasons),
+            markdown_loss_reasons=markdown_loss_reasons,
+            effective_llm_text_kind=effective_llm_text_kind,
         )
 
     def split_for_llm(self, document_text: str, chunk_size_chars: int) -> list[str]:
@@ -427,6 +464,10 @@ class DocumentLoader(
         표는 markdown table 로, 일반 텍스트는 fenced block 으로 유지해서
         "사람이 읽는 구조"와 "코드가 재현 가능한 구조"를 동시에 맞춘다.
         """
+        preferred_markdown_text = render_hints.get("preferred_markdown_text") if render_hints else None
+        if isinstance(preferred_markdown_text, str) and preferred_markdown_text.strip():
+            return preferred_markdown_text.strip()
+
         sections = [section.strip() for section in raw_text.split(self.RAW_SECTION_DELIMITER) if section.strip()]
         rendered_sections: list[str] = []
         render_hint_state = {
@@ -452,6 +493,37 @@ class DocumentLoader(
         markdown_text = self.MARKDOWN_SECTION_DELIMITER.join(rendered_sections).strip()
         logger.info("Built markdown text for LLM: chars=%s", len(markdown_text))
         return markdown_text or raw_text
+
+    def _audit_html_markdown_loss(
+        self,
+        markdown_text: str,
+        render_hints: dict[str, Any] | None = None,
+    ) -> list[str]:
+        audit_payload = render_hints.get("html_markdown_audit") if render_hints else None
+        if not isinstance(audit_payload, dict):
+            return []
+
+        reasons: list[str] = []
+        label_tokens = [str(token).strip() for token in audit_payload.get("label_tokens", []) if str(token).strip()]
+        table_row_tokens = [
+            str(token).strip() for token in audit_payload.get("table_row_tokens", []) if str(token).strip()
+        ]
+        inherited_row_tokens = [
+            str(token).strip() for token in audit_payload.get("inherited_row_tokens", []) if str(token).strip()
+        ]
+        row_kind_tokens = [
+            str(token).strip() for token in audit_payload.get("row_kind_tokens", []) if str(token).strip()
+        ]
+
+        if label_tokens and any(token not in markdown_text for token in label_tokens):
+            reasons.append("html_label_missing")
+        if table_row_tokens and any(token not in markdown_text for token in table_row_tokens):
+            reasons.append("html_table_shape_collapsed")
+        if inherited_row_tokens and any(token not in markdown_text for token in inherited_row_tokens):
+            reasons.append("html_inherited_context_missing")
+        if row_kind_tokens and any(token not in markdown_text for token in row_kind_tokens):
+            reasons.append("html_row_kind_missing")
+        return reasons
 
     def looks_like_no_order_document(self, raw_text: str) -> bool:
         """문서가 '정상적인 0건' 인지 빠르게 판별한다.
@@ -584,6 +656,7 @@ class DocumentLoader(
             loaded.raw_text,
             target_fund_scope=target_fund_scope,
         )
+        llm_source_text = loaded.raw_text if loaded.markdown_loss_detected else loaded.markdown_text
         return DocumentLoadTaskPayload(
             source_path=str(normalized_path),
             file_name=normalized_path.name,
@@ -591,13 +664,16 @@ class DocumentLoader(
             content_type=loaded.content_type,
             raw_text=loaded.raw_text,
             markdown_text=loaded.markdown_text,
-            chunks=tuple(self.split_for_llm(loaded.markdown_text, chunk_size_chars=chunk_size_chars)),
+            chunks=tuple(self.split_for_llm(llm_source_text, chunk_size_chars=chunk_size_chars)),
             # `지시없음` 문서는 정상 0건 지시서이므로 비지시서 판정보다 allow-empty가 우선한다.
             non_instruction_reason=None if allow_empty_result else self.looks_like_non_instruction_document(loaded.raw_text),
             allow_empty_result=allow_empty_result,
             scope_excludes_all_funds=self.scope_excludes_all_funds(target_fund_scope),
             expected_order_count=expected_order_count,
             target_fund_scope=target_fund_scope,
+            markdown_loss_detected=loaded.markdown_loss_detected,
+            markdown_loss_reasons=loaded.markdown_loss_reasons,
+            effective_llm_text_kind=loaded.effective_llm_text_kind,
         )
 
     def estimate_order_cell_count(
@@ -1234,11 +1310,6 @@ class DocumentLoader(
                     for row in inherited_body_rows
                 ]
             header = self._normalize_markdown_headers(header, body_rows)
-            body_rows = self._suppress_shared_amounts_in_order_context_markdown(
-                header,
-                body_rows,
-                inherited_body_rows=inherited_body_rows,
-            )
 
         markdown_lines = [
             f"| {' | '.join(self._escape_markdown_cell(cell or f'col_{index + 1}') for index, cell in enumerate(header))} |",
@@ -3288,6 +3359,9 @@ class DocumentLoader(
         cell = value.strip()
         if cell in {"|", "\\|"}:
             return ""
+        normalized_amount = self._normalize_document_amount_token(cell)
+        if normalized_amount is not None:
+            return normalized_amount
         return self._alias_business_day_label(cell)
 
     @staticmethod
@@ -3314,11 +3388,7 @@ class DocumentLoader(
         """문자열이 금액/수량처럼 보이는 숫자 표현인지 판별한다."""
         if not value:
             return False
-        normalized = value.strip().replace(" ", "")
-        return bool(
-            re.fullmatch(r"[+-]?\d[\d,]*(?:\.\d+)?", normalized)
-            or re.fullmatch(r"[+-]?\d[\d,]*(?:\.\d+)?(?:억|만|천)", normalized)
-        )
+        return DocumentLoader._normalize_document_amount_token(value) is not None
 
     def _is_order_amount_label(self, label: str) -> bool:
         """헤더가 넓은 의미의 주문 금액 컬럼인지 판별한다."""
@@ -3423,11 +3493,11 @@ class DocumentLoader(
         coverage/markdown 단계에서 `0.3억`, `1.8억`, `283,660` 같은 표기까지
         비영 금액으로 인식하기 위한 최소 보강이다.
         """
-        normalized = value.strip().replace(",", "").replace(" ", "")
+        normalized = DocumentLoader._normalize_document_amount_token(value)
         if not normalized or normalized in {"-", "/", "--"}:
             return None
         try:
-            return float(normalized)
+            return float(normalized.replace(",", ""))
         except ValueError:
             pass
 
@@ -3439,6 +3509,38 @@ class DocumentLoader(
             match = re.fullmatch(pattern, normalized)
             if match:
                 return float(match.group(1)) * multiplier
+        return None
+
+    @staticmethod
+    def _normalize_document_amount_token(value: str | None) -> str | None:
+        """문서 셀에서 금액 해석에 불필요한 통화 표기를 제거한다.
+
+        raw_text는 원문을 그대로 보존하고, markdown/coverage/deterministic parser 같은
+        document-side 판단에서만 아래 표현을 순수 numeric token으로 본다.
+
+        예:
+        - `₩ 12,082,790` -> `12,082,790`
+        - `-₩23 ,182,592` -> `-23,182,592`
+        - `₩0` -> `0`
+        - `1,234원` -> `1,234`
+        """
+        if value is None:
+            return None
+
+        normalized = str(value).strip()
+        if not normalized:
+            return None
+
+        normalized = re.sub(r"(?i)krw", "", normalized)
+        normalized = normalized.replace("₩", "").replace("￦", "").replace("원", "")
+        normalized = re.sub(r"\s+", "", normalized)
+        if not normalized or normalized in {"-", "/", "--"}:
+            return None
+
+        if re.fullmatch(r"[+-]?\d[\d,]*(?:\.\d+)?", normalized):
+            return normalized
+        if re.fullmatch(r"[+-]?\d[\d,]*(?:\.\d+)?(?:억|만|천)", normalized):
+            return normalized
         return None
 
     def _looks_like_non_zero_amount_value(self, value: str) -> bool:

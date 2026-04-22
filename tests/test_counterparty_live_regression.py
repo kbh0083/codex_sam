@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import replace
+import signal
+import subprocess
+import sys
+import time
+from contextlib import contextmanager
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, mkdtemp
 import unittest
 
 from openpyxl import Workbook
 
-from app.component import DocumentExtractionRequest, ExtractionComponent
 from app.config import get_settings
 from app.document_loader import DocumentLoader
 from app.extractor import FundOrderExtractor, load_counterparty_guidance
@@ -17,6 +20,7 @@ from app.schemas import OrderType, SettleClass
 
 
 RUN_LIVE_COUNTERPARTY_REGRESSION = os.getenv("RUN_LIVE_COUNTERPARTY_REGRESSION") == "1"
+LIVE_REGRESSION_TIMEOUT_SECONDS = int(os.getenv("LIVE_REGRESSION_TIMEOUT_SECONDS", "480"))
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCUMENT_DIR = REPO_ROOT / "document"
 CORRECT_RESULT_DIR = REPO_ROOT / "output" / "correct_result"
@@ -25,9 +29,65 @@ HANAIS_XLSX_PATH = DOCUMENT_DIR / "흥국생명-hanais-0407-지시서.xlsx"
 HANAIS_PDF_PATH = DOCUMENT_DIR / "흥국생명-hanais-0407-지시서.pdf"
 CARDIF_PDF_PATH = CORRECT_RESULT_DIR / "11_카디프__카디프_251127.pdf"
 CARDIF_BASELINE_PATH = CORRECT_RESULT_DIR / "11_카디프.json"
+DONGYANG_20260318_PATH = DOCUMENT_DIR / "동양생명_20260318.html"
+DONGYANG_20260318_BASELINE_PATH = CORRECT_RESULT_DIR / "08_동양생명.json"
+DONGYANG_20260413_PATH = DOCUMENT_DIR / "동양생명_20260413.html"
+DONGYANG_20260413_BASELINE_PATH = CORRECT_RESULT_DIR / "08_동양생명_20260413.json"
 HANA_LIFE_XLSX_PATH = DOCUMENT_DIR / "하나생명-0415-지시서.xlsx"
 HANA_LIFE_LEGACY_PDF_PATH = DOCUMENT_DIR / "하나생명(액티브)_251127.pdf"
 HANA_LIFE_BASELINE_PATH = CORRECT_RESULT_DIR / "12_하나생명.json"
+METLIFE_ADDITIONAL_SUB_PATH = DOCUMENT_DIR / "메트라이프생명_0408_추가_추가설정.eml"
+METLIFE_ADDITIONAL_RED_PATH = DOCUMENT_DIR / "메트라이프생명_추가설정해지_0408.eml"
+
+
+class LiveRegressionTimeoutError(TimeoutError):
+    """live regression이 backend stall로 과도하게 오래 걸릴 때 쓰는 명시적 오류다."""
+
+
+@contextmanager
+def _live_timeout_guard(seconds: int, *, label: str):
+    """live regression 1건이 무한 대기하지 않도록 wall-clock 상한을 건다."""
+    if seconds <= 0 or not hasattr(signal, "SIGALRM") or not hasattr(signal, "setitimer"):
+        yield
+        return
+
+    def _raise_timeout(signum, frame):
+        raise LiveRegressionTimeoutError(f"live regression timed out after {seconds}s: {label}")
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+    previous_timer = signal.getitimer(signal.ITIMER_REAL)
+    signal.signal(signal.SIGALRM, _raise_timeout)
+    signal.setitimer(signal.ITIMER_REAL, float(seconds))
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
+        signal.signal(signal.SIGALRM, previous_handler)
+        if previous_timer != (0.0, 0.0):
+            signal.setitimer(signal.ITIMER_REAL, *previous_timer)
+
+
+class LiveRegressionTimeoutGuardTests(unittest.TestCase):
+    @unittest.skipUnless(
+        hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer"),
+        "requires SIGALRM-based timer support",
+    )
+    def test_live_timeout_guard_raises_after_deadline(self) -> None:
+        with self.assertRaises(LiveRegressionTimeoutError):
+            with _live_timeout_guard(1, label="timeout-guard-smoke"):
+                time.sleep(2)
+
+
+class _LiveRegressionTimeoutMixin:
+    """각 live regression test method에 timeout guard를 공통 적용한다."""
+
+    def _callTestMethod(self, method):
+        label = f"{self.__class__.__name__}.{self._testMethodName}"
+        try:
+            with _live_timeout_guard(LIVE_REGRESSION_TIMEOUT_SECONDS, label=label):
+                return super()._callTestMethod(method)
+        except LiveRegressionTimeoutError as exc:
+            self.fail(str(exc))
 
 
 def _write_minimal_text_pdf(path: Path, lines: list[str]) -> None:
@@ -95,30 +155,165 @@ def _write_minimal_xlsx(path: Path, rows: list[list[str]]) -> None:
     RUN_LIVE_COUNTERPARTY_REGRESSION,
     "set RUN_LIVE_COUNTERPARTY_REGRESSION=1 to run live counterparty regression tests",
 )
-class CounterpartyLiveRegressionTests(unittest.TestCase):
+class CounterpartyLiveRegressionTests(_LiveRegressionTimeoutMixin, unittest.TestCase):
+    def _extract_document_payload_via_subprocess(
+        self,
+        source_path: Path,
+        *,
+        only_pending: bool,
+        include_debug_meta: bool = False,
+    ) -> dict[str, object]:
+        temp_root = Path(mkdtemp(prefix="live_counterparty_regression_"))
+        child_script = """
+import json
+import sys
+from dataclasses import replace
+from pathlib import Path
+
+from app.component import DocumentExtractionRequest, ExtractionComponent
+from app.config import get_settings
+
+source_path = Path(sys.argv[1])
+only_pending = sys.argv[2] == "1"
+repo_root = Path(sys.argv[3])
+temp_root = Path(sys.argv[4])
+
+settings = replace(
+    get_settings(),
+    document_input_dir=repo_root,
+    task_payload_output_dir=temp_root / "handoff",
+    debug_output_dir=temp_root / "debug",
+)
+component = ExtractionComponent(settings=settings)
+payload = component.extract_document_payload(
+    DocumentExtractionRequest(
+        source_path,
+        use_counterparty_prompt=True,
+        only_pending=only_pending,
+    ),
+)
+print(
+    json.dumps(
+        {
+            "payload": payload,
+            "debug_root": str(temp_root / "debug"),
+            "handoff_root": str(temp_root / "handoff"),
+        },
+        ensure_ascii=False,
+    )
+)
+"""
+        previous_handler = None
+        previous_timer = None
+        timer_was_suspended = False
+        if hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer"):
+            previous_handler = signal.getsignal(signal.SIGALRM)
+            previous_timer = signal.getitimer(signal.ITIMER_REAL)
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            timer_was_suspended = True
+        try:
+            try:
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        child_script,
+                        str(source_path),
+                        "1" if only_pending else "0",
+                        str(REPO_ROOT),
+                        str(temp_root),
+                    ],
+                    cwd=REPO_ROOT,
+                    capture_output=True,
+                    text=True,
+                    timeout=LIVE_REGRESSION_TIMEOUT_SECONDS,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired:
+                self.fail(
+                    f"live regression timed out after {LIVE_REGRESSION_TIMEOUT_SECONDS}s: "
+                    f"{source_path} | debug_root={temp_root / 'debug'}"
+                )
+        except subprocess.TimeoutExpired as exc:
+            self.fail(
+                f"live regression timed out after {LIVE_REGRESSION_TIMEOUT_SECONDS}s: "
+                f"{source_path} | debug_root={temp_root / 'debug'}"
+            )
+        finally:
+            if timer_was_suspended and previous_handler is not None and previous_timer is not None:
+                signal.signal(signal.SIGALRM, previous_handler)
+                if previous_timer != (0.0, 0.0):
+                    signal.setitimer(signal.ITIMER_REAL, *previous_timer)
+
+        stdout_lines = [line for line in completed.stdout.splitlines() if line.strip()]
+        if completed.returncode != 0:
+            failure_detail = completed.stderr.strip() or completed.stdout.strip() or "subprocess returned non-zero exit status"
+            self.fail(
+                f"live regression subprocess failed for {source_path}: {failure_detail} "
+                f"| debug_root={temp_root / 'debug'}"
+            )
+        if not stdout_lines:
+            self.fail(f"live regression subprocess produced no JSON output for {source_path}: debug_root={temp_root / 'debug'}")
+
+        try:
+            result = json.loads(stdout_lines[-1])
+        except json.JSONDecodeError as exc:
+            self.fail(
+                f"live regression subprocess returned invalid JSON for {source_path}: {exc} "
+                f"| debug_root={temp_root / 'debug'}"
+            )
+        if include_debug_meta:
+            return result
+        return result["payload"]
+
+    def _load_single_metrics_sidecar(self, debug_root: Path) -> dict[str, object]:
+        metrics_paths = sorted(debug_root.glob("*_llm_metrics.json"))
+        if not metrics_paths:
+            self.fail(f"missing extract metrics sidecar under debug_root={debug_root}")
+        if len(metrics_paths) != 1:
+            self.fail(
+                f"expected exactly one extract metrics sidecar under debug_root={debug_root}, "
+                f"found {len(metrics_paths)}"
+            )
+        return json.loads(metrics_paths[0].read_text(encoding="utf-8"))
+
+    def _assert_payload_matches_baseline(
+        self,
+        source_path: Path,
+        baseline_path: Path,
+        *,
+        only_pending: bool,
+        include_debug_meta: bool = False,
+    ) -> dict[str, object] | None:
+        if not source_path.exists():
+            self.skipTest(f"missing actual fixture: {source_path}")
+        if not baseline_path.exists():
+            self.skipTest(f"missing baseline payload: {baseline_path}")
+
+        payload_result = self._extract_document_payload_via_subprocess(
+            source_path,
+            only_pending=only_pending,
+            include_debug_meta=include_debug_meta,
+        )
+        payload = payload_result["payload"] if include_debug_meta else payload_result
+        baseline_payload = json.loads(baseline_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["status"], "COMPLETED")
+        self.assertEqual(payload["reason"], baseline_payload.get("reason"))
+        self.assertEqual(payload["base_date"], baseline_payload["base_date"])
+        self.assertEqual(payload["issues"], baseline_payload["issues"])
+        self.assertEqual(payload["orders"], baseline_payload["orders"])
+        return payload_result if include_debug_meta else None
+
     def test_cardif_counterparty_prompt_extracts_expected_pdf_orders(self) -> None:
         if not CARDIF_PDF_PATH.exists():
             self.skipTest(f"missing actual Cardif PDF fixture: {CARDIF_PDF_PATH}")
         if not CARDIF_BASELINE_PATH.exists():
             self.skipTest(f"missing Cardif baseline payload: {CARDIF_BASELINE_PATH}")
 
-        temp_dir = TemporaryDirectory()
-        self.addCleanup(temp_dir.cleanup)
-        temp_root = Path(temp_dir.name)
-        settings = replace(
-            get_settings(),
-            document_input_dir=REPO_ROOT,
-            task_payload_output_dir=temp_root / "handoff",
-            debug_output_dir=temp_root / "debug",
-        )
-        component = ExtractionComponent(settings=settings)
-
-        payload = component.extract_document_payload(
-            DocumentExtractionRequest(
-                CARDIF_PDF_PATH,
-                use_counterparty_prompt=True,
-                only_pending=True,
-            ),
+        payload = self._extract_document_payload_via_subprocess(
+            CARDIF_PDF_PATH,
+            only_pending=True,
         )
         baseline_payload = json.loads(CARDIF_BASELINE_PATH.read_text(encoding="utf-8"))
 
@@ -127,6 +322,30 @@ class CounterpartyLiveRegressionTests(unittest.TestCase):
         self.assertEqual(payload["base_date"], baseline_payload["base_date"])
         self.assertEqual(payload["issues"], baseline_payload["issues"])
         self.assertEqual(payload["orders"], baseline_payload["orders"])
+
+    def test_dongyang_20260318_counterparty_prompt_extracts_expected_html_payload(self) -> None:
+        result = self._assert_payload_matches_baseline(
+            DONGYANG_20260318_PATH,
+            DONGYANG_20260318_BASELINE_PATH,
+            only_pending=False,
+            include_debug_meta=True,
+        )
+        assert result is not None
+        metrics_payload = self._load_single_metrics_sidecar(Path(result["debug_root"]))
+        self.assertEqual(metrics_payload.get("llm_batches_started", {}).get("t_day", 0), 0)
+        self.assertEqual(metrics_payload.get("llm_batches_started", {}).get("transfer_amount", 0), 0)
+
+    def test_dongyang_20260413_counterparty_prompt_extracts_expected_html_payload(self) -> None:
+        result = self._assert_payload_matches_baseline(
+            DONGYANG_20260413_PATH,
+            DONGYANG_20260413_BASELINE_PATH,
+            only_pending=False,
+            include_debug_meta=True,
+        )
+        assert result is not None
+        metrics_payload = self._load_single_metrics_sidecar(Path(result["debug_root"]))
+        self.assertEqual(metrics_payload.get("llm_batches_started", {}).get("t_day", 0), 0)
+        self.assertEqual(metrics_payload.get("llm_batches_started", {}).get("transfer_amount", 0), 0)
 
     def test_cardif_counterparty_prompt_skips_duplicate_xlsx_copy(self) -> None:
         settings = get_settings()
@@ -263,23 +482,9 @@ class CounterpartyLiveRegressionTests(unittest.TestCase):
         if not HANA_LIFE_BASELINE_PATH.exists():
             self.skipTest(f"missing Hana Life baseline payload: {HANA_LIFE_BASELINE_PATH}")
 
-        temp_dir = TemporaryDirectory()
-        self.addCleanup(temp_dir.cleanup)
-        temp_root = Path(temp_dir.name)
-        settings = replace(
-            get_settings(),
-            document_input_dir=REPO_ROOT,
-            task_payload_output_dir=temp_root / "handoff",
-            debug_output_dir=temp_root / "debug",
-        )
-        component = ExtractionComponent(settings=settings)
-
-        payload = component.extract_document_payload(
-            DocumentExtractionRequest(
-                HANA_LIFE_XLSX_PATH,
-                use_counterparty_prompt=True,
-                only_pending=True,
-            ),
+        payload = self._extract_document_payload_via_subprocess(
+            HANA_LIFE_XLSX_PATH,
+            only_pending=True,
         )
         baseline_payload = json.loads(HANA_LIFE_BASELINE_PATH.read_text(encoding="utf-8"))
 
@@ -293,27 +498,153 @@ class CounterpartyLiveRegressionTests(unittest.TestCase):
         if not HANA_LIFE_LEGACY_PDF_PATH.exists():
             self.skipTest(f"missing actual Hana Life legacy PDF fixture: {HANA_LIFE_LEGACY_PDF_PATH}")
 
-        temp_dir = TemporaryDirectory()
-        self.addCleanup(temp_dir.cleanup)
-        temp_root = Path(temp_dir.name)
-        settings = replace(
-            get_settings(),
-            document_input_dir=REPO_ROOT,
-            task_payload_output_dir=temp_root / "handoff",
-            debug_output_dir=temp_root / "debug",
-        )
-        component = ExtractionComponent(settings=settings)
-
-        payload = component.extract_document_payload(
-            DocumentExtractionRequest(
-                HANA_LIFE_LEGACY_PDF_PATH,
-                use_counterparty_prompt=True,
-                only_pending=True,
-            ),
+        payload = self._extract_document_payload_via_subprocess(
+            HANA_LIFE_LEGACY_PDF_PATH,
+            only_pending=True,
         )
 
         self.assertEqual(payload["status"], "SKIPPED")
         self.assertIn("duplicate PDF copy; use XLSX attachment", payload.get("reason", ""))
+
+    def test_metlife_counterparty_prompt_extracts_expected_internal_subscription_order(self) -> None:
+        if not METLIFE_ADDITIONAL_SUB_PATH.exists():
+            self.skipTest(f"missing actual MetLife fixture: {METLIFE_ADDITIONAL_SUB_PATH}")
+
+        settings = get_settings()
+        loader = DocumentLoader()
+        extractor = FundOrderExtractor(settings)
+        task_payload = loader.build_task_payload(METLIFE_ADDITIONAL_SUB_PATH, chunk_size_chars=settings.llm_chunk_size_chars)
+        guidance = load_counterparty_guidance(
+            METLIFE_ADDITIONAL_SUB_PATH,
+            use_counterparty_prompt=True,
+            document_text=task_payload.markdown_text,
+        )
+
+        outcome = extractor.extract_from_task_payload(task_payload, counterparty_guidance=guidance)
+
+        self.assertEqual(outcome.result.issues, [])
+        self.assertEqual(
+            [
+                (
+                    order.fund_code,
+                    order.fund_name,
+                    order.settle_class,
+                    order.order_type,
+                    order.base_date,
+                    order.t_day,
+                    order.transfer_amount,
+                )
+                for order in outcome.result.orders
+            ],
+            [
+                (
+                    "METLIFE_TMP_001",
+                    "MyFund Vul 혼합안정형 (주식)-삼성",
+                    SettleClass.CONFIRMED,
+                    OrderType.SUB,
+                    "2026-04-09",
+                    0,
+                    "12,082,790",
+                )
+            ],
+        )
+
+    def test_metlife_counterparty_prompt_extracts_expected_internal_redemption_order(self) -> None:
+        if not METLIFE_ADDITIONAL_RED_PATH.exists():
+            self.skipTest(f"missing actual MetLife fixture: {METLIFE_ADDITIONAL_RED_PATH}")
+
+        settings = get_settings()
+        loader = DocumentLoader()
+        extractor = FundOrderExtractor(settings)
+        task_payload = loader.build_task_payload(METLIFE_ADDITIONAL_RED_PATH, chunk_size_chars=settings.llm_chunk_size_chars)
+        guidance = load_counterparty_guidance(
+            METLIFE_ADDITIONAL_RED_PATH,
+            use_counterparty_prompt=True,
+            document_text=task_payload.markdown_text,
+        )
+
+        outcome = extractor.extract_from_task_payload(task_payload, counterparty_guidance=guidance)
+
+        self.assertEqual(outcome.result.issues, [])
+        self.assertEqual(
+            [
+                (
+                    order.fund_code,
+                    order.fund_name,
+                    order.settle_class,
+                    order.order_type,
+                    order.base_date,
+                    order.t_day,
+                    order.transfer_amount,
+                )
+                for order in outcome.result.orders
+            ],
+            [
+                (
+                    "METLIFE_TMP_001",
+                    "MyFund Vul 혼합안정형 (주식)-삼성",
+                    SettleClass.CONFIRMED,
+                    OrderType.RED,
+                    "2026-04-08",
+                    0,
+                    "-23,182,592",
+                )
+            ],
+        )
+
+    def test_metlife_counterparty_prompt_subscription_payload_completes_for_only_pending_contract(self) -> None:
+        if not METLIFE_ADDITIONAL_SUB_PATH.exists():
+            self.skipTest(f"missing actual MetLife fixture: {METLIFE_ADDITIONAL_SUB_PATH}")
+
+        payload = self._extract_document_payload_via_subprocess(
+            METLIFE_ADDITIONAL_SUB_PATH,
+            only_pending=True,
+        )
+
+        self.assertEqual(payload["status"], "COMPLETED")
+        self.assertEqual(payload["base_date"], "2026-04-09")
+        self.assertEqual(payload["issues"], [])
+        self.assertEqual(
+            payload["orders"],
+            [
+                {
+                    "fund_code": "-",
+                    "fund_name": "MyFund Vul 혼합안정형 (주식)-삼성",
+                    "settle_class": "1",
+                    "order_type": "3",
+                    "base_date": "2026-04-09",
+                    "t_day": "01",
+                    "transfer_amount": "12,082,790",
+                }
+            ],
+        )
+
+    def test_metlife_counterparty_prompt_redemption_payload_completes_for_only_pending_contract(self) -> None:
+        if not METLIFE_ADDITIONAL_RED_PATH.exists():
+            self.skipTest(f"missing actual MetLife fixture: {METLIFE_ADDITIONAL_RED_PATH}")
+
+        payload = self._extract_document_payload_via_subprocess(
+            METLIFE_ADDITIONAL_RED_PATH,
+            only_pending=True,
+        )
+
+        self.assertEqual(payload["status"], "COMPLETED")
+        self.assertEqual(payload["base_date"], "2026-04-08")
+        self.assertEqual(payload["issues"], [])
+        self.assertEqual(
+            payload["orders"],
+            [
+                {
+                    "fund_code": "-",
+                    "fund_name": "MyFund Vul 혼합안정형 (주식)-삼성",
+                    "settle_class": "1",
+                    "order_type": "1",
+                    "base_date": "2026-04-08",
+                    "t_day": "01",
+                    "transfer_amount": "23,182,592",
+                }
+            ],
+        )
 
     def test_ibk_counterparty_prompt_extracts_expected_internal_orders(self) -> None:
         settings = get_settings()
@@ -374,23 +705,9 @@ class CounterpartyLiveRegressionTests(unittest.TestCase):
         )
 
     def test_ibk_counterparty_prompt_only_pending_contract_outputs_single_pending_row(self) -> None:
-        temp_dir = TemporaryDirectory()
-        self.addCleanup(temp_dir.cleanup)
-        temp_root = Path(temp_dir.name)
-        settings = replace(
-            get_settings(),
-            document_input_dir=REPO_ROOT,
-            task_payload_output_dir=temp_root / "handoff",
-            debug_output_dir=temp_root / "debug",
-        )
-        component = ExtractionComponent(settings=settings)
-
-        payload = component.extract_document_payload(
-            DocumentExtractionRequest(
-                IBK_DOCUMENT_PATH,
-                use_counterparty_prompt=True,
-                only_pending=True,
-            ),
+        payload = self._extract_document_payload_via_subprocess(
+            IBK_DOCUMENT_PATH,
+            only_pending=True,
         )
 
         self.assertEqual(payload["status"], "COMPLETED")
@@ -461,23 +778,9 @@ class CounterpartyLiveRegressionTests(unittest.TestCase):
         )
 
     def test_heungkuk_hanais_counterparty_prompt_only_pending_false_preserves_confirmed_output(self) -> None:
-        temp_dir = TemporaryDirectory()
-        self.addCleanup(temp_dir.cleanup)
-        temp_root = Path(temp_dir.name)
-        settings = replace(
-            get_settings(),
-            document_input_dir=REPO_ROOT,
-            task_payload_output_dir=temp_root / "handoff",
-            debug_output_dir=temp_root / "debug",
-        )
-        component = ExtractionComponent(settings=settings)
-
-        payload = component.extract_document_payload(
-            DocumentExtractionRequest(
-                HANAIS_XLSX_PATH,
-                use_counterparty_prompt=True,
-                only_pending=False,
-            ),
+        payload = self._extract_document_payload_via_subprocess(
+            HANAIS_XLSX_PATH,
+            only_pending=False,
         )
 
         self.assertEqual(payload["status"], "COMPLETED")

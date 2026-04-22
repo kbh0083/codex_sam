@@ -1,18 +1,18 @@
-# WAS 포팅 가이드
+# WAS 병합 가이드
 
 이 문서는 **현재 구현된 데이터 추출 기능을 개발 WAS 서버로 포팅할 때**,  
 `ExtractionService`를 그대로 붙이는 방식이 아니라 **queue + task handler 구조**로 옮기는 방법을 설명한다.
 
-> 2026-04-20 기준 보강.
-> 공통 최신 상태와 테스트 보고 원칙은 [처음읽는_개발자용_흐름.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/처음읽는_개발자용_흐름.md)를 출처로 둔다.
-> 이 문서는 WAS 포팅/병합 전용 규칙만 유지한다. 최신 WAS 병합 근거는 [merge_report/merge_result_report_20260420_01.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_20260420_01.md)를 따른다.
+> 2026-04-22 기준 보강.
+> 공통 최신 상태와 테스트 보고 원칙은 [00_시작_안내.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/00_시작_안내.md)를 출처로 둔다.
+> 이 문서는 WAS 포팅/병합 전용 규칙만 유지한다. 하나생명 accepted 병합 근거는 [merge_report/merge_result_report_20260420_01.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_20260420_01.md), 메트라이프 selective merge와 focused 검수 근거는 [test_report/20260421_WAS_메트라이프_병합_데이터추출_테스트_보고서.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421_WAS_메트라이프_병합_데이터추출_테스트_보고서.md), [test_report/20260421_WAS_9건_데이터추출_검수_보고서.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421_WAS_9건_데이터추출_검수_보고서.md)를 따른다.
 > 본문의 `2026-04-14`, `2026-04-16` 표기는 과거 stable 기준선 설명이다.
 
 먼저 범위를 분명히 하면:
 
 - 이 문서는 **현재 구현 기준 포팅 가이드**다.
 - 거래처 프로필, `document_family`, 형식별 profile/prompt override 같은 **장기 설계안**은
-  [거래처_프로필_기반_프리징_1차설계.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/거래처_프로필_기반_프리징_1차설계.md)를 따른다.
+  [90_설계_거래처_프로필_프리징.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/90_설계_거래처_프로필_프리징.md)를 따른다.
 - 즉 현재 WAS 반영은 이 문서를 기준으로 하고, 이후 구조 개편 일정이 잡히면 설계 문서를 기준으로 별도 구현한다.
 
 특히 아래 전제를 기준으로 작성했다.
@@ -48,8 +48,8 @@
 
 중요:
 
-- 2026-04-20 기준 WAS의 source of truth는 **DB의 거래처 설정값**이다.
-- 즉 `prompt`, `use_counterparty_prompt`, `only_pending`, `designated_password`는 가능하면 WAS DB row에서 읽어 handler A/B에 그대로 전달한다.
+- 2026-04-21 기준 WAS의 source of truth는 **DB의 거래처 설정값**이다.
+- 즉 `prompt`, `use_counterparty_prompt`, `only_pending`, `designated_password`, `delivery_type`는 가능하면 WAS DB row에서 읽어 handler A/B에 그대로 전달한다.
 - Local standalone helper인 [app/prompts/counterparty_prompt_map.yaml](/Users/bhkim/Documents/codex_prj_sam_asset/app/prompts/counterparty_prompt_map.yaml)은 포팅 참고용일 뿐, WAS의 정답 소스가 아니다.
 - 파일명 기반 추정이나 로컬 YAML 재판정으로 `only_pending`을 다시 계산하지 않는 편이 현재 병합 기준과 맞다.
 
@@ -90,7 +90,7 @@
   - Local/WAS DB projection parity: `14/14`
   - WAS pipeline smoke: `3/3`
 
-## 참고. 2026-04-20 최신 병합/검증 기준
+## 참고. 2026-04-20~2026-04-21 최신 병합/검증 기준
 
 2026-04-20 하나생명 XLSX 전환 병합은 하나생명 XLSX 전환과 loader/extractor deterministic 보정을 선별 반영했다. 검증 수치와 케이스별 결과는 중복 기재하지 않고 [merge_report/merge_result_report_20260420_01.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_20260420_01.md)를 출처로 둔다.
 
@@ -104,7 +104,7 @@
   - `11_카디프`, `14_흥국생명`, `17_메트라이프` final payload drift가 재현되지 않았기 때문이다.
 - 하나생명 prompt는 XLSX workbook authoritative 계약으로 갱신했다.
 - helper regression은 test source가 존재할 때 WAS venv로 실행한다.
-  - 현재 재실행 절차는 [test_report/20260420_로컬_WAS_테스트_수행_방안.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260420_로컬_WAS_테스트_수행_방안.md)를 따른다.
+  - 현재 재실행 절차는 [03_테스트_실행_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/03_테스트_실행_가이드.md)를 따른다.
 
 후속 금액 source-scale 보존 라운드는 별도 변경이다.
 
@@ -113,6 +113,23 @@
 - `23,213.40`, `23,213.4`, `23,213.409`처럼 실제 소수부가 있는 금액은 추출 문자열의 소수 자릿수를 유지한다.
 - `70,000,000.00000001` 같은 spreadsheet float-tail artifact는 정수로 정리한다.
 - 이 라운드에서는 WAS `amount_normalization.py`, `output_contract.py`, `extractor.py`, `tasks/llm/pipeline.py`가 대상이다.
+
+2026-04-21 메트라이프 selective merge는 위 accepted 기준선 위에 선별 반영한 추가 라운드다.
+
+- WAS repo 기준 production 반영 파일:
+  - `src/app/services/variable_annuity/extract/document_loader.py`
+  - `src/app/services/variable_annuity/extract/extractor.py`
+  - `src/app/services/variable_annuity/extract/prompts/extraction_prompts.yaml`
+- DB 반영 대상:
+  - `tb_variable_counterparties.company_name='메트라이프생명'`
+- 병합 핵심:
+  - 문서측 금액 토큰 정규화가 `₩`, `￦`, `KRW`, `원`, Unicode whitespace를 허용
+  - deterministic amount parser가 loader와 같은 decorated amount 규칙을 사용
+  - `instruction_document` 판정에서 explicit RED/outflow 컬럼의 non-zero 음수 printed amount도 거래 증거로 인정
+- focused validation 결과:
+  - 메트라이프 targeted regression `2/2 PASS`
+  - 메트라이프 3건 포함 임의 9건 원본 대조 검수 `9 PASS / 0 FAIL`
+  - 세부 보고서: [test_report/20260421_WAS_메트라이프_병합_데이터추출_테스트_보고서.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421_WAS_메트라이프_병합_데이터추출_테스트_보고서.md), [test_report/20260421_WAS_9건_데이터추출_검수_보고서.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421_WAS_9건_데이터추출_검수_보고서.md)
 
 ## 0-1. 주석 읽는 순서
 
@@ -779,7 +796,7 @@ queue 기반 WAS에서는 `ExtractionService`를 그대로 쓰지 말고,
   - `only_pending`
   - `designated_password`
 - 당시 DB prompt parity와 acceptance 상세는 [merge_report/merge_result_report_26041601.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_26041601.md)를 출처로 둔다.
-- 테스트/검증 결과 보고 기준은 [test_report/20260420_로컬_WAS_테스트_수행_방안.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260420_로컬_WAS_테스트_수행_방안.md)를 출처로 둔다.
+- 테스트/검증 결과 보고 기준은 [03_테스트_실행_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/03_테스트_실행_가이드.md)를 출처로 둔다.
 
 ## 2026-04-20 업데이트 메모
 
@@ -791,4 +808,43 @@ queue 기반 WAS에서는 `ExtractionService`를 그대로 쓰지 말고,
   - `.env`
 - 후속 금액 source-scale 보존 라운드에서는 `tasks/llm/pipeline.py`의 dedupe key가 숫자 canonical 금액을 쓰도록 갱신됐다.
 - 하나생명 DB prompt는 갱신했지만 `use_counterparty_prompt=true`, `only_pending=true`, `designated_password=null`은 보존했다.
-- LLM 연결 확인과 데이터 추출 테스트 보고서 작성 규칙은 [test_report/20260420_로컬_WAS_테스트_수행_방안.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260420_로컬_WAS_테스트_수행_방안.md)를 출처로 둔다.
+- LLM 연결 확인과 데이터 추출 테스트 보고서 작성 규칙은 [03_테스트_실행_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/03_테스트_실행_가이드.md)를 출처로 둔다.
+
+## 2026-04-21 업데이트 메모
+
+- 메트라이프 selective merge에서는 WAS production 코드 3개와 DB prompt row 1개만 선별 반영했다.
+- `parser.py`, `settings.py`, `.env`, `output_contract.py`, 파일 기반 거래처 prompt runtime wiring은 이번 라운드에서 수정하지 않았다.
+- 메트라이프 DB prompt는 로컬 [메트라이프생명.txt](/Users/bhkim/Documents/codex_prj_sam_asset/app/prompts/메트라이프생명.txt)와 parity를 맞췄다.
+- 신규 산출물 run root:
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/was_merge_20260421_01`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/was_validation_20260421_01`
+
+## 2026-04-22 pending WAS merge
+
+- 2026-04-22 기준 다음 WAS 병합 대상은 메트라이프 후속이 아니라 최신 로컬 변경 묶음이다.
+- 현재 로컬 확인 사실:
+  - `동양생명_20260318` -> `52건`, `issues=[]`, exact same, `85.335s`
+  - `동양생명_20260413` -> `48건`, `issues=[]`, exact same, `85.267s`
+  - `카디프` -> `46건`, `base_date=2025-11-27`, exact same
+  - targeted live 5건 `OK`
+  - unit/component `303 tests OK`
+- 외부 계약은 그대로 유지한다.
+  - `DocumentLoadTaskPayload`, 외부 payload, DB 저장 계약은 변경하지 않는다.
+- 따라서 `base_date` 문서 단일 fan-out과 동양생명 active-family shortcut은 로컬에서 정상 동작 중이다.
+- 현재 sidecar 기준 동양생명 2건은 `t_day=0`, `transfer_amount=0`이다.
+- 남은 지연은 `t_day`가 아니라 `instruction_document`/`fund_inventory` transport retry다.
+- 다음 selective merge 후보는 아래 다섯 축으로 본다.
+  - extractor 내부 reason metadata
+  - duplicate-copy precheck
+  - sequential LLM execution
+  - metrics sidecar
+  - 동양생명 active-family shortcut
+- duplicate-copy guard의 source of truth는 prompt가 아니라 extractor 코드 helper다.
+- metrics sidecar는 로컬 debug artifact이며, WAS 이식은 필요 여부를 보고 선택한다.
+- 병합 순서는 아래로 고정한다.
+  1. 로컬 변경 범위 정리
+  2. WAS selective merge
+  3. WAS focused validation
+  4. merge 후 refactor backlog 정리
+- focused validation 최소 기준은 guard 3건 + 동양생명 2건이다.
+- `parser.py`, `settings.py`, `.env`는 이번 라운드 merge 대상에서 제외한다.

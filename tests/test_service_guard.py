@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from app.config import get_settings
 from app.document_loader import DocumentLoadTaskPayload, TargetFundScope
@@ -240,6 +241,9 @@ class ServiceGuardTests(unittest.TestCase):
         self.assertEqual(restored.source_path, payload.source_path)
         self.assertEqual(restored.chunks, payload.chunks)
         self.assertEqual(restored.target_fund_scope.fund_codes, payload.target_fund_scope.fund_codes)
+        self.assertFalse(restored.markdown_loss_detected)
+        self.assertEqual(restored.markdown_loss_reasons, ())
+        self.assertEqual(restored.effective_llm_text_kind, "markdown_text")
 
     def test_document_load_task_payload_write_json_creates_parent_directories(self) -> None:
         payload = DocumentLoadTaskPayload(
@@ -596,6 +600,112 @@ class ServiceGuardTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "incomplete"):
             extractor.extract_from_task_payload(task_payload)
+
+    def test_extract_from_task_payload_preemptively_rejects_cardif_duplicate_xlsx_copy(self) -> None:
+        extractor = FundOrderExtractor(get_settings())
+        task_payload = DocumentLoadTaskPayload(
+            source_path="/tmp/카디프_251127.xlsx",
+            file_name="카디프_251127.xlsx",
+            pdf_password=None,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            raw_text="[SHEET Instruction]\nAmount(KRW)\n",
+            markdown_text="## Sheet Instruction\n\n| Amount(KRW) |\n| --- |\n| 1 |\n",
+            chunks=("chunk-1",),
+            non_instruction_reason=None,
+            allow_empty_result=False,
+            scope_excludes_all_funds=False,
+            expected_order_count=1,
+            target_fund_scope=TargetFundScope(manager_column_present=False),
+        )
+        extractor.extract = lambda *args, **kwargs: self.fail("duplicate copy should not reach LLM extraction")  # type: ignore[method-assign]
+
+        with self.assertRaisesRegex(ValueError, r"duplicate XLSX copy; use PDF attachment"):
+            extractor.extract_from_task_payload(task_payload)
+
+    def test_extract_from_task_payload_preemptively_rejects_hanalife_legacy_pdf_copy(self) -> None:
+        extractor = FundOrderExtractor(get_settings())
+        task_payload = DocumentLoadTaskPayload(
+            source_path="/tmp/하나생명(액티브)_251127.pdf",
+            file_name="하나생명(액티브)_251127.pdf",
+            pdf_password=None,
+            content_type="application/pdf",
+            raw_text="[PAGE 1]\n거래유형명\n설정해지금액\n",
+            markdown_text="## Page 1\n\n거래유형명\n설정해지금액\n",
+            chunks=("chunk-1",),
+            non_instruction_reason=None,
+            allow_empty_result=False,
+            scope_excludes_all_funds=False,
+            expected_order_count=1,
+            target_fund_scope=TargetFundScope(manager_column_present=False),
+        )
+        extractor.extract = lambda *args, **kwargs: self.fail("duplicate copy should not reach LLM extraction")  # type: ignore[method-assign]
+
+        with self.assertRaisesRegex(ValueError, r"duplicate PDF copy; use XLSX attachment"):
+            extractor.extract_from_task_payload(task_payload)
+
+    def test_extract_from_task_payload_preemptively_rejects_heungkuk_hanais_duplicate_pdf_hint(self) -> None:
+        extractor = FundOrderExtractor(get_settings())
+        task_payload = DocumentLoadTaskPayload(
+            source_path="/tmp/흥국생명-hanais-0407-지시서.pdf",
+            file_name="흥국생명-hanais-0407-지시서.pdf",
+            pdf_password=None,
+            content_type="application/pdf",
+            raw_text=(
+                "Heungkuk Life HANAIS duplicate PDF copy\n"
+                "Use XLSX attachment for extraction\n"
+                "Same instruction content as spreadsheet attachment\n"
+            ),
+            markdown_text="Heungkuk Life HANAIS duplicate PDF copy\nUse XLSX attachment for extraction\n",
+            chunks=("chunk-1",),
+            non_instruction_reason=None,
+            allow_empty_result=False,
+            scope_excludes_all_funds=False,
+            expected_order_count=1,
+            target_fund_scope=TargetFundScope(manager_column_present=False),
+        )
+        extractor.extract = lambda *args, **kwargs: self.fail("duplicate copy should not reach LLM extraction")  # type: ignore[method-assign]
+
+        with self.assertRaisesRegex(ValueError, r"duplicate PDF copy; use XLSX attachment"):
+            extractor.extract_from_task_payload(task_payload)
+
+    def test_extract_from_task_payload_ignores_precheck_prompt_mapping_failure(self) -> None:
+        extractor = FundOrderExtractor(get_settings())
+        task_payload = DocumentLoadTaskPayload(
+            source_path="/tmp/sample.pdf",
+            file_name="sample.pdf",
+            pdf_password=None,
+            content_type="application/pdf",
+            raw_text="Closing Date : 2025-11-26\n결제일 : 2025-11-27\n",
+            markdown_text="markdown",
+            chunks=("chunk-1",),
+            non_instruction_reason=None,
+            allow_empty_result=False,
+            scope_excludes_all_funds=False,
+            expected_order_count=1,
+            target_fund_scope=TargetFundScope(manager_column_present=False),
+        )
+        extractor.extract = lambda chunks, raw_text=None, markdown_text=None, target_fund_scope=None, counterparty_guidance=None, expected_order_count=None, markdown_loss_detected=False: LLMExtractionOutcome(  # type: ignore[method-assign]
+            result=ExtractionResult(
+                orders=[
+                    OrderExtraction(
+                        fund_code="F001",
+                        fund_name="Alpha",
+                        settle_class=SettleClass.CONFIRMED,
+                        order_type=OrderType.SUB,
+                        base_date="2025-11-27",
+                        t_day=0,
+                        transfer_amount="100",
+                    )
+                ],
+                issues=[],
+            )
+        )
+
+        with patch("app.extractor.resolve_counterparty_prompt_name", side_effect=RuntimeError("broken mapping")):
+            outcome = extractor.extract_from_task_payload(task_payload)
+
+        self.assertEqual(len(outcome.result.orders), 1)
+        self.assertEqual(outcome.result.orders[0].fund_code, "F001")
 
     def test_extract_from_task_payload_rejects_llm_classified_non_instruction_document(self) -> None:
         extractor = FundOrderExtractor(get_settings())

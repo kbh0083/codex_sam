@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import threading
 import tempfile
 import time
 import types
 import unittest
 from unittest.mock import Mock, patch
 
+from pydantic import ValidationError
 import yaml
 
 import app.extractor as extractor_module
@@ -16,6 +19,8 @@ from app.extractor import (
     FundAmountResult,
     FundBaseDateItem,
     FundBaseDateResult,
+    InstructionDocumentItem,
+    InstructionDocumentResult,
     FundOrderExtractor,
     FundResolvedItem,
     FundSeedResult,
@@ -24,6 +29,7 @@ from app.extractor import (
     FundSettleResult,
     FundSlotItem,
     FundSlotResult,
+    LLMExtractionOutcome,
     _load_prompt_bundle,
 )
 from app.schemas import ExtractionResult
@@ -214,6 +220,78 @@ class ExtractorLogicTests(unittest.TestCase):
 
         self.assertEqual(len(result.orders), 1)
         self.assertEqual(result.orders[0].transfer_amount, "23,213.40")
+
+    def test_stage_result_models_normalize_reason_metadata(self) -> None:
+        result = FundBaseDateResult.model_validate(
+            {
+                "items": [
+                    {
+                        "fund_code": "F001",
+                        "fund_name": "Alpha",
+                        "base_date": "2025-11-27",
+                        "reason_code": "date doc header",
+                    }
+                ],
+                "reason_summary": "  Header   date used   for  all funds.  ",
+                "issues": [],
+            }
+        )
+
+        self.assertEqual(result.items[0].reason_code, "DATE_DOC_HEADER")
+        self.assertEqual(result.reason_summary, "Header date used for all funds.")
+
+    def test_stage_item_reason_code_whitelist_allows_valid_value(self) -> None:
+        item = FundAmountItem(
+            fund_code="F001",
+            fund_name="Alpha",
+            base_date="2025-11-27",
+            t_day=0,
+            slot_id="T0_NET",
+            evidence_label="정산액",
+            transfer_amount="100",
+            reason_code="amount net column",
+        )
+
+        self.assertEqual(item.reason_code, "AMOUNT_NET_COLUMN")
+
+    def test_stage_item_reason_code_whitelist_rejects_invalid_value(self) -> None:
+        with self.assertRaises(ValidationError):
+            FundAmountItem(
+                fund_code="F001",
+                fund_name="Alpha",
+                base_date="2025-11-27",
+                t_day=0,
+                slot_id="T0_NET",
+                evidence_label="정산액",
+                transfer_amount="100",
+                reason_code="DATE_DOC_HEADER",
+            )
+
+    def test_stage_item_reason_code_whitelist_allows_blank_value(self) -> None:
+        item = FundAmountItem(
+            fund_code="F001",
+            fund_name="Alpha",
+            base_date="2025-11-27",
+            t_day=0,
+            slot_id="T0_NET",
+            evidence_label="정산액",
+            transfer_amount="100",
+            reason_code="  ",
+        )
+
+        self.assertIsNone(item.reason_code)
+
+    def test_parse_stage_response_returns_none_for_invalid_reason_code(self) -> None:
+        parsed = self.extractor._parse_stage_response(
+            raw_response=(
+                '{"items":[{"fund_code":"F001","fund_name":"Alpha","base_date":"2025-11-27",'
+                '"t_day":0,"slot_id":"T0_NET","evidence_label":"정산액","transfer_amount":"100",'
+                '"reason_code":"DATE_DOC_HEADER"}],"issues":[]}'
+            ),
+            response_model=FundAmountResult,
+        )
+
+        self.assertIsNone(parsed)
 
     def test_filter_fund_seeds_by_scope_keeps_only_samsung_targets(self) -> None:
         scope = TargetFundScope(
@@ -569,6 +647,544 @@ class ExtractorLogicTests(unittest.TestCase):
             },
         )
 
+    def test_build_deterministic_markdown_orders_skips_ghost_duplicate_future_red_slot_for_dongyang(self) -> None:
+        markdown_text = (
+            "## HTML 동양생명_20260318.html\n\n"
+            "```text\n"
+            "2026년 3월 18일\n"
+            "정산내역\n"
+            "예상내역\n"
+            "```"
+            "\n\n| 펀드코드 | 펀드명 | 설정액 | 해지액 | 정산액 |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| BALI00 | 퇴연주식형 | 8,592,243 | 0 | 8,592,243 |\n"
+            "\n\n| 펀드코드 | 펀드명 | 설정금액 / 3월19일 | 설정금액 / 3월20일 | 해지금액 / 3월19일 | 해지금액 / 3월20일 |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| BALI00 | 퇴연주식형 | 0 | 0 | 0 | 1,656,769 |\n"
+        )
+        raw_text = (
+            "[HTML 동양생명_20260318.html]\n"
+            "2026년 3월 18일\n"
+            "정산내역\n"
+            "예상내역\n"
+        )
+
+        orders = self.extractor._build_deterministic_markdown_orders(
+            markdown_text=markdown_text,
+            raw_text=raw_text,
+            target_fund_scope=None,
+        )
+
+        self.assertEqual(len(orders), 2)
+        confirmed = [order for order in orders if order.t_day == 0]
+        pending = [order for order in orders if order.t_day > 0]
+        self.assertEqual(len(confirmed), 1)
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0].t_day, 2)
+        self.assertEqual(pending[0].order_type.value, "RED")
+        self.assertEqual(pending[0].transfer_amount, "-1,656,769")
+
+    def test_build_deterministic_markdown_orders_reads_dongyang_20260413_schedule_buckets(self) -> None:
+        markdown_text = (
+            "## HTML 동양생명_20260413.html\n\n"
+            "```text\n"
+            "2026년 4월 13일\n"
+            "정산내역\n"
+            "예상내역\n"
+            "```"
+            "\n\n| 펀드코드 | 펀드명 | 설정액 | 해지액 | 정산액 |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| BALI00 | 퇴연주식형 | 1,667,046 | 0 | 1,667,046 |\n"
+            "\n\n| 펀드코드 | 펀드명 | 설정금액 / 4월14일 | 설정금액 / 4월15일 | 해지금액 / 4월14일 | 해지금액 / 4월15일 |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| BALI00 | 퇴연주식형 | 1,004,709 | 0 | 0 | 0 |\n"
+            "| BBI100 | 변액유니버셜종신-채권형 | 5,652,158 | 4,385,013 | 13,823,466 | 11,126,054 |\n"
+        )
+        raw_text = (
+            "[HTML 동양생명_20260413.html]\n"
+            "2026년 4월 13일\n"
+            "정산내역\n"
+            "예상내역\n"
+        )
+
+        orders = self.extractor._build_deterministic_markdown_orders(
+            markdown_text=markdown_text,
+            raw_text=raw_text,
+            target_fund_scope=None,
+        )
+
+        bali_pending = [order for order in orders if order.fund_code == "BALI00" and order.t_day > 0]
+        bbi_pending = [order for order in orders if order.fund_code == "BBI100" and order.t_day > 0]
+        self.assertEqual(
+            [(order.t_day, order.order_type.value, order.transfer_amount) for order in bali_pending],
+            [(1, "SUB", "1,004,709")],
+        )
+        self.assertEqual(
+            {(order.t_day, order.order_type.value, order.transfer_amount) for order in bbi_pending},
+            {
+                (1, "SUB", "5,652,158"),
+                (2, "SUB", "4,385,013"),
+                (1, "RED", "-13,823,466"),
+                (2, "RED", "-11,126,054"),
+            },
+        )
+
+    def test_reconcile_t_day_stage_output_prefers_explicit_date_matching_slot(self) -> None:
+        items = [
+            FundSlotItem(
+                fund_code="BALI00",
+                fund_name="퇴연주식형",
+                base_date="2026-03-18",
+                t_day=1,
+                slot_id="T1_RED",
+                evidence_label="해지금액 / 3월20일",
+            ),
+            FundSlotItem(
+                fund_code="BALI00",
+                fund_name="퇴연주식형",
+                base_date="2026-03-18",
+                t_day=2,
+                slot_id="T2_RED",
+                evidence_label="해지금액 / 3월20일",
+            ),
+        ]
+
+        reconciled, forced_issues = self.extractor._reconcile_t_day_stage_output(
+            document_text=(
+                "| 펀드코드 | 펀드명 | 해지금액 / 3월20일 |\n"
+                "| --- | --- | --- |\n"
+                "| BALI00 | 퇴연주식형 | 1,656,769 |\n"
+            ),
+            input_items=[{"fund_code": "BALI00", "fund_name": "퇴연주식형", "base_date": "2026-03-18"}],
+            output_items=items,
+        )
+
+        self.assertEqual(forced_issues, [])
+        self.assertEqual(len(reconciled), 1)
+        self.assertEqual(reconciled[0].t_day, 2)
+        self.assertEqual(reconciled[0].slot_id, "T2_RED")
+        self.assertFalse(self.extractor._t_day_output_has_duplicate_evidence(reconciled))
+
+    def test_reconcile_t_day_stage_output_preserves_distinct_schedule_siblings(self) -> None:
+        items = [
+            FundSlotItem(
+                fund_code="BBI100",
+                fund_name="변액유니버셜종신-채권형",
+                base_date="2026-04-13",
+                t_day=1,
+                slot_id="T1_SUB",
+                evidence_label="설정금액 / 4월14일",
+            ),
+            FundSlotItem(
+                fund_code="BBI100",
+                fund_name="변액유니버셜종신-채권형",
+                base_date="2026-04-13",
+                t_day=2,
+                slot_id="T2_SUB",
+                evidence_label="설정금액 / 4월15일",
+            ),
+            FundSlotItem(
+                fund_code="BBI100",
+                fund_name="변액유니버셜종신-채권형",
+                base_date="2026-04-13",
+                t_day=1,
+                slot_id="T1_RED",
+                evidence_label="해지금액 / 4월14일",
+            ),
+            FundSlotItem(
+                fund_code="BBI100",
+                fund_name="변액유니버셜종신-채권형",
+                base_date="2026-04-13",
+                t_day=2,
+                slot_id="T2_RED",
+                evidence_label="해지금액 / 4월15일",
+            ),
+        ]
+
+        reconciled, forced_issues = self.extractor._reconcile_t_day_stage_output(
+            document_text=(
+                "| 펀드코드 | 펀드명 | 설정금액 / 4월14일 | 설정금액 / 4월15일 | 해지금액 / 4월14일 | 해지금액 / 4월15일 |\n"
+                "| --- | --- | --- | --- | --- | --- |\n"
+                "| BBI100 | 변액유니버셜종신-채권형 | 5,652,158 | 4,385,013 | 13,823,466 | 11,126,054 |\n"
+            ),
+            input_items=[{"fund_code": "BBI100", "fund_name": "변액유니버셜종신-채권형", "base_date": "2026-04-13"}],
+            output_items=items,
+        )
+
+        self.assertEqual(forced_issues, [])
+        self.assertEqual(reconciled, items)
+
+    def test_reconcile_t_day_stage_output_keeps_best_item_but_marks_partial_when_ambiguous(self) -> None:
+        items = [
+            FundSlotItem(
+                fund_code="F001",
+                fund_name="Alpha",
+                base_date="2026-04-13",
+                t_day=1,
+                slot_id="T1_NET",
+                evidence_label="예상금액",
+            ),
+            FundSlotItem(
+                fund_code="F001",
+                fund_name="Alpha",
+                base_date="2026-04-13",
+                t_day=2,
+                slot_id="T2_NET",
+                evidence_label="예상금액",
+            ),
+        ]
+
+        reconciled, forced_issues = self.extractor._reconcile_t_day_stage_output(
+            document_text="예상금액\nF001\nAlpha\n100",
+            input_items=[{"fund_code": "F001", "fund_name": "Alpha", "base_date": "2026-04-13"}],
+            output_items=items,
+        )
+
+        self.assertEqual(reconciled, [items[0]])
+        self.assertEqual(forced_issues, ["T_DAY_STAGE_PARTIAL"])
+
+    def test_merge_t_day_retry_items_overlays_focus_subset_on_current_family(self) -> None:
+        current_items = [
+            FundSlotItem(
+                fund_code="BALI00",
+                fund_name="퇴연주식형",
+                base_date="2026-03-18",
+                t_day=0,
+                slot_id="T0_NET",
+                evidence_label="정산액",
+            ),
+            FundSlotItem(
+                fund_code="BALI00",
+                fund_name="퇴연주식형",
+                base_date="2026-03-18",
+                t_day=1,
+                slot_id="T1_RED",
+                evidence_label="해지금액 / 3월20일",
+            ),
+            FundSlotItem(
+                fund_code="BALX00",
+                fund_name="(디폴트옵션전용) 글로벌에셋밸런스형",
+                base_date="2026-03-18",
+                t_day=0,
+                slot_id="T0_NET",
+                evidence_label="정산액",
+            ),
+        ]
+        candidate_items = [
+            FundSlotItem(
+                fund_code="BALI00",
+                fund_name="퇴연주식형",
+                base_date="2026-03-18",
+                t_day=2,
+                slot_id="T2_RED",
+                evidence_label="해지금액 / 3월20일",
+            )
+        ]
+
+        merged = self.extractor._merge_t_day_retry_items(
+            current_items=current_items,
+            candidate_items=candidate_items,
+        )
+
+        self.assertEqual(
+            [(item.fund_code, item.t_day, item.slot_id) for item in merged],
+            [
+                ("BALI00", 0, "T0_NET"),
+                ("BALI00", 2, "T2_RED"),
+                ("BALX00", 0, "T0_NET"),
+            ],
+        )
+
+    def test_reconcile_after_t_day_document_augmentation_removes_ghost_future_slot(self) -> None:
+        document_text = (
+            "## HTML 동양생명_20260318.html\n\n"
+            "```text\n"
+            "2026년 3월 18일\n"
+            "정산내역\n"
+            "```\n\n"
+            "| 펀드코드 | 펀드명 | 설정액 | 해지액 | 정산액 |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| BALI00 | 퇴연주식형 | 8,592,243 | 0 | 8,592,243 |\n\n"
+            "```text\n"
+            "예상내역\n"
+            "```\n\n"
+            "| 펀드코드 | 펀드명 | 설정금액 / 3월19일 | 설정금액 / 3월20일 | 해지금액 / 3월19일 | 해지금액 / 3월20일 |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| BALI00 | 퇴연주식형 | 0 | 0 | 0 | 1,656,769 |\n"
+        )
+        input_items = [
+            {
+                "fund_code": "BALI00",
+                "fund_name": "퇴연주식형",
+                "base_date": "2026-03-18",
+            }
+        ]
+        ghost_output = [
+            FundSlotItem(
+                fund_code="BALI00",
+                fund_name="퇴연주식형",
+                base_date="2026-03-18",
+                t_day=0,
+                slot_id="T0_NET",
+                evidence_label="정산액",
+            ),
+            FundSlotItem(
+                fund_code="BALI00",
+                fund_name="퇴연주식형",
+                base_date="2026-03-18",
+                t_day=1,
+                slot_id="T1_RED",
+                evidence_label="해지금액 / 3월20일",
+            )
+        ]
+
+        augmented = self.extractor._augment_t_day_items_from_document(
+            document_text=document_text,
+            input_items=input_items,
+            output_items=ghost_output,
+        )
+        reconciled, forced_issues = self.extractor._reconcile_t_day_stage_output(
+            document_text=document_text,
+            input_items=input_items,
+            output_items=augmented,
+        )
+
+        self.assertEqual(
+            [(item.t_day, item.slot_id, item.evidence_label) for item in augmented],
+            [
+                (0, "T0_NET", "정산액"),
+                (1, "T1_RED", "해지금액 / 3월20일"),
+                (2, "T2_RED", "해지금액 / 3월20일"),
+            ],
+        )
+        self.assertEqual(forced_issues, [])
+        self.assertEqual(
+            [(item.t_day, item.slot_id, item.evidence_label) for item in reconciled],
+            [
+                (0, "T0_NET", "정산액"),
+                (2, "T2_RED", "해지금액 / 3월20일"),
+            ],
+        )
+
+    def test_build_stage_retry_context_normalizes_t_day_previous_output_before_retry_prompt(self) -> None:
+        prompt_bundle = _load_prompt_bundle()
+        stage = prompt_bundle.stages["t_day"]
+        document_text = (
+            "## HTML 동양생명_20260318.html\n\n"
+            "```text\n"
+            "2026년 3월 18일\n"
+            "정산내역\n"
+            "```\n\n"
+            "| 펀드코드 | 펀드명 | 설정액 | 해지액 | 정산액 |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| BALI00 | 퇴연주식형 | 8,592,243 | 0 | 8,592,243 |\n\n"
+            "```text\n"
+            "예상내역\n"
+            "```\n\n"
+            "| 펀드코드 | 펀드명 | 설정금액 / 3월19일 | 설정금액 / 3월20일 | 해지금액 / 3월19일 | 해지금액 / 3월20일 |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| BALI00 | 퇴연주식형 | 0 | 0 | 0 | 1,656,769 |\n"
+        )
+        input_items = [
+            {
+                "fund_code": "BALI00",
+                "fund_name": "퇴연주식형",
+                "base_date": "2026-03-18",
+            }
+        ]
+        previous_parsed = FundSlotResult(
+            items=[
+                FundSlotItem(
+                    fund_code="BALI00",
+                    fund_name="퇴연주식형",
+                    base_date="2026-03-18",
+                    t_day=0,
+                    slot_id="T0_NET",
+                    evidence_label="정산액",
+                ),
+                FundSlotItem(
+                    fund_code="BALI00",
+                    fund_name="퇴연주식형",
+                    base_date="2026-03-18",
+                    t_day=1,
+                    slot_id="T1_RED",
+                    evidence_label="해지금액 / 3월20일",
+                ),
+                FundSlotItem(
+                    fund_code="BALI00",
+                    fund_name="퇴연주식형",
+                    base_date="2026-03-18",
+                    t_day=2,
+                    slot_id="T2_RED",
+                    evidence_label="해지금액 / 3월20일",
+                ),
+            ],
+            issues=[],
+        )
+
+        retry_context = self.extractor._build_stage_retry_context(
+            stage=stage,
+            document_text=document_text,
+            input_items=input_items,
+            previous_parsed=previous_parsed,
+            stage_issues=["T_DAY_STAGE_PARTIAL"],
+            partial_issue=None,
+            attempt_number=1,
+            target_fund_scope=None,
+        )
+
+        self.assertIsNotNone(retry_context)
+        assert retry_context is not None
+        self.assertEqual(
+            [(item["fund_code"], item["t_day"], item["slot_id"]) for item in retry_context["previous_output_items"]],
+            [
+                ("BALI00", 0, "T0_NET"),
+                ("BALI00", 2, "T2_RED"),
+            ],
+        )
+        self.assertEqual(
+            [(item["fund_code"], item["base_date"]) for item in retry_context["focus_items"]],
+            [
+                ("BALI00", "2026-03-18"),
+            ],
+        )
+        self.assertEqual(
+            [(item["fund_code"], item["slot_id"], item["evidence_label"]) for item in retry_context["target_issues"]],
+            [
+                ("BALI00", None, None),
+            ],
+        )
+        self.assertEqual(retry_context["previous_reason_summary"], "")
+
+    def test_build_stage_retry_context_replaces_stale_t_day_previous_output_with_focus_slot(self) -> None:
+        prompt_bundle = _load_prompt_bundle()
+        stage = prompt_bundle.stages["t_day"]
+        document_text = (
+            "## HTML 동양생명_20260318.html\n\n"
+            "```text\n"
+            "2026년 3월 18일\n"
+            "정산내역\n"
+            "```\n\n"
+            "| 펀드코드 | 펀드명 | 설정액 | 해지액 | 정산액 |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| BALI00 | 퇴연주식형 | 8,592,243 | 0 | 8,592,243 |\n\n"
+            "```text\n"
+            "예상내역\n"
+            "```\n\n"
+            "| 펀드코드 | 펀드명 | 설정금액 / 3월19일 | 설정금액 / 3월20일 | 해지금액 / 3월19일 | 해지금액 / 3월20일 |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| BALI00 | 퇴연주식형 | 0 | 0 | 0 | 1,656,769 |\n"
+        )
+        input_items = [
+            {
+                "fund_code": "BALI00",
+                "fund_name": "퇴연주식형",
+                "base_date": "2026-03-18",
+            }
+        ]
+        previous_parsed = FundSlotResult(
+            items=[
+                FundSlotItem(
+                    fund_code="BALI00",
+                    fund_name="퇴연주식형",
+                    base_date="2026-03-18",
+                    t_day=0,
+                    slot_id="T0_NET",
+                    evidence_label="정산액",
+                ),
+                FundSlotItem(
+                    fund_code="BALI00",
+                    fund_name="퇴연주식형",
+                    base_date="2026-03-18",
+                    t_day=1,
+                    slot_id="T1_RED",
+                    evidence_label="해지금액 / 3월20일",
+                ),
+            ],
+            issues=[],
+        )
+
+        retry_context = self.extractor._build_stage_retry_context(
+            stage=stage,
+            document_text=document_text,
+            input_items=input_items,
+            previous_parsed=previous_parsed,
+            stage_issues=[],
+            partial_issue="T_DAY_STAGE_PARTIAL",
+            attempt_number=1,
+            target_fund_scope=None,
+        )
+
+        self.assertIsNotNone(retry_context)
+        assert retry_context is not None
+        self.assertEqual(
+            [(item["fund_code"], item["t_day"], item["slot_id"]) for item in retry_context["previous_output_items"]],
+            [
+                ("BALI00", 0, "T0_NET"),
+                ("BALI00", 2, "T2_RED"),
+            ],
+        )
+        self.assertEqual(
+            [(item["fund_code"], item["t_day"], item["slot_id"]) for item in retry_context["focus_items"]],
+            [
+                ("BALI00", 2, "T2_RED"),
+            ],
+        )
+        self.assertEqual(
+            [(item["fund_code"], item["slot_id"], item["evidence_label"]) for item in retry_context["target_issues"]],
+            [
+                ("BALI00", "T2_RED", "해지금액 / 3월20일"),
+            ],
+        )
+
+    def test_build_stage_retry_context_carries_previous_reason_summary(self) -> None:
+        prompt_bundle = _load_prompt_bundle()
+        stage = prompt_bundle.stages["base_date"]
+
+        retry_context = self.extractor._build_stage_retry_context(
+            stage=stage,
+            document_text="기준일: 2025-11-27",
+            input_items=[
+                {
+                    "fund_code": "F001",
+                    "fund_name": "Alpha",
+                }
+            ],
+            previous_parsed=FundBaseDateResult(
+                items=[
+                    FundBaseDateItem(
+                        fund_code="F001",
+                        fund_name="Alpha",
+                        base_date="2025-11-27",
+                        reason_code="DATE_DOC_HEADER",
+                    )
+                ],
+                reason_summary="  Header date governs the document.  ",
+                issues=[],
+            ),
+            stage_issues=["BASE_DATE_STAGE_PARTIAL"],
+            partial_issue=None,
+            attempt_number=1,
+            target_fund_scope=None,
+        )
+
+        assert retry_context is not None
+        self.assertEqual(retry_context["previous_reason_summary"], "Header date governs the document.")
+
+    def test_parse_numeric_amount_text_for_deterministic_supports_currency_tokens_with_unicode_whitespace(self) -> None:
+        self.assertEqual(
+            self.extractor._parse_numeric_amount_text_for_deterministic("KRW\t100"),
+            100,
+        )
+        self.assertEqual(
+            self.extractor._parse_numeric_amount_text_for_deterministic("₩\u00a0123"),
+            123,
+        )
+        self.assertEqual(
+            self.extractor._parse_numeric_amount_text_for_deterministic("-₩23 ,182,592"),
+            -23182592,
+        )
+
     def test_build_deterministic_markdown_orders_allows_missing_fund_name_for_heungkuk(self) -> None:
         markdown_text = (
             "## EML [흥국생명] 설정해지 내역 운용지시건-삼성-0413\n\n"
@@ -793,6 +1409,31 @@ class ExtractorLogicTests(unittest.TestCase):
         )
 
         self.assertEqual(orders, [])
+
+    def test_build_markdown_shortcut_orders_after_base_date_ignores_inactive_base_date_seed(self) -> None:
+        markdown_text = (
+            "## EML [흥국생명] 설정해지 내역 운용지시건-삼성-0413\n\n"
+            "| 펀드코드 | 추가설정금액 | 당일인출금액 | 해지신청 | 비고 |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| 450038 | 0.4억 | / | / | / |\n"
+            "| 999999 | 0 | / | / | / |\n"
+        )
+        raw_text = "Date (Asia/Seoul): 2026-04-13\n"
+        base_dates = [
+            FundBaseDateItem(fund_code="450038", fund_name="", base_date="2026-04-13"),
+            FundBaseDateItem(fund_code="999999", fund_name="", base_date="2026-04-13"),
+        ]
+
+        orders = self.extractor._build_markdown_shortcut_orders_after_base_date(
+            base_dates=base_dates,
+            markdown_text=markdown_text,
+            raw_text=raw_text,
+            target_fund_scope=None,
+            expected_order_count=1,
+        )
+
+        self.assertEqual(len(orders), 1)
+        self.assertEqual(orders[0].fund_code, "450038")
 
     def test_build_markdown_shortcut_orders_after_base_date_skips_when_pending_note_is_incomplete(self) -> None:
         markdown_text = (
@@ -1242,7 +1883,7 @@ class ExtractorLogicTests(unittest.TestCase):
 
         self.assertEqual(
             focus_items,
-            [{"fund_code": "6115", "fund_name": "삼성그룹주형"}],
+            [{"fund_code": "6115", "fund_name": "삼성그룹주형", "reason_code": "FUND_MANAGER_SCOPED"}],
         )
 
     def test_recover_result_from_structured_markdown_preserves_non_blocking_issues(self) -> None:
@@ -1926,6 +2567,7 @@ class ExtractorLogicTests(unittest.TestCase):
         orders = self.extractor._build_structure_shortcut_orders_after_base_date(
             base_dates=base_dates,
             raw_text=raw_text,
+            markdown_text=None,
             target_fund_scope=None,
             expected_order_count=3,
         )
@@ -1943,6 +2585,31 @@ class ExtractorLogicTests(unittest.TestCase):
             },
         )
 
+    def test_build_structure_shortcut_orders_after_base_date_ignores_inactive_base_date_seed(self) -> None:
+        raw_text = (
+            "[PAGE 1]\n"
+            "The order of Subscription and Redemption\n"
+            "Date : 27-Nov-25\n"
+            "1. Subscription\n"
+            "Fund Name Code No. of Unit NAV Date NAV Amount(KRW) Bank\n"
+            "Future Mobility Active ETF FoF FME 20,751,062.2603 27-Nov-25 1,032.61 21,427,754 HANA\n"
+        )
+        base_dates = [
+            FundBaseDateItem(fund_code="FME", fund_name="Future Mobility Active ETF FoF", base_date="2025-11-27"),
+            FundBaseDateItem(fund_code="GBE", fund_name="Global Bond FoF II", base_date="2025-11-27"),
+        ]
+
+        orders = self.extractor._build_structure_shortcut_orders_after_base_date(
+            base_dates=base_dates,
+            raw_text=raw_text,
+            markdown_text=None,
+            target_fund_scope=None,
+            expected_order_count=1,
+        )
+
+        self.assertEqual(len(orders), 1)
+        self.assertEqual(orders[0].fund_code, "FME")
+
     def test_build_structure_shortcut_orders_after_base_date_requires_expected_count(self) -> None:
         raw_text = (
             "[PAGE 1]\n"
@@ -1959,6 +2626,7 @@ class ExtractorLogicTests(unittest.TestCase):
         orders = self.extractor._build_structure_shortcut_orders_after_base_date(
             base_dates=base_dates,
             raw_text=raw_text,
+            markdown_text=None,
             target_fund_scope=None,
             expected_order_count=None,
         )
@@ -1982,6 +2650,7 @@ class ExtractorLogicTests(unittest.TestCase):
         orders = self.extractor._build_structure_shortcut_orders_after_base_date(
             base_dates=base_dates,
             raw_text=raw_text,
+            markdown_text=None,
             target_fund_scope=None,
             expected_order_count=2,
         )
@@ -4175,6 +4844,7 @@ class ExtractorLogicTests(unittest.TestCase):
                             "evidence_label": "설정금액",
                         }
                     ],
+                    "previous_reason_summary": "same-day settlement plus missing explicit sub slot",
                 },
                 counterparty_guidance=None,
             )
@@ -4185,7 +4855,251 @@ class ExtractorLogicTests(unittest.TestCase):
         self.assertIn("T_DAY_MISSING_FOR_6114", prompt)
         self.assertIn('"issue_code": "T_DAY_MISSING"', prompt)
         self.assertIn("Previous output items JSON:", prompt)
+        self.assertIn("Previous reason summary:", prompt)
+        self.assertIn("same-day settlement plus missing explicit sub slot", prompt)
         self.assertIn('"fund_code": "6114"', prompt)
+
+    def test_classify_instruction_document_prefers_reason_summary(self) -> None:
+        extractor = object.__new__(FundOrderExtractor)
+        prompt_bundle = _load_prompt_bundle()
+
+        def _fake_invoke_stage_with_issue_retry(self, **_kwargs):
+            return (
+                types.SimpleNamespace(
+                    parsed=InstructionDocumentResult(
+                        items=[
+                            InstructionDocumentItem(
+                                is_instruction_document=False,
+                                reason="item-level reason",
+                                reason_code="NONINSTR_COVER_EMAIL",
+                            )
+                        ],
+                        reason_summary="stage-level reason summary",
+                        issues=[],
+                    ),
+                    raw_response="",
+                ),
+                [],
+                None,
+            )
+
+        extractor._invoke_stage_with_issue_retry = types.MethodType(_fake_invoke_stage_with_issue_retry, extractor)
+
+        is_instruction_document, reason = extractor._classify_instruction_document(
+            prompt_bundle=prompt_bundle,
+            document_text="cover email",
+            artifacts=[],
+            counterparty_guidance=None,
+        )
+
+        self.assertFalse(is_instruction_document)
+        self.assertEqual(reason, "stage-level reason summary")
+
+    def test_classify_instruction_document_falls_back_to_item_reason(self) -> None:
+        extractor = object.__new__(FundOrderExtractor)
+        prompt_bundle = _load_prompt_bundle()
+
+        def _fake_invoke_stage_with_issue_retry(self, **_kwargs):
+            return (
+                types.SimpleNamespace(
+                    parsed=InstructionDocumentResult(
+                        items=[
+                            InstructionDocumentItem(
+                                is_instruction_document=False,
+                                reason="item-level reason",
+                                reason_code="NONINSTR_COVER_EMAIL",
+                            )
+                        ],
+                        reason_summary="",
+                        issues=[],
+                    ),
+                    raw_response="",
+                ),
+                [],
+                None,
+            )
+
+        extractor._invoke_stage_with_issue_retry = types.MethodType(_fake_invoke_stage_with_issue_retry, extractor)
+
+        is_instruction_document, reason = extractor._classify_instruction_document(
+            prompt_bundle=prompt_bundle,
+            document_text="cover email",
+            artifacts=[],
+            counterparty_guidance=None,
+        )
+
+        self.assertFalse(is_instruction_document)
+        self.assertEqual(reason, "item-level reason")
+
+    def test_dedupe_stage_items_ignores_reason_code_and_preserves_first_non_empty(self) -> None:
+        items = [
+            FundAmountItem(
+                fund_code="F001",
+                fund_name="Alpha",
+                base_date="2025-11-27",
+                t_day=0,
+                slot_id="T0_NET",
+                evidence_label="정산액",
+                transfer_amount="100",
+                reason_code=None,
+            ),
+            FundAmountItem(
+                fund_code="F001",
+                fund_name="Alpha",
+                base_date="2025-11-27",
+                t_day=0,
+                slot_id="T0_NET",
+                evidence_label="정산액",
+                transfer_amount="100",
+                reason_code="AMOUNT_NET_COLUMN",
+            ),
+            FundAmountItem(
+                fund_code="F001",
+                fund_name="Alpha",
+                base_date="2025-11-27",
+                t_day=0,
+                slot_id="T0_NET",
+                evidence_label="정산액",
+                transfer_amount="100",
+                reason_code="AMOUNT_SCHEDULE_BUCKET",
+            ),
+        ]
+
+        deduped = self.extractor._dedupe_stage_items(items)
+
+        self.assertEqual(len(deduped), 1)
+        self.assertEqual(deduped[0].reason_code, "AMOUNT_NET_COLUMN")
+
+    def test_dedupe_retry_focus_items_ignores_reason_code(self) -> None:
+        deduped = self.extractor._dedupe_retry_focus_items(
+            [
+                {
+                    "fund_code": "F001",
+                    "fund_name": "Alpha",
+                    "base_date": "2025-11-27",
+                    "t_day": 0,
+                    "slot_id": "T0_NET",
+                    "evidence_label": "정산액",
+                },
+                {
+                    "fund_code": "F001",
+                    "fund_name": "Alpha",
+                    "base_date": "2025-11-27",
+                    "t_day": 0,
+                    "slot_id": "T0_NET",
+                    "evidence_label": "정산액",
+                    "reason_code": "SLOT_T0_NET",
+                },
+            ]
+        )
+
+        self.assertEqual(len(deduped), 1)
+        self.assertEqual(deduped[0]["reason_code"], "SLOT_T0_NET")
+
+    def test_dedupe_fund_seeds_preserves_reason_code(self) -> None:
+        seeds = [
+            FundSeedItem(fund_code="F001", fund_name="Alpha", reason_code=None),
+            FundSeedItem(fund_code="F001", fund_name="Alpha", reason_code="FUND_MANAGER_SCOPED"),
+        ]
+
+        deduped = self.extractor._dedupe_fund_seeds(seeds)
+
+        self.assertEqual(len(deduped), 1)
+        self.assertEqual(deduped[0].reason_code, "FUND_MANAGER_SCOPED")
+
+    def test_post_validate_transfer_amount_items_fills_missing_reason_code(self) -> None:
+        post_validated = self.extractor._post_validate_transfer_amount_items(
+            [
+                FundAmountItem(
+                    fund_code="F001",
+                    fund_name="Alpha",
+                    base_date="2025-11-27",
+                    t_day=0,
+                    slot_id="T0_NET",
+                    evidence_label="정산액",
+                    transfer_amount="100",
+                    reason_code=None,
+                )
+            ]
+        )
+
+        self.assertEqual(post_validated[0].reason_code, "AMOUNT_NET_COLUMN")
+
+    def test_post_validate_transfer_amount_items_upgrades_other_to_schedule_bucket(self) -> None:
+        post_validated = self.extractor._post_validate_transfer_amount_items(
+            [
+                FundAmountItem(
+                    fund_code="F001",
+                    fund_name="Alpha",
+                    base_date="2025-11-27",
+                    t_day=2,
+                    slot_id="T2_SUB",
+                    evidence_label="설정금액 / 11월29일",
+                    transfer_amount="100",
+                    reason_code="AMOUNT_OTHER_VERIFIED",
+                )
+            ]
+        )
+
+        self.assertEqual(post_validated[0].reason_code, "AMOUNT_SCHEDULE_BUCKET")
+
+    def test_post_validate_transfer_amount_items_keeps_existing_specific_reason_code(self) -> None:
+        post_validated = self.extractor._post_validate_transfer_amount_items(
+            [
+                FundAmountItem(
+                    fund_code="F001",
+                    fund_name="Alpha",
+                    base_date="2025-11-27",
+                    t_day=0,
+                    slot_id="T0_SUB",
+                    evidence_label="설정금액",
+                    transfer_amount="100",
+                    reason_code="AMOUNT_EXPLICIT_SUB",
+                )
+            ]
+        )
+
+        self.assertEqual(post_validated[0].reason_code, "AMOUNT_EXPLICIT_SUB")
+
+    def test_post_validate_transfer_amount_items_uses_signed_outflow_when_no_stronger_signal(self) -> None:
+        post_validated = self.extractor._post_validate_transfer_amount_items(
+            [
+                FundAmountItem(
+                    fund_code="F001",
+                    fund_name="Alpha",
+                    base_date="2025-11-27",
+                    t_day=0,
+                    slot_id="T0_NET",
+                    evidence_label="금액",
+                    transfer_amount="-100",
+                    reason_code=None,
+                )
+            ]
+        )
+
+        self.assertEqual(post_validated[0].reason_code, "AMOUNT_SIGNED_OUTFLOW")
+
+    def test_normalize_stage_retry_previous_output_items_post_validates_transfer_amount_reason_code(self) -> None:
+        normalized_items, forced_issues = self.extractor._normalize_stage_retry_previous_output_items_with_issues(
+            stage_name="transfer_amount",
+            document_text="",
+            input_items=[],
+            previous_output_items=[
+                {
+                    "fund_code": "F001",
+                    "fund_name": "Alpha",
+                    "base_date": "2025-11-27",
+                    "t_day": 1,
+                    "slot_id": "T1_SUB",
+                    "evidence_label": "설정금액 / 11월28일",
+                    "transfer_amount": "100",
+                    "reason_code": "AMOUNT_OTHER_VERIFIED",
+                }
+            ],
+        )
+
+        self.assertEqual(forced_issues, [])
+        self.assertEqual(normalized_items[0]["reason_code"], "AMOUNT_SCHEDULE_BUCKET")
 
     def test_normalize_stage_retry_issue_extracts_fund_code_from_detailed_issue(self) -> None:
         normalized = self.extractor._normalize_stage_retry_issue(
@@ -4252,7 +5166,7 @@ class ExtractorLogicTests(unittest.TestCase):
             response_model,
             counterparty_guidance=None,
         ):
-            active_context = getattr(self, "_active_stage_retry_context", None)
+            active_context = extractor_module._ACTIVE_STAGE_RETRY_CONTEXT.get()
             seen_retry_contexts.append(None if active_context is None else dict(active_context))
             return next(responses)
 
@@ -4294,6 +5208,65 @@ class ExtractorLogicTests(unittest.TestCase):
         )
         self.assertEqual(stage_issues, [])
         self.assertIsNone(partial_issue)
+
+    def test_invoke_stage_with_issue_retry_records_batch_and_stage_retry_metrics(self) -> None:
+        extractor = object.__new__(FundOrderExtractor)
+        extractor.llm_stage_issue_retry_attempts = 2
+        prompt_bundle = _load_prompt_bundle()
+        stage = prompt_bundle.stages["base_date"]
+
+        responses = iter(
+            [
+                types.SimpleNamespace(
+                    parsed=FundBaseDateResult(
+                        items=[FundBaseDateItem(fund_code="6114", fund_name="인덱스주식형", base_date=None)],
+                        issues=["BASE_DATE_MISSING"],
+                    ),
+                    raw_response="first",
+                ),
+                types.SimpleNamespace(
+                    parsed=FundBaseDateResult(
+                        items=[FundBaseDateItem(fund_code="6114", fund_name="인덱스주식형", base_date="2025-08-26")],
+                        issues=[],
+                    ),
+                    raw_response="second",
+                ),
+            ]
+        )
+
+        def fake_invoke_stage(
+            self,
+            *,
+            prompt_bundle,
+            stage,
+            document_text,
+            input_items,
+            batch_index,
+            response_model,
+            counterparty_guidance=None,
+        ):
+            return next(responses)
+
+        extractor._invoke_stage = types.MethodType(fake_invoke_stage, extractor)
+        metrics_state = extractor_module._ExtractMetricsState(started_at_monotonic=time.monotonic())
+        metrics_token = extractor_module._ACTIVE_EXTRACT_METRICS.set(metrics_state)
+        try:
+            invocation, stage_issues, partial_issue = extractor._invoke_stage_with_issue_retry(
+                prompt_bundle=prompt_bundle,
+                stage=stage,
+                document_text="sample document",
+                input_items=[{"fund_code": "6114", "fund_name": "인덱스주식형"}],
+                batch_index=1,
+                response_model=FundBaseDateResult,
+            )
+        finally:
+            extractor_module._ACTIVE_EXTRACT_METRICS.reset(metrics_token)
+
+        self.assertIsNotNone(invocation.parsed)
+        self.assertEqual(stage_issues, [])
+        self.assertIsNone(partial_issue)
+        self.assertEqual(metrics_state.llm_batches_started, {"base_date": 1})
+        self.assertEqual(metrics_state.stage_retry_invocations, {"base_date": 1})
 
     def test_derive_retry_focus_items_for_transfer_amount_partial_uses_missing_input_slots(self) -> None:
         focus_items = self.extractor._derive_retry_focus_items(
@@ -4439,6 +5412,97 @@ class ExtractorLogicTests(unittest.TestCase):
             [
                 ("T0_SUB", "설정금액"),
                 ("T0_RED", "해지금액"),
+            ],
+        )
+
+    def test_replace_incomplete_t_day_items_replaces_problematic_family_with_expected_slots(self) -> None:
+        document_text = "\n".join(
+            [
+                "## HTML 동양생명_20260318.html",
+                "```text",
+                "2026년 3월 18일",
+                "정산내역",
+                "```",
+                "| 펀드코드 | 펀드명 | 설정액 | 해지액 | 정산액 |",
+                "| --- | --- | --- | --- | --- |",
+                "| BALI00 | 퇴연주식형 | 8,592,243 | 0 | 8,592,243 |",
+                "```text",
+                "예상내역",
+                "```",
+                "| 펀드코드 | 펀드명 | 설정금액 / 3월19일 | 설정금액 / 3월20일 | 해지금액 / 3월19일 | 해지금액 / 3월20일 |",
+                "| --- | --- | --- | --- | --- | --- |",
+                "| BALI00 | 퇴연주식형 | 0 | 0 | 0 | 1,656,769 |",
+                "| BBJU00 | 글로벌멀티에셋형 | 45,772 | 0 | 1,862 | 0 |",
+            ]
+        )
+        replaced = self.extractor._replace_incomplete_t_day_items_with_deterministic_document_slots(
+            document_text=document_text,
+            input_items=[
+                {
+                    "fund_code": "BALI00",
+                    "fund_name": "퇴연주식형",
+                    "base_date": "2026-03-18",
+                },
+                {
+                    "fund_code": "BBJU00",
+                    "fund_name": "글로벌멀티에셋형",
+                    "base_date": "2026-03-18",
+                },
+            ],
+            output_items=[
+                FundSlotItem(
+                    fund_code="BALI00",
+                    fund_name="퇴연주식형",
+                    base_date="2026-03-18",
+                    t_day=0,
+                    slot_id="T0_NET",
+                    evidence_label="정산액",
+                ),
+                FundSlotItem(
+                    fund_code="BALI00",
+                    fund_name="퇴연주식형",
+                    base_date="2026-03-18",
+                    t_day=1,
+                    slot_id="T1_RED",
+                    evidence_label="해지금액 / 3월19일",
+                ),
+                FundSlotItem(
+                    fund_code="BALI00",
+                    fund_name="퇴연주식형",
+                    base_date="2026-03-18",
+                    t_day=2,
+                    slot_id="T2_RED",
+                    evidence_label="해지금액 / 3월20일",
+                ),
+                FundSlotItem(
+                    fund_code="BBJU00",
+                    fund_name="글로벌멀티에셋형",
+                    base_date="2026-03-18",
+                    t_day=1,
+                    slot_id="T1_SUB",
+                    evidence_label="설정금액 / 3월19일",
+                ),
+                FundSlotItem(
+                    fund_code="BBJU00",
+                    fund_name="글로벌멀티에셋형",
+                    base_date="2026-03-18",
+                    t_day=1,
+                    slot_id="T1_RED",
+                    evidence_label="해지금액 / 3월19일",
+                ),
+            ],
+        )
+
+        self.assertEqual(
+            [
+                (item.fund_code, item.t_day, item.slot_id, item.evidence_label)
+                for item in replaced
+            ],
+            [
+                ("BALI00", 0, "T0_NET", "정산액"),
+                ("BALI00", 2, "T2_RED", "해지금액 / 3월20일"),
+                ("BBJU00", 1, "T1_SUB", "설정금액 / 3월19일"),
+                ("BBJU00", 1, "T1_RED", "해지금액 / 3월19일"),
             ],
         )
 
@@ -4670,6 +5734,7 @@ class ExtractorLogicTests(unittest.TestCase):
                     "t_day": 0,
                     "slot_id": "T0_SUB",
                     "evidence_label": "설정금액",
+                    "reason_code": "SLOT_T0_EXPLICIT_SUB",
                     "retry_expected_family_slots": ["T0_RED", "T0_SUB"],
                 },
                 {
@@ -4679,6 +5744,7 @@ class ExtractorLogicTests(unittest.TestCase):
                     "t_day": 0,
                     "slot_id": "T0_RED",
                     "evidence_label": "해지금액",
+                    "reason_code": "SLOT_T0_EXPLICIT_RED",
                     "retry_expected_family_slots": ["T0_RED", "T0_SUB"],
                 },
             ],
@@ -4749,6 +5815,7 @@ class ExtractorLogicTests(unittest.TestCase):
                     "t_day": 0,
                     "slot_id": "T0_SUB",
                     "evidence_label": "설정금액",
+                    "reason_code": "SLOT_T0_EXPLICIT_SUB",
                     "retry_expected_family_slots": ["T0_RED", "T0_SUB"],
                 }
             ],
@@ -5289,6 +6356,66 @@ class ExtractorLogicTests(unittest.TestCase):
         self.assertEqual(len(outcome.result.orders), 1)
         self.assertEqual(outcome.result.orders[0].fund_code, "450038")
 
+    def test_extract_disables_markdown_shortcut_when_markdown_loss_is_detected(self) -> None:
+        document_text = (
+            "## EML [흥국생명] 설정해지 내역 운용지시건-삼성-0413\n\n"
+            "| 펀드코드 | 추가설정금액 |\n"
+            "| --- | --- |\n"
+            "| 450038 | 0.4억 |\n"
+        )
+        raw_text = "Date (Asia/Seoul): 2026-04-13\n"
+
+        extractor = object.__new__(FundOrderExtractor)
+        extractor.prompt_bundle = _load_prompt_bundle()
+        extractor.system_prompt = extractor.prompt_bundle.system_prompt
+        extractor.stage_batch_size = 10
+        extractor.llm_chunk_size_chars = 1200
+        extractor._refresh_prompt_bundle = types.MethodType(lambda self, force=False: self.prompt_bundle, extractor)
+        extractor._classify_instruction_document = types.MethodType(
+            lambda self, prompt_bundle, document_text, artifacts, *, counterparty_guidance=None: (True, None),
+            extractor,
+        )
+        extractor._extract_fund_seeds = types.MethodType(
+            lambda self, prompt_bundle, chunks, raw_text, issues, artifacts, *, target_fund_scope=None, counterparty_guidance=None: [
+                FundSeedItem(fund_code="450038", fund_name="-"),
+            ],
+            extractor,
+        )
+        seen_stages: list[str] = []
+
+        def fake_run_batched_stage(
+            self,
+            prompt_bundle,
+            stage,
+            document_text,
+            input_items,
+            response_model,
+            issues,
+            artifacts,
+            *,
+            counterparty_guidance=None,
+        ):
+            seen_stages.append(stage.name)
+            if stage.name == "t_day":
+                return [FundSlotItem(fund_code="450038", fund_name="-", base_date="2026-04-13", t_day=0, slot_id="T0_SUB", evidence_label="추가설정금액")]
+            if stage.name == "transfer_amount":
+                return [FundAmountItem(fund_code="450038", fund_name="-", base_date="2026-04-13", t_day=0, slot_id="T0_SUB", evidence_label="추가설정금액", transfer_amount="40,000,000")]
+            raise AssertionError(f"Unexpected stage after transfer_amount: {stage.name}")
+
+        extractor._run_batched_stage = types.MethodType(fake_run_batched_stage, extractor)
+
+        outcome = extractor.extract(
+            [document_text],
+            raw_text=raw_text,
+            markdown_text=document_text,
+            expected_order_count=1,
+            markdown_loss_detected=True,
+        )
+
+        self.assertEqual(seen_stages, ["t_day", "transfer_amount"])
+        self.assertEqual(len(outcome.result.orders), 1)
+        self.assertEqual(outcome.result.orders[0].fund_code, "450038")
+
     def test_extract_falls_back_to_staged_path_when_markdown_shortcut_is_not_safe(self) -> None:
         document_text = (
             "## EML [흥국생명] 설정해지 내역 운용지시건-삼성-0413\n\n"
@@ -5543,6 +6670,62 @@ class ExtractorLogicTests(unittest.TestCase):
         self.assertEqual(extractor.llm.bound.calls, 2)
         self.assertEqual(extractor.llm.prompt_calls, 0)
 
+    def test_invoke_stage_records_transport_retry_attempt_metric(self) -> None:
+        class FakeBoundLLM:
+            def __init__(self, responses):
+                self.responses = list(responses)
+                self.calls = 0
+
+            def invoke(self, messages):
+                response = self.responses[self.calls]
+                self.calls += 1
+                if isinstance(response, Exception):
+                    raise response
+                return response
+
+            def bind(self, **kwargs):
+                return self
+
+        class FakeLLM:
+            def __init__(self, responses):
+                self.bound = FakeBoundLLM(responses)
+
+            def bind(self, **kwargs):
+                return self.bound
+
+            def invoke(self, messages):
+                raise AssertionError("prompt-only mode should not be used")
+
+        extractor = object.__new__(FundOrderExtractor)
+        extractor.llm_retry_attempts = 3
+        extractor.llm_retry_backoff_seconds = 0
+        extractor.llm = FakeLLM(
+            [
+                RuntimeError("Connection error"),
+                types.SimpleNamespace(content='{"items":[{"fund_code":"F001","fund_name":"Alpha"}],"issues":[]}'),
+            ]
+        )
+        prompt_bundle = _load_prompt_bundle()
+        stage = prompt_bundle.stages["fund_inventory"]
+        metrics_state = extractor_module._ExtractMetricsState(started_at_monotonic=time.monotonic())
+        metrics_token = extractor_module._ACTIVE_EXTRACT_METRICS.set(metrics_state)
+        try:
+            with patch("app.extractor.time.sleep", return_value=None):
+                invocation = extractor._invoke_stage(
+                    prompt_bundle=prompt_bundle,
+                    stage=stage,
+                    document_text="sample",
+                    input_items=None,
+                    batch_index=1,
+                    response_model=FundSeedResult,
+                    counterparty_guidance=None,
+                )
+        finally:
+            extractor_module._ACTIVE_EXTRACT_METRICS.reset(metrics_token)
+
+        self.assertIsNotNone(invocation.parsed)
+        self.assertEqual(metrics_state.transport_retry_attempts, {"fund_inventory": 1})
+
     def test_invoke_stage_retries_prompt_only_mode_after_json_failures(self) -> None:
         class FakeBoundLLM:
             """JSON mode 실패를 반복 재현하는 최소 bound client다."""
@@ -5669,6 +6852,98 @@ class ExtractorLogicTests(unittest.TestCase):
         self.assertIn("[User]", logged_text)
         self.assertIn("LLM response stage=fund_inventory batch=1 mode=json_object attempt=1", logged_text)
         self.assertIn("[Response]", logged_text)
+
+    def test_extract_from_task_payload_writes_metrics_sidecar(self) -> None:
+        extractor = object.__new__(FundOrderExtractor)
+        task_payload = DocumentLoadTaskPayload(
+            source_path="/tmp/sample.pdf",
+            file_name="sample.pdf",
+            pdf_password=None,
+            content_type="application/pdf",
+            raw_text="Closing Date : 2025-11-26\n결제일 : 2025-11-27\n",
+            markdown_text="markdown",
+            chunks=("chunk-1",),
+            non_instruction_reason=None,
+            allow_empty_result=False,
+            scope_excludes_all_funds=False,
+            expected_order_count=1,
+            target_fund_scope=TargetFundScope(manager_column_present=False),
+        )
+        extractor.extract = lambda chunks, raw_text=None, markdown_text=None, target_fund_scope=None, counterparty_guidance=None, expected_order_count=None, markdown_loss_detected=False: LLMExtractionOutcome(  # type: ignore[method-assign]
+            result=ExtractionResult(
+                orders=[
+                    OrderExtraction(
+                        fund_code="F001",
+                        fund_name="Alpha",
+                        settle_class=SettleClass.CONFIRMED,
+                        order_type=OrderType.SUB,
+                        base_date="2025-11-27",
+                        t_day=0,
+                        transfer_amount="100",
+                    )
+                ],
+                issues=[],
+            )
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "sample_llm_pipeline.log"
+            outcome = extractor.extract_from_task_payload(
+                task_payload,
+                extract_log_path=log_path,
+            )
+            metrics_path = extractor_module.build_extract_llm_metrics_path(log_path=log_path)
+            metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(outcome.result.orders), 1)
+        self.assertGreaterEqual(metrics_payload["total_elapsed_seconds"], 0.0)
+        self.assertEqual(metrics_payload["stage_retry_invocations"], {})
+        self.assertEqual(metrics_payload["transport_retry_attempts"], {})
+        self.assertEqual(metrics_payload["llm_batches_started"], {})
+
+    def test_init_uses_settings_runtime_values_for_llm_and_retry_config(self) -> None:
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_chat_openai(**kwargs):
+            captured_kwargs.update(kwargs)
+            return types.SimpleNamespace(**kwargs)
+
+        settings = types.SimpleNamespace(
+            llm_model="test-model",
+            llm_base_url="http://localhost:3910/v1",
+            llm_api_key="dummy",
+            llm_temperature=0.25,
+            llm_max_tokens=4321,
+            llm_timeout_seconds=67,
+            llm_retry_attempts=5,
+            llm_retry_backoff_seconds=2.25,
+            llm_chunk_size_chars=3456,
+            llm_stage_batch_size=9,
+        )
+
+        with patch("app.extractor.ChatOpenAI", side_effect=fake_chat_openai), patch.object(
+            FundOrderExtractor,
+            "_refresh_prompt_bundle",
+            autospec=True,
+            return_value=None,
+        ):
+            extractor = FundOrderExtractor(settings)
+
+        self.assertEqual(captured_kwargs["model"], "test-model")
+        self.assertEqual(captured_kwargs["base_url"], "http://localhost:3910/v1")
+        self.assertEqual(captured_kwargs["api_key"], "dummy")
+        self.assertEqual(captured_kwargs["temperature"], 0.25)
+        self.assertEqual(captured_kwargs["max_tokens"], 4321)
+        self.assertEqual(captured_kwargs["timeout"], 67)
+        self.assertEqual(extractor.stage_batch_size, 9)
+        self.assertEqual(extractor.llm_retry_attempts, 5)
+        self.assertEqual(extractor.llm_retry_backoff_seconds, 2.25)
+        self.assertEqual(extractor.llm_chunk_size_chars, 3456)
+        self.assertEqual(extractor.llm_max_tokens, 4321)
+        self.assertEqual(extractor.llm_timeout_seconds, 67)
+        self.assertEqual(extractor.llm_parallel_workers, 1)
+        self.assertEqual(extractor._stage_max_tokens("instruction_document"), 4096)
+        self.assertEqual(extractor._stage_max_tokens("transfer_amount"), 4321)
 
     def test_extract_fund_seeds_reinvokes_same_stage_when_stage_issues_exist(self) -> None:
         extractor = object.__new__(FundOrderExtractor)
@@ -6291,6 +7566,86 @@ class ExtractorLogicTests(unittest.TestCase):
         self.assertEqual([(item.fund_code, item.base_date) for item in result], [("F001", "2025-11-27")])
         self.assertEqual(issues, [])
         self.assertEqual(artifacts, [])
+
+    def test_run_batched_stage_runs_llm_calls_sequentially_when_parallel_is_disabled(self) -> None:
+        extractor = object.__new__(FundOrderExtractor)
+        extractor.stage_batch_size = 1
+        extractor.llm_parallel_workers = 1
+
+        prompt_bundle = _load_prompt_bundle()
+        stage = prompt_bundle.stages["base_date"]
+        active_calls = 0
+        max_active_calls = 0
+        lock = threading.Lock()
+
+        def fake_invoke_stage_with_issue_retry(
+            self,
+            *,
+            prompt_bundle,
+            stage,
+            document_text,
+            input_items,
+            batch_index,
+            response_model,
+            target_fund_scope=None,
+            counterparty_guidance=None,
+        ):
+            nonlocal active_calls, max_active_calls
+            with lock:
+                active_calls += 1
+                max_active_calls = max(max_active_calls, active_calls)
+            try:
+                time.sleep(0.05)
+                item = input_items[0]
+                return (
+                    types.SimpleNamespace(
+                        parsed=FundBaseDateResult(
+                            items=[
+                                FundBaseDateItem(
+                                    fund_code=item["fund_code"],
+                                    fund_name=item["fund_name"],
+                                    base_date="2025-11-27",
+                                )
+                            ],
+                            issues=[],
+                        ),
+                        raw_response="{}",
+                    ),
+                    [],
+                    None,
+                )
+            finally:
+                with lock:
+                    active_calls -= 1
+
+        extractor._invoke_stage_with_issue_retry = types.MethodType(fake_invoke_stage_with_issue_retry, extractor)
+
+        result = extractor._run_batched_stage(
+            prompt_bundle=prompt_bundle,
+            stage=stage,
+            document_text="sample",
+            input_items=[
+                {"fund_code": "F001", "fund_name": "Alpha"},
+                {"fund_code": "F002", "fund_name": "Beta"},
+                {"fund_code": "F003", "fund_name": "Gamma"},
+                {"fund_code": "F004", "fund_name": "Delta"},
+            ],
+            response_model=FundBaseDateResult,
+            issues=[],
+            artifacts=[],
+            counterparty_guidance=None,
+        )
+
+        self.assertEqual(max_active_calls, 1)
+        self.assertEqual(
+            [(item.fund_code, item.base_date) for item in result],
+            [
+                ("F001", "2025-11-27"),
+                ("F002", "2025-11-27"),
+                ("F003", "2025-11-27"),
+                ("F004", "2025-11-27"),
+            ],
+        )
 
     def test_run_batched_stage_accepts_same_slot_missing_value_recovery(self) -> None:
         extractor = object.__new__(FundOrderExtractor)
@@ -7269,8 +8624,8 @@ class ExtractorLogicTests(unittest.TestCase):
             counterparty_guidance=None,
         )
 
-        self.assertEqual([(item.fund_code, item.t_day, item.slot_id) for item in result], [("F001", None, "")])
-        self.assertEqual(issues, ["T_DAY_MISSING", "T_DAY_STAGE_PARTIAL"])
+        self.assertEqual([(item.fund_code, item.t_day, item.slot_id) for item in result], [("F001", 0, "T0_NET")])
+        self.assertEqual(issues, [])
         self.assertEqual(artifacts, [])
 
     def test_run_batched_stage_rejects_t_day_complete_family_conflicting_evidence_label(self) -> None:
