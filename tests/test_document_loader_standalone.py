@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import importlib
 import shutil
 import sys
@@ -10,8 +11,36 @@ from tempfile import TemporaryDirectory
 class DocumentLoaderStandaloneImportTests(unittest.TestCase):
     """`DocumentLoader` standalone import 시나리오를 검증한다."""
 
+    def test_document_loader_class_is_facade_only(self) -> None:
+        """`DocumentLoader` class body에는 facade entry 역할만 남아 있어야 한다."""
+        source_path = Path(__file__).resolve().parents[1] / "app" / "document_loader.py"
+        module = ast.parse(source_path.read_text(encoding="utf-8"))
+        document_loader = next(
+            node for node in module.body if isinstance(node, ast.ClassDef) and node.name == "DocumentLoader"
+        )
+
+        self.assertEqual(
+            [base.id for base in document_loader.bases if isinstance(base, ast.Name)],
+            [
+                "DocumentLoaderCommonMixin",
+                "DocumentLoaderCoreMixin",
+                "DocumentLoaderScopeMixin",
+                "DocumentLoaderMarkdownMixin",
+                "DocumentLoaderCoverageMixin",
+                "PdfDocumentLoaderMixin",
+                "ExcelDocumentLoaderMixin",
+                "HtmlDocumentLoaderMixin",
+                "EmlDocumentLoaderMixin",
+                "MhtDocumentLoaderMixin",
+            ],
+        )
+        self.assertEqual(len(document_loader.body), 1)
+        self.assertIsInstance(document_loader.body[0], ast.Expr)
+        self.assertIsInstance(document_loader.body[0].value, ast.Constant)
+        self.assertIsInstance(document_loader.body[0].value.value, str)
+
     def test_document_loader_can_be_imported_as_standalone_package_copy(self) -> None:
-        """`document_loader.py + document_loaders/`만 복사된 환경에서도 import 되는지 본다.
+        """`document_loader.py + document_loading/ + document_loaders/` 복사본을 검증한다.
 
         실제 WAS 포팅에서는 `app` 패키지 전체를 옮기지 않고, DocumentLoader 관련 코드만
         떼어내는 경우가 있다. 이 테스트는 그런 배포 형태를 임시 디렉터리에서 재현해서
@@ -29,12 +58,14 @@ class DocumentLoaderStandaloneImportTests(unittest.TestCase):
         #   확인하는 계약 테스트이지, 실제 운영 문서 샘플 회귀 테스트는 아니다.
         project_root = Path(__file__).resolve().parents[1]
         source_module = project_root / "app" / "document_loader.py"
-        source_package = project_root / "app" / "document_loaders"
+        source_loading_package = project_root / "app" / "document_loading"
+        source_loader_package = project_root / "app" / "document_loaders"
 
         with TemporaryDirectory() as tmp_dir:
             temp_root = Path(tmp_dir)
             shutil.copy2(source_module, temp_root / "document_loader.py")
-            shutil.copytree(source_package, temp_root / "document_loaders")
+            shutil.copytree(source_loading_package, temp_root / "document_loading")
+            shutil.copytree(source_loader_package, temp_root / "document_loaders")
 
             # fixture를 테스트 안에서 직접 만드는 이유:
             # - 다른 서버/CI에서는 DOCUMENT_INPUT_DIR가 비어 있을 수 있다.
@@ -75,16 +106,25 @@ class DocumentLoaderStandaloneImportTests(unittest.TestCase):
             module_names_to_clear = [
                 module_name
                 for module_name in list(sys.modules)
-                if module_name == "document_loader" or module_name.startswith("document_loaders")
+                if module_name == "document_loader"
+                or module_name.startswith("document_loading")
+                or module_name.startswith("document_loaders")
             ]
             cached_modules = {module_name: sys.modules.pop(module_name) for module_name in module_names_to_clear}
             try:
                 standalone_module = importlib.import_module("document_loader")
                 loader = standalone_module.DocumentLoader()
                 loaded = loader.load(sample_document)
+                payload = loader.build_task_payload(sample_document, chunk_size_chars=1000)
             finally:
                 sys.path.remove(added_path)
-                for module_name in [name for name in list(sys.modules) if name == "document_loader" or name.startswith("document_loaders")]:
+                for module_name in [
+                    name
+                    for name in list(sys.modules)
+                    if name == "document_loader"
+                    or name.startswith("document_loading")
+                    or name.startswith("document_loaders")
+                ]:
                     sys.modules.pop(module_name, None)
                 sys.modules.update(cached_modules)
 
@@ -92,3 +132,6 @@ class DocumentLoaderStandaloneImportTests(unittest.TestCase):
         self.assertEqual(loaded.content_type, "text/html")
         self.assertIn("V2201S", loaded.raw_text)
         self.assertGreater(loader.estimate_order_cell_count(loaded.raw_text), 0)
+        self.assertEqual(payload.file_name, "sample_instruction.html")
+        self.assertGreaterEqual(payload.expected_order_count, 1)
+        self.assertTrue(payload.chunks)

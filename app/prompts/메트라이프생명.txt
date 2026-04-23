@@ -13,17 +13,20 @@ Field mapping and extraction rules
 - base_date: use the date shown directly below the title at the top of the document.
 - fund_name: map from the "펀드" column when it exists, otherwise map from the "펀드구분" column. Preserve the printed fund name, but remove leading and trailing whitespace.
 - There is no real fund code column in this document.
-- During extraction, assign one deterministic temporary internal fund_code per valid transaction row using this exact format:
+- During extraction, assign one deterministic temporary internal fund_code per section 1 fund row using this exact format:
   - METLIFE_TMP_001
   - METLIFE_TMP_002
   - METLIFE_TMP_003
-- Use the top-to-bottom visual row order of valid transaction rows in section "1. 추가설정 및 부분해지 내용".
+- Use the top-to-bottom visual row order of the section 1 fund rows.
 - If the same row creates both a SUB order and a RED order, use the same temporary internal fund_code for both orders from that row.
 
 Transaction rules
 - Read the direction amount columns from the section 1 table.
 - Treat "추가설정" and "추가설정 금액" as the same SUB amount column.
 - Treat "부분해지" and "부분해지 금액" as the same RED amount column.
+- Use only the amount cells from the same visual row as the selected fund row.
+- Never borrow an amount from the previous row or the next row.
+- For a given row and direction, use at most one amount cell.
 - "추가설정" or "추가설정 금액" > 0 creates one SUB order.
 - "부분해지" or "부분해지 금액" creates one RED order when the printed amount is non-zero, even if the document prints it as a negative amount such as "-₩23,182,592".
 - A value of 0, blank, or "-" is not a transaction for that direction.
@@ -37,4 +40,5 @@ Transaction rules
 Output discipline
 - Do not invent extra orders from "운용사", "수탁은행", "거래은행", "결제계좌", "구분", or "설정구분".
 - Do not use any information from section "2. 결제 금액 및 계좌" as transaction evidence.
+- Do not reuse a section 2 결제금액 as a section 1 row amount.
 - Emit orders only from rows in section "1. 추가설정 및 부분해지 내용" that have explicit non-zero values in the selected SUB and/or RED amount columns.

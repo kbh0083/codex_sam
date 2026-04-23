@@ -23,19 +23,35 @@ RUN_LIVE_COUNTERPARTY_REGRESSION = os.getenv("RUN_LIVE_COUNTERPARTY_REGRESSION")
 LIVE_REGRESSION_TIMEOUT_SECONDS = int(os.getenv("LIVE_REGRESSION_TIMEOUT_SECONDS", "480"))
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCUMENT_DIR = REPO_ROOT / "document"
-CORRECT_RESULT_DIR = REPO_ROOT / "output" / "correct_result"
+ANSWER_SET_DIR = REPO_ROOT / "거래처별_문서_정답"
+KDB_XLSX_PATH = DOCUMENT_DIR / "운용지시서(KDB생명)_20251128.xlsx"
+KDB_PDF_PATH = DOCUMENT_DIR / "운용지시서(KDB생명)_20251128.pdf"
+KDB_EML_PATH = DOCUMENT_DIR / "운용지시서_KDB_20251128.eml"
+KDB_ANSWER_DIR = ANSWER_SET_DIR / "KDB생명"
+KDB_XLSX_BASELINE_PATH = KDB_ANSWER_DIR / "운용지시서(KDB생명)_20251128.json"
+KDB_PDF_BASELINE_PATH = KDB_ANSWER_DIR / "운용지시서(KDB생명)_20251128.pdf.json"
+KDB_EML_BASELINE_PATH = KDB_ANSWER_DIR / "운용지시서_KDB_20251128.json"
 IBK_DOCUMENT_PATH = DOCUMENT_DIR / "IBK연금보험_0408_삼성자산운용설정해지지시서.eml"
 HANAIS_XLSX_PATH = DOCUMENT_DIR / "흥국생명-hanais-0407-지시서.xlsx"
 HANAIS_PDF_PATH = DOCUMENT_DIR / "흥국생명-hanais-0407-지시서.pdf"
-CARDIF_PDF_PATH = CORRECT_RESULT_DIR / "11_카디프__카디프_251127.pdf"
-CARDIF_BASELINE_PATH = CORRECT_RESULT_DIR / "11_카디프.json"
+CARDIF_PDF_PATH = DOCUMENT_DIR / "카디프_251127.pdf"
+CARDIF_ANSWER_DIR = ANSWER_SET_DIR / "카디프생명"
+CARDIF_BASELINE_PATH = CARDIF_ANSWER_DIR / "카디프_251127.json"
 DONGYANG_20260318_PATH = DOCUMENT_DIR / "동양생명_20260318.html"
-DONGYANG_20260318_BASELINE_PATH = CORRECT_RESULT_DIR / "08_동양생명.json"
+DONGYANG_ANSWER_DIR = ANSWER_SET_DIR / "동양생명"
+DONGYANG_20260318_BASELINE_PATH = DONGYANG_ANSWER_DIR / "동양생명_20260318.json"
 DONGYANG_20260413_PATH = DOCUMENT_DIR / "동양생명_20260413.html"
-DONGYANG_20260413_BASELINE_PATH = CORRECT_RESULT_DIR / "08_동양생명_20260413.json"
+DONGYANG_20260413_BASELINE_PATH = DONGYANG_ANSWER_DIR / "동양생명_20260413.json"
+KYOBO_MHT_PATH = DOCUMENT_DIR / "자금운용_해지_5440_20260316.mht"
+KYOBO_ANSWER_DIR = ANSWER_SET_DIR / "교보생명"
+KYOBO_MHT_BASELINE_PATH = KYOBO_ANSWER_DIR / "자금운용_해지_5440_20260316.json"
 HANA_LIFE_XLSX_PATH = DOCUMENT_DIR / "하나생명-0415-지시서.xlsx"
 HANA_LIFE_LEGACY_PDF_PATH = DOCUMENT_DIR / "하나생명(액티브)_251127.pdf"
-HANA_LIFE_BASELINE_PATH = CORRECT_RESULT_DIR / "12_하나생명.json"
+HANA_LIFE_ANSWER_DIR = ANSWER_SET_DIR / "하나생명"
+HANA_LIFE_BASELINE_PATH = HANA_LIFE_ANSWER_DIR / "하나생명-0415-지시서.json"
+METLIFE_BASE_PATH = DOCUMENT_DIR / "메트라이프생명_0408.eml"
+METLIFE_ANSWER_DIR = ANSWER_SET_DIR / "메트라이프생명"
+METLIFE_BASELINE_PATH = METLIFE_ANSWER_DIR / "메트라이프생명_0408.json"
 METLIFE_ADDITIONAL_SUB_PATH = DOCUMENT_DIR / "메트라이프생명_0408_추가_추가설정.eml"
 METLIFE_ADDITIONAL_RED_PATH = DOCUMENT_DIR / "메트라이프생명_추가설정해지_0408.eml"
 
@@ -347,6 +363,43 @@ print(
         self.assertEqual(metrics_payload.get("llm_batches_started", {}).get("t_day", 0), 0)
         self.assertEqual(metrics_payload.get("llm_batches_started", {}).get("transfer_amount", 0), 0)
 
+    def test_kyobo_mht_counterparty_prompt_ignores_total_row_and_matches_baseline(self) -> None:
+        result = self._assert_payload_matches_baseline(
+            KYOBO_MHT_PATH,
+            KYOBO_MHT_BASELINE_PATH,
+            only_pending=True,
+            include_debug_meta=True,
+        )
+        assert result is not None
+        payload = result["payload"]
+        self.assertEqual(len(payload["orders"]), 2)
+        self.assertEqual(
+            [order["fund_code"] for order in payload["orders"]],
+            ["D706", "Y318"],
+        )
+        self.assertNotIn("ORDER_COVERAGE_MISMATCH", payload["issues"])
+
+    def test_kdb_counterparty_prompt_extracts_expected_xlsx_payload(self) -> None:
+        self._assert_payload_matches_baseline(
+            KDB_XLSX_PATH,
+            KDB_XLSX_BASELINE_PATH,
+            only_pending=False,
+        )
+
+    def test_kdb_counterparty_prompt_extracts_expected_pdf_payload(self) -> None:
+        self._assert_payload_matches_baseline(
+            KDB_PDF_PATH,
+            KDB_PDF_BASELINE_PATH,
+            only_pending=False,
+        )
+
+    def test_kdb_counterparty_prompt_extracts_expected_eml_payload(self) -> None:
+        self._assert_payload_matches_baseline(
+            KDB_EML_PATH,
+            KDB_EML_BASELINE_PATH,
+            only_pending=False,
+        )
+
     def test_cardif_counterparty_prompt_skips_duplicate_xlsx_copy(self) -> None:
         settings = get_settings()
         loader = DocumentLoader()
@@ -645,6 +698,18 @@ print(
                 }
             ],
         )
+
+    def test_metlife_counterparty_prompt_base_payload_matches_accepted_baseline(self) -> None:
+        result = self._assert_payload_matches_baseline(
+            METLIFE_BASE_PATH,
+            METLIFE_BASELINE_PATH,
+            only_pending=True,
+            include_debug_meta=True,
+        )
+        assert result is not None
+        metrics_payload = self._load_single_metrics_sidecar(Path(result["debug_root"]))
+        self.assertEqual(metrics_payload.get("llm_batches_started", {}).get("t_day", 0), 0)
+        self.assertEqual(metrics_payload.get("llm_batches_started", {}).get("transfer_amount", 0), 0)
 
     def test_ibk_counterparty_prompt_extracts_expected_internal_orders(self) -> None:
         settings = get_settings()

@@ -7,1140 +7,111 @@ import logging
 import re
 import time
 import unicodedata
-from contextvars import ContextVar, copy_context
+from contextvars import copy_context
 from datetime import datetime
-from threading import RLock
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from string import Formatter
-from typing import Any, ClassVar, TypeVar
+from threading import RLock
+from typing import Any, TypeVar
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
-import yaml
+from pydantic import BaseModel, ValidationError
 
 from app.amount_normalization import canonicalize_transfer_amount, format_source_transfer_amount
 from app.config import Settings
 from app.document_loader import DocumentLoadTaskPayload, DocumentLoader, TargetFundScope, normalize_fund_name_key
 from app.schemas import ExtractionResult, OrderExtraction, OrderType, SettleClass
+from app.extraction.constants import (
+    BLOCKING_EXTRACTION_ISSUES,
+    COUNTERPARTY_DUPLICATE_COPY_REASONS,
+    HANAIS_DUPLICATE_PDF_HINT_TOKENS,
+    INSTRUCTION_DOCUMENT_STAGE_ISSUE_RETRY_ATTEMPTS,
+    INTERNAL_RETRY_FINDING_PREFIX,
+    MAX_PARALLEL_LLM_BATCH_WORKERS,
+    OTHER_STAGE_ISSUE_RETRY_ATTEMPTS,
+    SOFT_COVERAGE_WARNING,
+    STAGE_ITEM_METADATA_FIELDS,
+    STAGE_RESULT_METADATA_FIELDS,
+    STAGE_SPECIFIC_MAX_TOKENS,
+    T_DAY_STAGE_BATCH_SIZE,
+    VA_LLM_CHUNK_SIZE_CHARS,
+    VA_LLM_MAX_TOKENS,
+    VA_LLM_RETRY_ATTEMPTS,
+    VA_LLM_RETRY_BACKOFF_SECONDS,
+    VA_LLM_STAGE_BATCH_SIZE,
+    VA_LLM_TEMPERATURE,
+    VA_LLM_TIMEOUT_SECONDS,
+)
+from app.extraction.counterparty import load_counterparty_guidance, resolve_counterparty_prompt_name
+from app.extraction.models import (
+    ExtractionOutcomeError,
+    FundAmountItem,
+    FundAmountResult,
+    FundBaseDateItem,
+    FundBaseDateResult,
+    FundResolvedItem,
+    FundResolvedResult,
+    FundSeedItem,
+    FundSeedResult,
+    FundSettleItem,
+    FundSettleResult,
+    FundSlotItem,
+    FundSlotResult,
+    InstructionDocumentItem,
+    InstructionDocumentResult,
+    InvalidResponseArtifact,
+    LLMExtractionOutcome,
+    PromptBundle,
+    StageDefinition,
+    _ExtractMetricsState,
+    _OrderCandidate,
+    _normalize_reason_code_value,
+    _normalize_reason_summary_value,
+    apply_only_pending_filter,
+)
+from app.extraction.prompts import (
+    SENSITIVE_COUNTERPARTY_GUIDANCE_STAGES,
+    _default_prompt_path,
+    _load_prompt_bundle,
+    _split_system_user_from_messages,
+)
+from app.extraction.telemetry import (
+    _ACTIVE_EXTRACT_LOG_PATH,
+    _ACTIVE_EXTRACT_METRICS,
+    _ACTIVE_STAGE_RETRY_CONTEXT,
+    _append_local_llm_prompt_log,
+    _append_local_llm_response_log,
+    _record_llm_batch_started,
+    _record_stage_retry_invocation,
+    _record_transport_retry_attempt,
+    _write_extract_metrics_sidecar,
+    build_extract_llm_log_path,
+    build_extract_llm_metrics_path,
+    write_invalid_response_debug_files,
+)
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
-# queue 기반 WAS에서는 handler B가 `FundOrderExtractor`를 직접 호출한 뒤
-# "이 결과를 저장해도 되는지"를 바로 판단할 수 있어야 한다.
-# 그래서 저장 차단이 필요한 issue 집합을 service 바깥에서도 재사용할 수 있도록
-# extractor 모듈 수준 상수로 둔다.
-#
-# 주의:
-# - `ORDER_COVERAGE_MISMATCH`는 loader 추정 과대 때문에 false-fail을 만들기 쉬워서
-#   현재는 hard blocker 집합에 넣지 않는다.
-# - coverage 문제는 최종 orders와 독립 parser corroboration을 본 뒤
-#   `ORDER_COVERAGE_ESTIMATE_MISMATCH` warning으로만 남길 수 있다.
-BLOCKING_EXTRACTION_ISSUES = {
-    "LLM_INVALID_RESPONSE_FORMAT",
-    "FUND_DISCOVERY_EMPTY",
-    "TRANSACTION_SLOT_EMPTY",
-    "TRANSFER_AMOUNT_EMPTY",
-    "SETTLE_CLASS_EMPTY",
-    "FUND_METADATA_INCOMPLETE",
-    "TRANSFER_AMOUNT_MISSING",
-    "TRANSFER_AMOUNT_CONFLICT",
-    "SETTLE_CLASS_MISSING",
-    "ORDER_TYPE_MISSING",
-    "T_DAY_MISSING",
-    "BASE_DATE_STAGE_PARTIAL",
-    "T_DAY_STAGE_PARTIAL",
-    "TRANSFER_AMOUNT_STAGE_PARTIAL",
-    "SETTLE_CLASS_STAGE_PARTIAL",
-    "ORDER_TYPE_STAGE_PARTIAL",
-}
 
-SOFT_COVERAGE_WARNING = "ORDER_COVERAGE_ESTIMATE_MISMATCH"
-# 변액일임 추출기는 다른 서비스와 같은 전역 Settings 기본값을 공유하지 않는다.
-# 실제 운영에서 필요한 LLM 설정은 이 모듈 안에서만 고정/제어한다.
-VA_LLM_TEMPERATURE = 0.0
-VA_LLM_MAX_TOKENS = 16384
-VA_LLM_TIMEOUT_SECONDS = 120
-VA_LLM_STAGE_BATCH_SIZE = 12
-VA_LLM_RETRY_ATTEMPTS = 3
-VA_LLM_RETRY_BACKOFF_SECONDS = 1.5
-VA_LLM_CHUNK_SIZE_CHARS = 12000
-# stage issue retry는 단계별 코드 정책으로 고정한다.
-# 1단계(instruction_document)는 최대 1회, 나머지 단계는 최대 2회 재호출한다.
-INSTRUCTION_DOCUMENT_STAGE_ISSUE_RETRY_ATTEMPTS = 1
-OTHER_STAGE_ISSUE_RETRY_ATTEMPTS = 2
-MAX_PARALLEL_LLM_BATCH_WORKERS = 1
-STAGE_SPECIFIC_MAX_TOKENS: dict[str, int] = {
-    "instruction_document": 4096,
-    "base_date": 4096,
-    "settle_class": 8192,
-    "order_type": 4096,
-}
-T_DAY_STAGE_BATCH_SIZE = 6
-INTERNAL_RETRY_FINDING_PREFIX = "_RETRY_"
-_ACTIVE_EXTRACT_LOG_PATH: ContextVar[Path | None] = ContextVar(
-    "_ACTIVE_EXTRACT_LOG_PATH",
-    default=None,
-)
-_ACTIVE_EXTRACT_METRICS: ContextVar[Any | None] = ContextVar(
-    "_ACTIVE_EXTRACT_METRICS",
-    default=None,
-)
-_ACTIVE_STAGE_RETRY_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar(
-    "_ACTIVE_STAGE_RETRY_CONTEXT",
-    default=None,
-)
-REASON_SUMMARY_MAX_CHARS = 160
-STAGE_ITEM_METADATA_FIELDS = frozenset({"reason_code"})
-STAGE_RESULT_METADATA_FIELDS = frozenset({"reason_summary"})
-INSTRUCTION_DOCUMENT_REASON_CODES = frozenset(
-    {
-        "INSTR_ORDER_ROWS_PRESENT",
-        "INSTR_NET_OR_SCHEDULE_PRESENT",
-        "INSTR_OUTFLOW_AMOUNT_PRESENT",
-        "NONINSTR_COVER_EMAIL",
-        "NONINSTR_ATTACHMENT_WRAPPER",
-        "NONINSTR_NO_ACTIONABLE_ROWS",
-        "NONINSTR_APPROVAL_NOTICE",
-    }
-)
-FUND_INVENTORY_REASON_CODES = frozenset(
-    {
-        "FUND_MANAGER_SCOPED",
-        "FUND_NO_MANAGER_SCOPE",
-        "FUND_NET_AMOUNT_ROW",
-        "FUND_EXPLICIT_SUB_ROW",
-        "FUND_EXPLICIT_RED_ROW",
-        "FUND_CODE_ONLY_ROW",
-        "FUND_OTHER_VERIFIED",
-    }
-)
-BASE_DATE_REASON_CODES = frozenset(
-    {
-        "DATE_DOC_HEADER",
-        "DATE_GRID_ALIGNED",
-        "DATE_SETTLEMENT_LABEL",
-        "DATE_SECTION_ROW",
-        "DATE_EMAIL_FALLBACK",
-        "DATE_OTHER_VERIFIED",
-    }
-)
-T_DAY_REASON_CODES = frozenset(
-    {
-        "SLOT_T0_NET",
-        "SLOT_T0_EXPLICIT_SUB",
-        "SLOT_T0_EXPLICIT_RED",
-        "SLOT_TPLUS_SCHEDULE",
-        "SLOT_BUSINESS_DAY_HEADER",
-        "SLOT_SECTION_DIRECTION",
-        "SLOT_OTHER_VERIFIED",
-    }
-)
-TRANSFER_AMOUNT_REASON_CODES = frozenset(
-    {
-        "AMOUNT_NET_COLUMN",
-        "AMOUNT_EXPLICIT_SUB",
-        "AMOUNT_EXPLICIT_RED",
-        "AMOUNT_SCHEDULE_BUCKET",
-        "AMOUNT_SIGNED_OUTFLOW",
-        "AMOUNT_OTHER_VERIFIED",
-    }
-)
-SETTLE_CLASS_REASON_CODES = frozenset(
-    {
-        "SETTLE_SAME_DAY_LABEL",
-        "SETTLE_FUTURE_LABEL",
-        "SETTLE_BUSINESS_DAY_HEADER",
-        "SETTLE_PROCESSED_RESULT",
-        "SETTLE_TDAY_FALLBACK",
-        "SETTLE_OTHER_VERIFIED",
-    }
-)
-ORDER_TYPE_REASON_CODES = frozenset(
-    {
-        "ORDER_SIGN_POSITIVE",
-        "ORDER_SIGN_NEGATIVE",
-        "ORDER_LABEL_SUB",
-        "ORDER_LABEL_RED",
-        "ORDER_SECTION_SUB",
-        "ORDER_SECTION_RED",
-        "ORDER_TRANSACTION_TYPE",
-        "ORDER_OTHER_VERIFIED",
-    }
-)
-COUNTERPARTY_DUPLICATE_COPY_REASONS = {
-    "카디프": "duplicate XLSX copy; use PDF attachment",
-    "하나생명": "duplicate PDF copy; use XLSX attachment",
-    "흥국생명-hanais": "duplicate PDF copy; use XLSX attachment",
-}
-HANAIS_DUPLICATE_PDF_HINT_TOKENS = (
-    "duplicate pdf copy",
-    "use xlsx attachment",
-    "xlsx attachment for extraction",
-    "xlsx 첨부",
-    "xlsx attachment",
-    "pdf 사본",
-)
-
-
-def _normalize_reason_code_value(value: object) -> str | None:
-    """자유서술이 섞여도 내부 reason_code는 짧은 상수형 태그로 정규화한다."""
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text:
-        return None
-    text = unicodedata.normalize("NFC", text).upper()
-    text = re.sub(r"[\s\-]+", "_", text)
-    text = re.sub(r"[^A-Z0-9_]+", "", text)
-    text = re.sub(r"_+", "_", text).strip("_")
-    if not text or len(text) > 64:
-        return None
-    return text
-
-
-def _normalize_reason_summary_value(value: object) -> str:
-    """stage-level 요약은 한 줄 factual summary만 유지한다."""
-    if value is None:
-        return ""
-    text = unicodedata.normalize("NFC", " ".join(str(value).split()))
-    if not text:
-        return ""
-    return text[:REASON_SUMMARY_MAX_CHARS].rstrip()
-
-
-def apply_only_pending_filter(result: ExtractionResult, *, only_pending: bool) -> ExtractionResult:
-    """최종 추출 결과에 `only_pending` 출력 규칙을 적용한다.
-
-    요구사항은 이름과 달리 "예정분만 남긴다"가 아니라 아래 순서를 강제한다.
-
-    - `only_pending=False`
-      - 결과를 그대로 둔다.
-    - `only_pending=True`
-      1. `settle_class == PENDING` 인 항목을 제거한다.
-      2. 남은 항목(대체로 CONFIRMED)의 `settle_class`를 모두 `PENDING` 으로 바꾼다.
-
-    이 규칙은 추출/검증 로직 자체를 바꾸는 것이 아니라,
-    "검증까지 끝난 최종 결과를 어떤 계약으로 외부에 내보낼지"를 바꾸는 후처리다.
-    그래서 coverage, blocking issue 판단이 끝난 뒤 마지막 결과에만 적용한다.
-    """
-    if not only_pending:
-        return result
-
-    filtered_orders = [
-        order.model_copy(update={"settle_class": SettleClass.PENDING})
-        for order in result.orders
-        if order.settle_class is not SettleClass.PENDING
-    ]
-    return ExtractionResult(orders=filtered_orders, issues=list(result.issues))
-
-
-class StageModel(BaseModel):
-    """각 stage 응답 모델의 공통 기반 클래스.
-
-    LLM 응답에는 불필요한 필드가 섞일 수 있으므로 `extra="ignore"` 로 두고,
-    우리가 정의한 계약 필드만 읽는다.
-    """
-    model_config = ConfigDict(extra="ignore")
-
-
-class StageItemModel(StageModel):
-    """다음 stage에 전파되는 item-level reason metadata를 공통 처리한다."""
-    allowed_reason_codes: ClassVar[frozenset[str] | None] = None
-    reason_code: str | None = None
-
-    @field_validator("reason_code", mode="before")
-    @classmethod
-    def _normalize_reason_code(cls, value: object) -> str | None:
-        normalized = _normalize_reason_code_value(value)
-        allowed_reason_codes = getattr(cls, "allowed_reason_codes", None)
-        if normalized is not None and allowed_reason_codes and normalized not in allowed_reason_codes:
-            raise ValueError(f"Invalid reason_code for {cls.__name__}: {normalized}")
-        return normalized
-
-    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        """reason_code가 비어 있으면 item JSON에서 생략한다."""
-        payload = super().model_dump(*args, **kwargs)
-        if payload.get("reason_code") is None:
-            payload.pop("reason_code", None)
-        return payload
-
-
-class StageResultModel(StageModel):
-    """stage-level reason summary와 issue 목록을 공통 처리한다."""
-    reason_summary: str = ""
-    issues: list[str] = Field(default_factory=list)
-
-    @field_validator("reason_summary", mode="before")
-    @classmethod
-    def _normalize_reason_summary(cls, value: object) -> str:
-        return _normalize_reason_summary_value(value)
-
-
-class FundSeedItem(StageItemModel):
-    """Stage 1이 발견한 펀드 inventory 후보 1건이다."""
-    allowed_reason_codes: ClassVar[frozenset[str]] = FUND_INVENTORY_REASON_CODES
-    fund_code: str = ""
-    fund_name: str = ""
-
-    @field_validator("fund_code", "fund_name", mode="before")
-    @classmethod
-    def _strip_text(cls, value: object) -> str:
-        """seed 텍스트 필드의 공백/None을 stage 공통 규칙으로 정리한다."""
-        if value is None:
-            return ""
-        return str(value).strip()
-
-
-class FundSeedResult(StageResultModel):
-    """Stage 1 `fund_inventory` 응답 전체 계약이다."""
-    items: list[FundSeedItem] = Field(default_factory=list)
-
-
-class InstructionDocumentItem(StageItemModel):
-    """문서 자체가 실제 지시서인지 판단한 결과 1건이다."""
-    allowed_reason_codes: ClassVar[frozenset[str]] = INSTRUCTION_DOCUMENT_REASON_CODES
-    is_instruction_document: bool | None = None
-    reason: str = ""
-
-    @field_validator("reason", mode="before")
-    @classmethod
-    def _strip_reason(cls, value: object) -> str:
-        """사유 필드는 빈값/공백을 정리해 비교 가능하게 만든다."""
-        if value is None:
-            return ""
-        return str(value).strip()
-
-
-class InstructionDocumentResult(StageResultModel):
-    """사전 문서 판별 stage 응답 전체 계약이다."""
-    items: list[InstructionDocumentItem] = Field(default_factory=list)
-
-
-class FundBaseDateItem(StageItemModel):
-    """Stage 2가 펀드별 기준일을 붙인 결과 1건이다."""
-    allowed_reason_codes: ClassVar[frozenset[str]] = BASE_DATE_REASON_CODES
-    fund_code: str = ""
-    fund_name: str = ""
-    base_date: str | None = None
-
-    @field_validator("fund_code", "fund_name", mode="before")
-    @classmethod
-    def _strip_text(cls, value: object) -> str:
-        """기준일 stage의 식별자 텍스트를 공통 규칙으로 정리한다."""
-        if value is None:
-            return ""
-        return str(value).strip()
-
-
-class FundBaseDateResult(StageResultModel):
-    """Stage 2 `base_date` 응답 전체 계약이다."""
-    items: list[FundBaseDateItem] = Field(default_factory=list)
-
-
-class FundSlotItem(StageItemModel):
-    """Stage 3이 확정한 거래 slot 후보 1건이다."""
-    allowed_reason_codes: ClassVar[frozenset[str]] = T_DAY_REASON_CODES
-    fund_code: str = ""
-    fund_name: str = ""
-    base_date: str | None = None
-    t_day: int | None = None
-    slot_id: str = ""
-    evidence_label: str | None = None
-
-    @field_validator("fund_code", "fund_name", "slot_id", mode="before")
-    @classmethod
-    def _strip_required_text(cls, value: object) -> str:
-        """slot stage의 필수 식별자 문자열을 빈 문자열/공백 없이 정리한다."""
-        if value is None:
-            return ""
-        return str(value).strip()
-
-    @field_validator("evidence_label", mode="before")
-    @classmethod
-    def _strip_optional_text(cls, value: object) -> str | None:
-        """선택 필드는 비어 있으면 None으로 정규화한다."""
-        if value is None:
-            return None
-        text = str(value).strip()
-        return text or None
-
-
-class FundSlotResult(StageResultModel):
-    """Stage 3 `t_day` 응답 전체 계약이다."""
-    items: list[FundSlotItem] = Field(default_factory=list)
-
-
-class FundAmountItem(StageItemModel):
-    """Stage 4가 slot별 금액을 붙인 결과 1건이다."""
-    allowed_reason_codes: ClassVar[frozenset[str]] = TRANSFER_AMOUNT_REASON_CODES
-    fund_code: str = ""
-    fund_name: str = ""
-    base_date: str | None = None
-    t_day: int | None = None
-    slot_id: str = ""
-    evidence_label: str | None = None
-    transfer_amount: str | None = None
-
-    @field_validator("fund_code", "fund_name", "slot_id", mode="before")
-    @classmethod
-    def _strip_required_text(cls, value: object) -> str:
-        """금액 stage의 필수 문자열 필드를 정리한다."""
-        if value is None:
-            return ""
-        return str(value).strip()
-
-    @field_validator("evidence_label", "transfer_amount", mode="before")
-    @classmethod
-    def _strip_optional_text(cls, value: object) -> str | None:
-        """선택 필드는 비어 있으면 None으로 정규화한다."""
-        if value is None:
-            return None
-        text = str(value).strip()
-        return text or None
-
-
-class FundAmountResult(StageResultModel):
-    """Stage 4 `transfer_amount` 응답 전체 계약이다."""
-    items: list[FundAmountItem] = Field(default_factory=list)
-
-
-class FundSettleItem(StageItemModel):
-    """Stage 5가 settle_class를 붙인 결과 1건이다."""
-    allowed_reason_codes: ClassVar[frozenset[str]] = SETTLE_CLASS_REASON_CODES
-    fund_code: str = ""
-    fund_name: str = ""
-    base_date: str | None = None
-    t_day: int | None = None
-    slot_id: str = ""
-    evidence_label: str | None = None
-    transfer_amount: str | None = None
-    settle_class: str | None = None
-
-    @field_validator("fund_code", "fund_name", "slot_id", mode="before")
-    @classmethod
-    def _strip_required_text(cls, value: object) -> str:
-        """settle stage의 필수 문자열 필드를 정리한다."""
-        if value is None:
-            return ""
-        return str(value).strip()
-
-    @field_validator("evidence_label", "transfer_amount", "settle_class", mode="before")
-    @classmethod
-    def _strip_optional_text(cls, value: object) -> str | None:
-        """선택 필드는 비어 있으면 None으로 정규화한다."""
-        if value is None:
-            return None
-        text = str(value).strip()
-        return text or None
-
-
-class FundSettleResult(StageResultModel):
-    """Stage 5 `settle_class` 응답 전체 계약이다."""
-    items: list[FundSettleItem] = Field(default_factory=list)
-
-
-class FundResolvedItem(StageItemModel):
-    """Stage 6까지 완료된 주문 후보 1건이다."""
-    allowed_reason_codes: ClassVar[frozenset[str]] = ORDER_TYPE_REASON_CODES
-    fund_code: str = ""
-    fund_name: str = ""
-    base_date: str | None = None
-    t_day: int | None = None
-    slot_id: str = ""
-    evidence_label: str | None = None
-    transfer_amount: str | None = None
-    settle_class: str | None = None
-    order_type: str | None = None
-
-    @field_validator("fund_code", "fund_name", "slot_id", mode="before")
-    @classmethod
-    def _strip_required_text(cls, value: object) -> str:
-        """최종 resolved stage의 필수 문자열 필드를 정리한다."""
-        if value is None:
-            return ""
-        return str(value).strip()
-
-    @field_validator("evidence_label", "transfer_amount", "settle_class", "order_type", mode="before")
-    @classmethod
-    def _strip_optional_text(cls, value: object) -> str | None:
-        """선택 필드는 비어 있으면 None으로 정규화한다."""
-        if value is None:
-            return None
-        text = str(value).strip()
-        return text or None
-
-
-class FundResolvedResult(StageResultModel):
-    """Stage 6 `order_type` 응답 전체 계약이다."""
-    items: list[FundResolvedItem] = Field(default_factory=list)
-
-
-@dataclass(slots=True)
-class InvalidResponseArtifact:
-    """JSON 파싱에 실패한 stage raw response 1건을 보관한다."""
-    chunk_index: int
-    raw_response: str
-    stage_name: str
-
-
-@dataclass(slots=True)
-class LLMExtractionOutcome:
-    """추출 결과와 invalid raw response artifact를 함께 담는 반환 객체다."""
-    result: ExtractionResult
-    invalid_response_artifacts: list[InvalidResponseArtifact] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class _ExtractMetricsState:
-    """문서 1건 추출 동안 쌓는 내부 관측성 메타데이터."""
-    started_at_monotonic: float
-    stage_retry_invocations: dict[str, int] = field(default_factory=dict)
-    transport_retry_attempts: dict[str, int] = field(default_factory=dict)
-    llm_batches_started: dict[str, int] = field(default_factory=dict)
-    lock: RLock = field(default_factory=RLock, repr=False)
-
-    def increment_bucket(self, bucket_name: str, stage_name: str, increment: int = 1) -> None:
-        """stage별 카운터 버킷을 thread-safe 하게 증가시킨다."""
-        if increment <= 0:
-            return
-        with self.lock:
-            bucket = getattr(self, bucket_name)
-            bucket[stage_name] = bucket.get(stage_name, 0) + increment
-
-    def snapshot(self) -> dict[str, Any]:
-        """sidecar 저장용 직렬화 가능한 metrics 스냅샷을 만든다."""
-        with self.lock:
-            return {
-                "total_elapsed_seconds": round(max(0.0, time.monotonic() - self.started_at_monotonic), 3),
-                "stage_retry_invocations": dict(sorted(self.stage_retry_invocations.items())),
-                "transport_retry_attempts": dict(sorted(self.transport_retry_attempts.items())),
-                "llm_batches_started": dict(sorted(self.llm_batches_started.items())),
-            }
-
-
-class ExtractionOutcomeError(ValueError):
-    """추출 실패와 함께 stage 산출물을 상위 계층으로 전달하는 예외.
-
-    queue 기반 WAS에서는 "추출이 실패했다"는 사실만큼
-    "어떤 원문 응답이 실패 원인이었는지"가 중요하다.
-    그런데 `extract_from_task_payload()`가 `ValueError`만 던지면,
-    service/handler는 실패 사실만 알고 invalid raw response artifact는 잃어버리게 된다.
-
-    그래서 이 예외는 일반 `ValueError`처럼 사용할 수 있으면서도,
-    실패 시점의 `LLMExtractionOutcome`을 함께 싣고 올라가도록 만든다.
-    상위 계층은 이 예외를 받아 debug 파일을 저장한 뒤 다시 예외를 올리면 된다.
-    """
-
-    def __init__(self, message: str, outcome: LLMExtractionOutcome) -> None:
-        """예외 메시지와 함께 실패 시점 산출물을 보관한다."""
-        super().__init__(message)
-        # 내부 저장소는 private 속성으로 두고, 외부 호출자는 `exc.outcome` 속성으로 읽게 한다.
-        # 이렇게 해 두면 "이 속성은 public API"라는 의도를 문서와 코드에서 함께 드러낼 수 있다.
-        self._outcome = outcome
-
-    @property
-    def outcome(self) -> LLMExtractionOutcome:
-        """실패 시점의 전체 추출 산출물.
-
-        Handler B가 `FundOrderExtractor`를 직접 사용할 때는 이 속성이 가장 중요하다.
-        - `exc.outcome.result`로 현재까지 조립된 결과/issue를 볼 수 있고
-        - `exc.outcome.invalid_response_artifacts`로 깨진 LLM 원문 응답도 저장할 수 있다.
-        """
-        return self._outcome
-
-    @property
-    def result(self) -> ExtractionResult:
-        """실패 시점까지 만들어진 최종 결과 스냅샷에 바로 접근하는 shortcut."""
-        return self._outcome.result
-
-    @property
-    def invalid_response_artifacts(self) -> list[InvalidResponseArtifact]:
-        """실패 시점에 확보된 invalid raw response 목록에 바로 접근하는 shortcut."""
-        return self._outcome.invalid_response_artifacts
-
-
-def write_invalid_response_debug_files(
-    *,
-    debug_output_dir: Path,
-    source_name: str,
-    artifacts: list[InvalidResponseArtifact],
-) -> list[Path]:
-    """JSON 파싱에 실패한 LLM 원문 응답을 디버그 파일로 저장한다.
-
-    이 함수는 `ExtractionService` 내부 전용 로직이 아니라,
-    queue 기반 WAS의 handler B가 `FundOrderExtractor`를 직접 호출할 때도 그대로 재사용할 수 있게
-    extractor 모듈 쪽에 둔다.
-
-    반환값으로 저장된 파일 경로 목록을 돌려주는 이유:
-    - 호출자가 로그/DB/모니터링에 그대로 기록하기 쉽고
-    - 테스트에서도 "정말 파일이 만들어졌는지"를 곧바로 검증할 수 있기 때문이다.
-    """
-    if not artifacts:
-        return []
-
-    debug_output_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    source_stem = Path(source_name).stem or "document"
-    written_paths: list[Path] = []
-
-    for artifact in artifacts:
-        debug_path = (
-            debug_output_dir
-            / (
-                f"{source_stem}_{timestamp}_{artifact.stage_name}_"
-                f"chunk{artifact.chunk_index:02d}_llm_invalid_response.txt"
-            )
-        )
-        debug_path.write_text(artifact.raw_response, encoding="utf-8")
-        logger.warning("Saved invalid LLM raw response to debug file: %s", debug_path)
-        written_paths.append(debug_path)
-
-    return written_paths
-
-
-def build_extract_llm_log_path(*, debug_output_dir: Path, source_name: str) -> Path:
-    """문서 1건 추출에 대응하는 로컬 LLM 로그 파일 경로를 만든다.
-
-    로컬은 WAS처럼 task temp 디렉터리가 없으므로, debug 출력 루트 아래에
-    문서별 timestamped 로그 파일을 만든다. 실행을 반복해도 이전 로그를 덮지 않게
-    타임스탬프를 파일명에 포함한다.
-    """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    source_stem = Path(source_name).stem or "document"
-    return debug_output_dir / f"{source_stem}_{timestamp}_llm_pipeline.log"
-
-
-def build_extract_llm_metrics_path(*, log_path: Path) -> Path:
-    """문서 1건 추출 로그 옆에 저장할 metrics sidecar 경로를 만든다."""
-    if log_path.name.endswith("_llm_pipeline.log"):
-        stem = log_path.name.removesuffix("_llm_pipeline.log")
-    else:
-        stem = log_path.stem
-    return log_path.with_name(f"{stem}_llm_metrics.json")
-
-
-def _record_extract_metric(bucket_name: str, stage_name: str, increment: int = 1) -> None:
-    """현재 활성 추출 metrics 상태에 stage별 카운터를 기록한다."""
-    state = _ACTIVE_EXTRACT_METRICS.get()
-    if not isinstance(state, _ExtractMetricsState):
-        return
-    state.increment_bucket(bucket_name, stage_name, increment)
-
-
-def _record_stage_retry_invocation(stage_name: str) -> None:
-    _record_extract_metric("stage_retry_invocations", stage_name)
-
-
-def _record_transport_retry_attempt(stage_name: str) -> None:
-    _record_extract_metric("transport_retry_attempts", stage_name)
-
-
-def _record_llm_batch_started(stage_name: str) -> None:
-    _record_extract_metric("llm_batches_started", stage_name)
-
-
-def _write_extract_metrics_sidecar(
-    *,
-    log_path: Path | None,
-    metrics_state: _ExtractMetricsState,
-) -> None:
-    """현재 추출 metrics 스냅샷을 로그 옆 JSON sidecar 로 남긴다."""
-    if log_path is None:
-        return
-    metrics_path = build_extract_llm_metrics_path(log_path=log_path)
-    try:
-        metrics_path.parent.mkdir(parents=True, exist_ok=True)
-        metrics_path.write_text(
-            json.dumps(metrics_state.snapshot(), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-    except Exception as exc:  # pragma: no cover - observability helper only
-        logger.warning("Failed to write extract metrics sidecar %s: %s", metrics_path, exc)
-
-
-def _append_local_llm_prompt_log(
-    log_path: Path | None,
-    *,
-    header: str,
-    system_prompt: str,
-    user_prompt: str,
-) -> None:
-    """로컬 debug 출력 디렉터리에 LLM 프롬프트 블록을 append 한다."""
-    if log_path is None:
-        return
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().isoformat()
-    with log_path.open("a", encoding="utf-8") as f:
-        f.write(f"{ts} {header}\n")
-        f.write(f"{ts} [System]\n")
-        for line in system_prompt.splitlines():
-            f.write(f"{ts} {line}\n")
-        f.write(f"{ts} [User]\n")
-        for line in user_prompt.splitlines():
-            f.write(f"{ts} {line}\n")
-        f.write(f"{ts} --- end LLM prompt ---\n")
-
-
-def _append_local_llm_response_log(
-    log_path: Path | None,
-    *,
-    header: str,
-    response_text: str,
-) -> None:
-    """로컬 debug 출력 디렉터리에 LLM 응답 블록을 append 한다."""
-    if log_path is None:
-        return
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().isoformat()
-    with log_path.open("a", encoding="utf-8") as f:
-        f.write(f"{ts} {header}\n")
-        f.write(f"{ts} [Response]\n")
-        for line in response_text.splitlines():
-            f.write(f"{ts} {line}\n")
-        f.write(f"{ts} --- end LLM response ---\n")
-
-
-@dataclass(slots=True)
-class _OrderCandidate:
-    """최종 집계 전 intermediate 주문 후보와 evidence 메타데이터를 묶는다."""
-    order: OrderExtraction
+@dataclass(frozen=True, slots=True)
+class _RowLocalTransaction:
+    settle_class: SettleClass
+    t_day: int
+    order_type: OrderType
+    transfer_amount: str
     evidence_label: str
-    evidence_kind: str
 
 
 @dataclass(frozen=True, slots=True)
-class StageDefinition:
-    """YAML에서 읽은 stage 1개 정의를 런타임 구조로 고정한 객체다."""
-    number: int
-    name: str
-    goal: str
-    instructions: str
-    output_contract: str
-    retry_instructions: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class PromptBundle:
-    """현재 요청에 사용되는 system/user/stage prompt 묶음이다."""
-    system_prompt: str
-    user_prompt_template: str
-    retry_user_prompt_template: str
-    stages: dict[str, StageDefinition]
-
-REQUIRED_USER_PROMPT_FIELDS = {
-    "stage_number",
-    "total_stage_count",
-    "stage_goal",
-    "stage_name",
-    "stage_instructions",
-    "output_contract",
-    "input_items_json",
-    "document_text",
-}
-
-OPTIONAL_USER_PROMPT_FIELDS = {
-    "counterparty_guidance",
-}
-
-REQUIRED_RETRY_USER_PROMPT_FIELDS = {
-    "stage_number",
-    "total_stage_count",
-    "stage_goal",
-    "stage_name",
-    "stage_instructions",
-    "retry_instructions",
-    "output_contract",
-    "retry_target_issues_json",
-    "previous_output_items_json",
-    "retry_focus_items_json",
-    "input_items_json",
-    "document_text",
-    "retry_attempt_number",
-    "retry_max_attempts",
-}
-
-OPTIONAL_RETRY_USER_PROMPT_FIELDS = {
-    "counterparty_guidance",
-    "previous_reason_summary_text",
-}
-
-SENSITIVE_COUNTERPARTY_GUIDANCE_STAGES = frozenset({"base_date", "transfer_amount", "order_type"})
-
-
-def _default_prompt_path() -> Path:
-    """기본 prompt YAML 위치를 반환한다."""
-    return Path(__file__).resolve().parent / "prompts" / "extraction_prompts.yaml"
-
-
-def _default_counterparty_prompt_map_path() -> Path:
-    """거래처 프롬프트 매핑 설정 파일 위치를 반환한다."""
-    return _default_prompt_path().parent / "counterparty_prompt_map.yaml"
-
-
-def _normalize_counterparty_token(text: str) -> str:
-    """파일명/토큰 비교용 문자열을 NFC + 소문자로 정규화한다."""
-    return unicodedata.normalize("NFC", text).casefold()
-
-
-def _tokenize_counterparty_name(text: str) -> tuple[str, ...]:
-    """파일명에서 거래처 식별에 쓸 의미 있는 토큰만 뽑는다.
-
-    영문 약어(AIA, ABL)는 substring 포함 여부로 보면 unrelated 단어에도 쉽게 오인식된다.
-    그래서 파일명을 정규화한 뒤 영문/숫자/한글 덩어리만 토큰으로 잘라 exact match에 쓴다.
-    """
-    normalized_text = _normalize_counterparty_token(text)
-    return tuple(re.findall(r"[0-9a-z가-힣]+", normalized_text))
-
-
-def _counterparty_token_matches(
-    *,
-    normalized_name: str,
-    name_tokens: tuple[str, ...],
-    match_token: str,
-) -> bool:
-    """거래처 매핑 토큰이 현재 파일명과 맞는지 보수적으로 판단한다.
-
-    - 영문 약어/숫자 토큰은 exact token match만 허용한다.
-    - 한글/복합 명칭은 파일명 안의 실제 phrase 포함 여부를 본다.
-
-    이렇게 나누면 `ABL`이 `global_ablation.xlsx`에 잘못 붙는 문제를 피하면서,
-    `삼성액티브자산운용_...` 같은 한글 문서명은 자연스럽게 인식할 수 있다.
-    """
-    normalized_match = _normalize_counterparty_token(match_token)
-    if re.fullmatch(r"[0-9a-z]+", normalized_match):
-        return normalized_match in name_tokens
-    return normalized_match in normalized_name
-
-
-def _load_counterparty_prompt_matchers(
-    mapping_path: Path | None = None,
-) -> tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...]:
-    """거래처 프롬프트 매핑 설정을 읽어 `(prompt_name, path_tokens, content_tokens)`로 변환한다."""
-    mapping_path = mapping_path or _default_counterparty_prompt_map_path()
-    if not mapping_path.exists():
-        logger.warning(
-            "Counterparty prompt mapping file does not exist: %s; all documents will fall back to the general prompt",
-            mapping_path,
-        )
-        return ()
-
-    try:
-        payload = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
-        logger.warning(
-            "Failed to read counterparty prompt mapping file: %s; "
-            "all documents will fall back to the general prompt (%s)",
-            mapping_path,
-            exc,
-        )
-        return ()
-
-    if not isinstance(payload, dict):
-        logger.warning(
-            "Counterparty prompt mapping file is not an object: %s; "
-            "all documents will fall back to the general prompt",
-            mapping_path,
-        )
-        return ()
-
-    raw_mappings = payload.get("mappings")
-    if not isinstance(raw_mappings, list):
-        logger.warning(
-            "Counterparty prompt mapping file has no 'mappings' list: %s; "
-            "all documents will fall back to the general prompt",
-            mapping_path,
-        )
-        return ()
-
-    mappings: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = []
-    for index, item in enumerate(raw_mappings, start=1):
-        if not isinstance(item, dict):
-            logger.warning(
-                "Counterparty prompt mapping #%s is not an object and will be ignored: %s",
-                index,
-                mapping_path,
-            )
-            continue
-
-        prompt_name = str(item.get("prompt_name", "")).strip()
-        raw_tokens = item.get("match_tokens")
-        raw_content_tokens = item.get("content_match_tokens")
-        if not prompt_name:
-            logger.warning(
-                "Counterparty prompt mapping #%s has an empty prompt_name and will be ignored: %s",
-                index,
-                mapping_path,
-            )
-            continue
-        if raw_tokens is not None and not isinstance(raw_tokens, list):
-            logger.warning(
-                "Counterparty prompt mapping #%s has invalid match_tokens and will be ignored: %s",
-                index,
-                mapping_path,
-            )
-            continue
-        if raw_content_tokens is not None and not isinstance(raw_content_tokens, list):
-            logger.warning(
-                "Counterparty prompt mapping #%s has invalid content_match_tokens and will be ignored: %s",
-                index,
-                mapping_path,
-            )
-            continue
-
-        match_tokens = tuple(str(token).strip() for token in (raw_tokens or []) if str(token).strip())
-        content_match_tokens = tuple(
-            str(token).strip() for token in (raw_content_tokens or []) if str(token).strip()
-        )
-        if not match_tokens and not content_match_tokens:
-            logger.warning(
-                "Counterparty prompt mapping #%s must define match_tokens and/or content_match_tokens and will be ignored: %s",
-                index,
-                mapping_path,
-            )
-            continue
-        mappings.append((prompt_name, match_tokens, content_match_tokens))
-
-    return tuple(mappings)
-
-
-def _counterparty_content_matches(
-    *,
-    document_text: str,
-    content_match_tokens: tuple[str, ...],
-) -> bool:
-    """문서 본문에 content 토큰이 모두 존재할 때만 content match를 허용한다."""
-    if not content_match_tokens:
-        return False
-    normalized_text = _normalize_counterparty_token(document_text)
-    return all(_normalize_counterparty_token(token) in normalized_text for token in content_match_tokens)
-
-
-def resolve_counterparty_prompt_name(
-    source_path: str | Path,
-    *,
-    mapping_path: Path | None = None,
-    document_text: str | None = None,
-) -> str | None:
-    """문서 경로에서 거래처 특징 프롬프트 파일명을 결정한다.
-
-    로컬 프로젝트에는 DB가 없으므로 YAML 설정 파일로 매핑을 관리한다.
-    WAS에서는 이 계약을 유지한 채 내부 구현만 DB 조회로 바꾸면 된다.
-    """
-    source_name = Path(source_path).stem
-    normalized_name = _normalize_counterparty_token(source_name)
-    name_tokens = _tokenize_counterparty_name(source_name)
-    matchers = _load_counterparty_prompt_matchers(mapping_path)
-    if document_text:
-        for prompt_name, _match_tokens, content_match_tokens in matchers:
-            if _counterparty_content_matches(
-                document_text=document_text,
-                content_match_tokens=content_match_tokens,
-            ):
-                return prompt_name
-    for prompt_name, match_tokens, _content_match_tokens in matchers:
-        if match_tokens and any(
-            _counterparty_token_matches(
-                normalized_name=normalized_name,
-                name_tokens=name_tokens,
-                match_token=token,
-            )
-            for token in match_tokens
-        ):
-            return prompt_name
-    return None
-
-
-def load_counterparty_guidance(
-    source_path: str | Path,
-    *,
-    use_counterparty_prompt: bool,
-    mapping_path: Path | None = None,
-    document_text: str | None = None,
-) -> str | None:
-    """문서 경로에 대응하는 거래처 특징 프롬프트를 선택적으로 로드한다.
-
-    `use_counterparty_prompt=False`면 현재와 완전히 같은 일반 추출 경로를 유지한다.
-    `True`일 때는 설정 파일 기반 매핑으로 거래처 프롬프트 파일을 찾아 보되,
-    매핑이 없거나 파일이 비어 있으면 "특징이 없는 거래처"로 간주하고
-    일반 추출 경로로 자연스럽게 fallback 한다.
-    """
-    if not use_counterparty_prompt:
-        return None
-
-    try:
-        prompt_name = resolve_counterparty_prompt_name(
-            source_path,
-            mapping_path=mapping_path,
-            document_text=document_text,
-        )
-    except Exception as exc:
-        logger.warning(
-            "Failed to load counterparty prompt mapping for source=%s; "
-            "falling back to the general extraction prompt: %s",
-            Path(source_path).name,
-            exc,
-        )
-        return None
-
-    if prompt_name is None:
-        logger.info(
-            "Counterparty prompt was requested, but no mapping was found for source=%s; "
-            "falling back to the general extraction prompt",
-            Path(source_path).name,
-        )
-        return None
-
-    prompt_path = _default_prompt_path().parent / f"{prompt_name}.txt"
-    if not prompt_path.exists():
-        logger.warning(
-            "Counterparty prompt mapping matched %s, but the prompt file does not exist: %s; "
-            "falling back to the general extraction prompt",
-            prompt_name,
-            prompt_path,
-        )
-        return None
-
-    guidance = prompt_path.read_text(encoding="utf-8").strip()
-    if not guidance:
-        logger.warning(
-            "Counterparty prompt file is empty for %s: %s; falling back to the general extraction prompt",
-            prompt_name,
-            prompt_path,
-        )
-        return None
-    return guidance
-
-
-def _load_prompt_bundle(prompt_path: Path | None = None) -> PromptBundle:
-    """YAML에서 system/user template와 stage 정의를 읽어 PromptBundle로 만든다."""
-    prompt_path = prompt_path or _default_prompt_path()
-    payload = yaml.safe_load(prompt_path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Prompt file is invalid: {prompt_path}")
-
-    system_prompt = str(payload.get("system_prompt", "")).strip()
-    user_prompt_template = str(payload.get("user_prompt_template", "")).strip()
-    retry_user_prompt_template = str(payload.get("retry_user_prompt_template", "")).strip()
-    stage_payloads = payload.get("stages")
-    if not system_prompt or not user_prompt_template or not retry_user_prompt_template or not isinstance(stage_payloads, list):
-        raise ValueError(f"Prompt file is missing required fields: {prompt_path}")
-
-    _validate_prompt_template(
-        template_name="user prompt",
-        prompt_template=user_prompt_template,
-        prompt_path=prompt_path,
-        required_fields=REQUIRED_USER_PROMPT_FIELDS,
-        optional_fields=OPTIONAL_USER_PROMPT_FIELDS,
-    )
-    _validate_prompt_template(
-        template_name="retry prompt",
-        prompt_template=retry_user_prompt_template,
-        prompt_path=prompt_path,
-        required_fields=REQUIRED_RETRY_USER_PROMPT_FIELDS,
-        optional_fields=OPTIONAL_RETRY_USER_PROMPT_FIELDS,
-    )
-
-    stages: dict[str, StageDefinition] = {}
-    for stage_payload in stage_payloads:
-        if not isinstance(stage_payload, dict):
-            raise ValueError(f"Prompt stage entry is invalid: {stage_payload!r}")
-        stage = StageDefinition(
-            number=int(stage_payload["number"]),
-            name=str(stage_payload["name"]).strip(),
-            goal=str(stage_payload["goal"]).strip(),
-            instructions=str(stage_payload["instructions"]).strip(),
-            output_contract=str(stage_payload["output_contract"]).strip(),
-            retry_instructions=str(stage_payload.get("retry_instructions", "")).strip(),
-        )
-        if stage.name in stages:
-            raise ValueError(f"Prompt file contains duplicate stage name: {stage.name}")
-        stages[stage.name] = stage
-
-    required_stage_names = {
-        "instruction_document",
-        "fund_inventory",
-        "base_date",
-        "t_day",
-        "transfer_amount",
-        "settle_class",
-        "order_type",
-    }
-    missing_stage_names = required_stage_names.difference(stages)
-    if missing_stage_names:
-        raise ValueError(f"Prompt file is missing stages: {sorted(missing_stage_names)}")
-
-    return PromptBundle(
-        system_prompt=system_prompt,
-        user_prompt_template=user_prompt_template,
-        retry_user_prompt_template=retry_user_prompt_template,
-        stages=stages,
-    )
-
-
-def _validate_prompt_template(
-    *,
-    template_name: str,
-    prompt_template: str,
-    prompt_path: Path,
-    required_fields: set[str],
-    optional_fields: set[str],
-) -> None:
-    """prompt template placeholder 오타를 로드 시점에 즉시 검증한다."""
-    formatter = Formatter()
-    field_names = {
-        field_name
-        for _, field_name, _, _ in formatter.parse(prompt_template)
-        if field_name is not None and field_name != ""
-    }
-    allowed_fields = required_fields.union(optional_fields)
-    unknown_fields = sorted(field_names.difference(allowed_fields))
-    if unknown_fields:
-        raise ValueError(
-            f"Prompt file has unknown {template_name} placeholders {unknown_fields}: {prompt_path}"
-        )
-    missing_fields = sorted(required_fields.difference(field_names))
-    if missing_fields:
-        raise ValueError(
-            f"Prompt file is missing {template_name} placeholders {missing_fields}: {prompt_path}"
-        )
-
-
-def _langchain_message_content_to_text(content: Any) -> str:
-    """LangChain message content를 로그용 평문으로 변환한다."""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for item in content:
-            if isinstance(item, str):
-                parts.append(item)
-                continue
-            if isinstance(item, dict):
-                text = item.get("text")
-                if text:
-                    parts.append(str(text))
-        return "\n".join(part for part in parts if part)
-    return str(content)
-
-
-def _split_system_user_from_messages(messages: list[Any]) -> tuple[str, str]:
-    """LLM 호출 메시지 묶음에서 system/user 프롬프트를 분리한다."""
-    system_parts: list[str] = []
-    user_parts: list[str] = []
-    for msg in messages:
-        text = _langchain_message_content_to_text(getattr(msg, "content", ""))
-        if isinstance(msg, SystemMessage):
-            system_parts.append(text)
-        elif isinstance(msg, HumanMessage):
-            user_parts.append(text)
-        else:
-            user_parts.append(text)
-    return "\n\n".join(part for part in system_parts if part), "\n\n".join(part for part in user_parts if part)
+class _RowLocalFundRow:
+    row_index: int
+    fund_name: str
+    base_date: str
+    transactions: tuple[_RowLocalTransaction, ...]
 
 
 class FundOrderExtractor:
@@ -1517,6 +488,12 @@ class FundOrderExtractor:
             counterparty_guidance=counterparty_guidance,
         )
         amounts = self._post_validate_transfer_amount_items(amounts)
+        amounts = self._reconcile_transfer_amount_items_with_document_amounts(
+            document_text=full_text,
+            raw_text=raw_text or full_text,
+            output_items=amounts,
+            target_fund_scope=target_fund_scope,
+        )
         if not amounts:
             direct_result = self._recover_direct_orders_from_document(
                 document_text=full_text,
@@ -2471,15 +1448,29 @@ class FundOrderExtractor:
 
         reference_text = raw_text or document_text
         deterministic_base_date = self._detect_document_base_date_from_text(reference_text)
-        if deterministic_base_date is not None and not self._date_looks_like_reference_only_in_text(
+        deterministic_reason_code = self._derive_document_base_date_reason_code(
             reference_text,
             deterministic_base_date,
+        )
+        should_defer_deterministic_base_date = self._should_defer_deterministic_base_date_to_one_shot_llm(
+            document_text=document_text,
+            raw_text=reference_text,
+            deterministic_base_date=deterministic_base_date,
+            deterministic_reason_code=deterministic_reason_code,
+        )
+        if (
+            deterministic_base_date is not None
+            and not should_defer_deterministic_base_date
+            and not self._date_looks_like_reference_only_in_text(
+            reference_text,
+            deterministic_base_date,
+            )
         ):
             logger.info("Resolved document base_date deterministically: %s", deterministic_base_date)
             base_dates = self._fan_out_document_base_date_to_funds(
                 seeds=seeds,
                 base_date=deterministic_base_date,
-                reason_code=self._derive_document_base_date_reason_code(reference_text, deterministic_base_date),
+                reason_code=deterministic_reason_code,
             )
             logger.info("Fanned out document base_date to %s fund seed(s)", len(base_dates))
             return base_dates
@@ -2494,7 +1485,22 @@ class FundOrderExtractor:
             counterparty_guidance=counterparty_guidance,
         )
         if llm_base_date is None:
-            return None
+            if deterministic_base_date is None or self._date_looks_like_reference_only_in_text(
+                reference_text,
+                deterministic_base_date,
+            ):
+                return None
+            logger.info(
+                "One-shot LLM did not resolve base_date; falling back to deterministic candidate: %s",
+                deterministic_base_date,
+            )
+            base_dates = self._fan_out_document_base_date_to_funds(
+                seeds=seeds,
+                base_date=deterministic_base_date,
+                reason_code=deterministic_reason_code,
+            )
+            logger.info("Fanned out fallback deterministic base_date to %s fund seed(s)", len(base_dates))
+            return base_dates
 
         logger.info("Resolved document base_date via one-shot LLM: %s", llm_base_date)
         base_dates = self._fan_out_document_base_date_to_funds(
@@ -2629,6 +1635,80 @@ class FundOrderExtractor:
 
         return cls._detect_asia_seoul_base_date_from_text(raw_text)
 
+    @classmethod
+    def _extract_normalized_date_candidates_from_line(cls, line: str) -> list[str]:
+        """한 줄에서 wrapper metadata를 제외한 normalized date 후보를 수집한다."""
+        normalized_line = cls._normalize_text(line)
+        if not normalized_line:
+            return []
+
+        normalized_dates: list[str] = []
+        seen_dates: set[str] = set()
+
+        def _append_candidate(candidate: str | None) -> None:
+            normalized_candidate = cls._normalize_date(candidate) if candidate is not None else None
+            if normalized_candidate is None or normalized_candidate in seen_dates:
+                return
+            seen_dates.add(normalized_candidate)
+            normalized_dates.append(normalized_candidate)
+
+        for year, month, day in re.findall(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})", normalized_line):
+            _append_candidate(f"{int(year):04d}-{int(month):02d}-{int(day):02d}")
+
+        for month, day, year in re.findall(r"\b(\d{1,2})-(\d{1,2})-(\d{4})\b", normalized_line):
+            _append_candidate(f"{int(year):04d}-{int(month):02d}-{int(day):02d}")
+
+        for short_date in re.findall(r"\b\d{1,2}-[A-Za-z]{3}-\d{2}\b", normalized_line):
+            _append_candidate(cls._normalize_short_english_date(short_date))
+
+        return normalized_dates
+
+    @classmethod
+    def _has_non_wrapper_date_candidate_in_document(
+        cls,
+        *,
+        document_text: str,
+        excluded_date: str | None,
+    ) -> bool:
+        """wrapper metadata 밖에서 deterministic email date와 다른 날짜가 보이는지 본다."""
+        normalized_excluded_date = cls._normalize_date(excluded_date)
+        if not document_text:
+            return False
+
+        for raw_line in document_text.splitlines():
+            line = cls._normalize_text(raw_line)
+            if not line:
+                continue
+            lowered = line.lower()
+            if lowered.startswith("subject:") or lowered.startswith("from:") or lowered.startswith("to:"):
+                continue
+            if lowered.startswith("date:") or lowered.startswith("date (asia/seoul):"):
+                continue
+            if lowered.startswith("## eml ") or lowered.startswith("[eml "):
+                continue
+            for candidate in cls._extract_normalized_date_candidates_from_line(line):
+                if normalized_excluded_date is None or candidate != normalized_excluded_date:
+                    return True
+        return False
+
+    @classmethod
+    def _should_defer_deterministic_base_date_to_one_shot_llm(
+        cls,
+        *,
+        document_text: str,
+        raw_text: str,
+        deterministic_base_date: str | None,
+        deterministic_reason_code: str | None,
+    ) -> bool:
+        """email wrapper fallback이면 attached document 날짜가 있는지 먼저 확인한다."""
+        normalized_base_date = cls._normalize_date(deterministic_base_date)
+        if normalized_base_date is None or deterministic_reason_code != "DATE_EMAIL_FALLBACK":
+            return False
+        return cls._has_non_wrapper_date_candidate_in_document(
+            document_text=document_text or raw_text,
+            excluded_date=normalized_base_date,
+        )
+
     @staticmethod
     def _section_order_row_pattern() -> re.Pattern[str]:
         """section ledger 원시 행을 읽는 공통 row pattern을 반환한다."""
@@ -2758,7 +1838,7 @@ class FundOrderExtractor:
 
     @classmethod
     def _detect_asia_seoul_base_date_from_text(cls, raw_text: str) -> str | None:
-        """EML loader가 추가한 `Date (Asia/Seoul)` 헤더를 최우선 기준일로 읽는다."""
+        """EML loader가 추가한 `Date (Asia/Seoul)` 헤더를 최후 fallback 후보로 읽는다."""
         match = re.search(
             r"Date\s*\(Asia/Seoul\)\s*:\s*(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})",
             raw_text,
@@ -5527,8 +4607,7 @@ class FundOrderExtractor:
     @staticmethod
     def _is_buy_sell_report_total_line(line: str) -> bool:
         """BUY&SELL 표의 합계/총계 행을 판별한다."""
-        stripped = line.strip().lower()
-        return stripped.startswith("total") or stripped.startswith("합계") or stripped.startswith("총계")
+        return FundOrderExtractor._looks_like_total_summary_text(line)
 
     @staticmethod
     def _normalize_buy_sell_report_date(value: str | None) -> str | None:
@@ -5703,6 +4782,23 @@ class FundOrderExtractor:
         return blocks
 
     @staticmethod
+    def _iter_pipe_table_like_blocks(text: str) -> list[list[str]]:
+        """leading/trailing pipe가 없어도 `|`로 구분된 표 행 묶음을 추출한다."""
+        blocks: list[list[str]] = []
+        current: list[str] = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if "|" in line:
+                current.append(line)
+                continue
+            if current:
+                blocks.append(current)
+                current = []
+        if current:
+            blocks.append(current)
+        return blocks
+
+    @staticmethod
     def _markdown_table_cells(line: str) -> list[str]:
         """markdown table line을 셀 리스트로 평탄화한다."""
         stripped = line.strip().strip("|")
@@ -5717,6 +4813,18 @@ class FundOrderExtractor:
         if not non_empty_cells:
             return False
         return all(bool(re.fullmatch(r":?-{3,}:?", cell)) for cell in non_empty_cells)
+
+    @staticmethod
+    def _is_pipe_placeholder_row(cells: list[str]) -> bool:
+        """`/ | / | /`처럼 placeholder만 있는 표 행인지 확인한다."""
+        meaningful = [
+            FundOrderExtractor._normalize_text(cell)
+            for cell in cells
+            if FundOrderExtractor._normalize_text(cell)
+        ]
+        if not meaningful:
+            return False
+        return all(token in {"/", "-", "--"} for token in meaningful)
 
     def _markdown_fund_code_index(
         self,
@@ -5739,19 +4847,33 @@ class FundOrderExtractor:
             return bool(sample) and all(self._looks_like_fund_code(value) for value in sample)
 
         for index, label in enumerate(header):
-            lowered = label.lower()
-            if "펀드코드" in label or "fund code" in lowered:
+            semantic_label = self._semantic_header_label_for_deterministic(label)
+            lowered = semantic_label.lower()
+            compact = self._normalize_text(semantic_label).lower().replace(" ", "")
+            if (
+                "펀드코드" in semantic_label
+                or "fund code" in lowered
+                or compact in {"수탁코드", "종목코드"}
+            ):
                 return index
-        has_fund_name = any("펀드명" in label or "fund name" in label.lower() for label in header)
-        has_execution_amount = any(self._is_execution_evidence(self._normalize_text(label)) for label in header)
+        has_fund_name = any(
+            "펀드명" in self._semantic_header_label_for_deterministic(label)
+            or "fund name" in self._semantic_header_label_for_deterministic(label).lower()
+            for label in header
+        )
+        has_execution_amount = any(
+            self._is_execution_evidence(self._semantic_header_label_for_deterministic(label)) for label in header
+        )
         if has_fund_name and has_execution_amount and body_rows:
             for index, label in enumerate(header):
-                lowered = label.lower().replace(" ", "")
-                if "운용사코드" in label or "managercode" in lowered:
+                semantic_label = self._semantic_header_label_for_deterministic(label)
+                lowered = semantic_label.lower().replace(" ", "")
+                if "운용사코드" in semantic_label or "managercode" in lowered:
                     if sampled_column_values_look_like_fund_codes(index, sample_size=10):
                         return index
             for index, label in enumerate(header):
-                lowered = self._normalize_text(label).lower().replace(" ", "")
+                semantic_label = self._semantic_header_label_for_deterministic(label)
+                lowered = self._normalize_text(semantic_label).lower().replace(" ", "")
                 if lowered in {"펀드", "fund"} and sampled_column_values_look_like_fund_codes(index, sample_size=5):
                     return index
         return None
@@ -5768,7 +4890,7 @@ class FundOrderExtractor:
     @staticmethod
     def _looks_like_non_amount_metadata_label(label: str) -> bool:
         """방향 단어가 있어도 실제 주문 컬럼이 아닌 메타데이터 헤더를 걸러낸다."""
-        lowered = label.lower()
+        lowered = FundOrderExtractor._semantic_header_label_for_deterministic(label).lower()
         compact_label = re.sub(r"\s+", "", lowered)
         if any(keyword in lowered for keyword in ("manager", "custodian", "bank")):
             return True
@@ -5778,11 +4900,102 @@ class FundOrderExtractor:
         )
 
     @staticmethod
+    def _header_segment_has_semantic_signal_for_deterministic(segment: str) -> bool:
+        """header segment가 실제 컬럼 의미를 담는지 본다."""
+        normalized_segment = FundOrderExtractor._normalize_text(segment)
+        lowered = normalized_segment.lower()
+        compact = re.sub(r"[^0-9a-z가-힣]+", "", lowered)
+        if not normalized_segment:
+            return False
+        if re.search(r"\b[td]\s*\+\s*\d+\b", lowered):
+            return True
+        if re.search(r"\d{1,2}\s*월\s*\d{1,2}\s*일", normalized_segment):
+            return True
+        if any(
+            token in lowered
+            for token in (
+                "fund",
+                "amount",
+                "unit",
+                "share",
+                "transaction",
+                "type",
+                "content",
+                "detail",
+                "description",
+                "memo",
+                "remark",
+                "subscription",
+                "redemption",
+                "execution",
+                "settlement",
+                "expected",
+            )
+        ):
+            return True
+        return any(
+            token in compact
+            for token in (
+                "펀드",
+                "코드",
+                "운용사",
+                "수탁",
+                "구분",
+                "내용",
+                "적요",
+                "사유",
+                "비고",
+                "금액",
+                "예상",
+                "영업일",
+                "정산",
+                "결제",
+                "좌수",
+                "당일",
+                "설정",
+                "해지",
+                "입금",
+                "출금",
+                "청구",
+            )
+        )
+
+    @classmethod
+    def _semantic_header_label_for_deterministic(cls, label: str) -> str:
+        """loader prefix/date noise를 제거한 header semantic label을 만든다."""
+        normalized_label = cls._normalize_text(label)
+        if not normalized_label:
+            return ""
+        segments = [cls._normalize_text(segment) for segment in normalized_label.split("/")]
+        segments = [segment for segment in segments if segment]
+        if len(segments) <= 1:
+            return normalized_label
+
+        first_semantic_index = next(
+            (
+                index
+                for index, segment in enumerate(segments)
+                if cls._header_segment_has_semantic_signal_for_deterministic(segment)
+            ),
+            None,
+        )
+        if first_semantic_index is None or first_semantic_index == 0:
+            return normalized_label
+        return " / ".join(segments[first_semantic_index:])
+
+    def _markdown_header_has_prefix_noise_for_deterministic(self, header: list[str]) -> bool:
+        """header semantic cleanup가 필요한 table은 권위 deterministic shortcut에서 제외한다."""
+        return any(
+            self._normalize_text(label) != self._semantic_header_label_for_deterministic(label)
+            for label in header
+        )
+
+    @staticmethod
     def _order_type_hint_from_header_label(label: str) -> OrderType | None:
         """collapsed markdown header label이 SUB/RED 방향을 직접 가리키는지 본다."""
         if FundOrderExtractor._looks_like_non_amount_metadata_label(label):
             return None
-        lowered = label.lower()
+        lowered = FundOrderExtractor._semantic_header_label_for_deterministic(label).lower()
         sub_tokens = ["투입", "설정", "입금", "납입", "매입", "buy", "subscription"]
         red_tokens = ["인출", "해지", "출금", "환매", "sell", "redemption"]
         has_sub = any(token in lowered for token in sub_tokens)
@@ -5798,7 +5011,7 @@ class FundOrderExtractor:
     @staticmethod
     def _is_order_context_header_for_deterministic(label: str) -> bool:
         """header가 row-level 주문 방향 문맥을 제공하는지 본다."""
-        lowered = FundOrderExtractor._normalize_text(label).lower()
+        lowered = FundOrderExtractor._semantic_header_label_for_deterministic(label).lower()
         compact = re.sub(r"[^0-9a-z가-힣]+", "", lowered)
         return any(
             keyword in lowered
@@ -5819,7 +5032,7 @@ class FundOrderExtractor:
     def _row_context_amount_priority_for_deterministic(label: str) -> int | None:
         """row-level direction으로 해석해야 하는 mixed amount 열의 우선순위."""
         best_priority: int | None = None
-        normalized_label = FundOrderExtractor._normalize_text(label).lower()
+        normalized_label = FundOrderExtractor._semantic_header_label_for_deterministic(label).lower()
         whole_label_adjustment = 0
         compact_label = re.sub(r"[^0-9a-z가-힣]+", "", normalized_label)
         if "펀드계" in compact_label:
@@ -5889,7 +5102,7 @@ class FundOrderExtractor:
     def _remarks_column_index_for_deterministic(header: list[str]) -> int | None:
         """header에서 비고/remarks 컬럼 위치를 찾는다."""
         for index, label in enumerate(header):
-            normalized = FundOrderExtractor._normalize_text(label).lower().replace(" ", "")
+            normalized = FundOrderExtractor._semantic_header_label_for_deterministic(label).lower().replace(" ", "")
             if "비고" in normalized or "remark" in normalized or "note" in normalized:
                 return index
         return None
@@ -5930,6 +5143,359 @@ class FundOrderExtractor:
         if parsed is None:
             return None
         return self._format_decimal_amount(parsed)
+
+    def _row_local_amount_table_header_spec(
+        self,
+        *,
+        header: list[str],
+        body_rows: list[list[str]],
+        base_date: str,
+    ) -> tuple[int, list[tuple[int, SettleClass, int, OrderType | None, bool, bool]]] | None:
+        """fund code 없이 fund name과 direction amount만 있는 표 헤더를 식별한다."""
+        if self._markdown_fund_code_index(header, body_rows=body_rows) is not None:
+            return None
+        fund_name_index = self._markdown_fund_name_index(header, body_rows=body_rows)
+        if fund_name_index is None:
+            return None
+
+        usable_specs: list[tuple[int, SettleClass, int, OrderType | None, bool, bool]] = []
+        for spec in self._deterministic_order_columns(header, base_date):
+            column_index = spec[0]
+            if column_index == fund_name_index:
+                continue
+            if not any(
+                not self._is_markdown_separator_row(row)
+                and not self._is_pipe_placeholder_row(row)
+                and column_index < len(row)
+                and (amount := self._normalize_amount_for_deterministic(row[column_index])) is not None
+                and not self._is_effectively_zero_amount(amount)
+                for row in body_rows
+            ):
+                continue
+            usable_specs.append(spec)
+
+        if not usable_specs:
+            return None
+        return fund_name_index, usable_specs
+
+    def _looks_like_total_row_without_fund_code(
+        self,
+        *,
+        row: list[str],
+        fund_name_index: int,
+    ) -> bool:
+        """fund code가 없는 표에서도 총계/합계 행을 걸러낸다."""
+        fund_name = self._normalize_text(row[fund_name_index]) if fund_name_index < len(row) else ""
+        meaningful_cells = [
+            self._normalize_text(cell)
+            for cell in row
+            if self._normalize_text(cell) and self._normalize_text(cell) not in {"/", "-", "--"}
+        ]
+        if not meaningful_cells:
+            return False
+        if self._looks_like_total_row(meaningful_cells[0], fund_name):
+            return True
+        return any(self._looks_like_total_summary_text(cell) for cell in meaningful_cells[:3])
+
+    def _build_row_local_fund_rows(
+        self,
+        *,
+        markdown_text: str,
+        raw_text: str,
+        target_fund_scope: TargetFundScope | None,
+    ) -> list[_RowLocalFundRow]:
+        """fund code 없는 row-local amount table을 읽어 행 단위 거래 근거를 복구한다."""
+        base_date = self._detect_document_base_date_from_text(raw_text)
+        if base_date is None:
+            return []
+
+        source_text = raw_text or markdown_text
+        fund_rows: list[_RowLocalFundRow] = []
+        row_counter = 0
+
+        for block in self._iter_pipe_table_like_blocks(source_text):
+            rows = [self._markdown_table_cells(line) for line in block]
+            for header_index, header in enumerate(rows):
+                if self._is_markdown_separator_row(header) or self._is_pipe_placeholder_row(header):
+                    continue
+                semantic_header = [self._semantic_header_label_for_deterministic(label) for label in header]
+                header_spec = self._row_local_amount_table_header_spec(
+                    header=semantic_header,
+                    body_rows=rows[header_index + 1 :],
+                    base_date=base_date,
+                )
+                if header_spec is None:
+                    continue
+
+                fund_name_index, column_specs = header_spec
+                parsed_body_row = False
+                for row in rows[header_index + 1 :]:
+                    if self._is_markdown_separator_row(row):
+                        continue
+                    if self._is_pipe_placeholder_row(row):
+                        if parsed_body_row:
+                            break
+                        continue
+                    if fund_name_index >= len(row):
+                        continue
+
+                    fund_name = self._normalize_text(row[fund_name_index])
+                    if not fund_name or fund_name in {"/", "-"}:
+                        continue
+                    if self._looks_like_total_row_without_fund_code(row=row, fund_name_index=fund_name_index):
+                        continue
+                    if target_fund_scope is not None and not self._is_target_fund(
+                        fund_code="",
+                        fund_name=fund_name,
+                        target_fund_scope=target_fund_scope,
+                    ):
+                        continue
+
+                    parsed_body_row = True
+                    row_counter += 1
+                    transactions: list[_RowLocalTransaction] = []
+                    for (
+                        column_index,
+                        settle_class,
+                        t_day,
+                        explicit_order_type,
+                        uses_signed_amount,
+                        uses_row_context_order_type,
+                    ) in column_specs:
+                        if column_index >= len(row):
+                            continue
+                        amount = self._normalize_amount_for_deterministic(row[column_index])
+                        if amount is None or self._is_effectively_zero_amount(amount):
+                            continue
+                        label = self._normalize_text(semantic_header[column_index])
+                        if self._is_pending_request_label_for_deterministic(label):
+                            pending_t_day = self._pending_request_t_day_from_row_for_deterministic(
+                                label=label,
+                                row=row,
+                                header=semantic_header,
+                                column_index=column_index,
+                                base_date=base_date,
+                            )
+                            if pending_t_day is None:
+                                continue
+                            t_day = pending_t_day
+                            settle_class = SettleClass.PENDING
+
+                        amount_decimal = Decimal(amount.replace(",", ""))
+                        order_type = explicit_order_type
+                        if uses_row_context_order_type:
+                            order_type = self._row_context_order_type_from_markdown_row(
+                                header=semantic_header,
+                                row=row,
+                            )
+                            if order_type is None:
+                                continue
+                            signed_amount = abs(amount_decimal)
+                            if order_type is OrderType.RED:
+                                signed_amount = -signed_amount
+                            transfer_amount = self._format_decimal_amount(signed_amount)
+                        elif uses_signed_amount:
+                            order_type = self._order_type_from_signed_amount(amount_decimal)
+                            if order_type is None:
+                                continue
+                            transfer_amount = self._format_decimal_amount(amount_decimal)
+                        else:
+                            if order_type is None:
+                                continue
+                            signed_amount = abs(amount_decimal)
+                            if order_type is OrderType.RED:
+                                signed_amount = -signed_amount
+                            transfer_amount = self._format_decimal_amount(signed_amount)
+
+                        transactions.append(
+                            _RowLocalTransaction(
+                                settle_class=settle_class,
+                                t_day=t_day,
+                                order_type=order_type,
+                                transfer_amount=transfer_amount,
+                                evidence_label=label,
+                            )
+                        )
+
+                    fund_rows.append(
+                        _RowLocalFundRow(
+                            row_index=row_counter,
+                            fund_name=fund_name,
+                            base_date=base_date,
+                            transactions=tuple(transactions),
+                        )
+                    )
+                break
+
+        return fund_rows
+
+    def _build_row_local_shortcut_orders_after_base_date(
+        self,
+        *,
+        base_dates: list[FundBaseDateItem],
+        markdown_text: str,
+        raw_text: str,
+        target_fund_scope: TargetFundScope | None,
+        expected_order_count: int | None,
+    ) -> list[OrderExtraction]:
+        """fund code 없는 row-local amount table이면 base_date 이후 shortcut order를 복구한다."""
+        if not base_dates or not raw_text:
+            return []
+
+        fund_rows = self._build_row_local_fund_rows(
+            markdown_text=markdown_text,
+            raw_text=raw_text,
+            target_fund_scope=target_fund_scope,
+        )
+        if not fund_rows or len(fund_rows) != len(base_dates):
+            return []
+
+        normalized_base_dates = {
+            self._normalize_date(item.base_date)
+            for item in base_dates
+            if self._normalize_date(item.base_date) is not None
+        }
+        if len(normalized_base_dates) != 1:
+            return []
+
+        orders: list[OrderExtraction] = []
+        for fund_row, base_item in zip(fund_rows, base_dates):
+            if self._canonical_fund_identity("", fund_row.fund_name) != self._canonical_fund_identity("", base_item.fund_name):
+                return []
+            resolved_base_date = base_item.base_date or fund_row.base_date
+            if self._normalize_date(resolved_base_date) not in normalized_base_dates:
+                return []
+            for transaction in fund_row.transactions:
+                orders.append(
+                    OrderExtraction(
+                        fund_code=base_item.fund_code,
+                        fund_name=base_item.fund_name or fund_row.fund_name,
+                        settle_class=transaction.settle_class,
+                        order_type=transaction.order_type,
+                        base_date=resolved_base_date,
+                        t_day=transaction.t_day,
+                        transfer_amount=transaction.transfer_amount,
+                    )
+                )
+
+        if not orders:
+            return []
+        if expected_order_count is not None and expected_order_count > 0 and len(orders) != expected_order_count:
+            return []
+        return self._dedupe_orders_by_signature(orders)
+
+    def _row_local_order_type_from_amount_item(self, item: FundAmountItem) -> OrderType | None:
+        """transfer_amount stage item에서 row-local 기대 방향을 추론한다."""
+        slot_id = self._normalize_text(item.slot_id).upper()
+        if slot_id.endswith("_SUB"):
+            return OrderType.SUB
+        if slot_id.endswith("_RED"):
+            return OrderType.RED
+
+        evidence_label = self._semantic_header_label_for_deterministic(item.evidence_label or "")
+        hinted_order_type = self._order_type_hint_from_header_label(evidence_label)
+        if hinted_order_type is not None:
+            return hinted_order_type
+
+        normalized_amount = self._canonicalize_amount_text(item.transfer_amount)
+        if normalized_amount is None:
+            return None
+        try:
+            return self._order_type_from_signed_amount(Decimal(normalized_amount.replace(",", "")))
+        except InvalidOperation:
+            return None
+
+    def _match_row_local_transaction_to_amount_item(
+        self,
+        *,
+        fund_rows: list[_RowLocalFundRow],
+        item: FundAmountItem,
+    ) -> _RowLocalTransaction | None:
+        """row-local table 근거와 현재 amount stage item을 안전하게 매칭한다."""
+        matching_rows = [
+            fund_row
+            for fund_row in fund_rows
+            if self._canonical_fund_identity("", fund_row.fund_name)
+            == self._canonical_fund_identity("", item.fund_name)
+        ]
+        if len(matching_rows) != 1:
+            return None
+
+        fund_row = matching_rows[0]
+        if self._normalize_date(item.base_date) != self._normalize_date(fund_row.base_date):
+            return None
+
+        order_type = self._row_local_order_type_from_amount_item(item)
+        if order_type is None:
+            return None
+
+        matching_transactions = [
+            transaction
+            for transaction in fund_row.transactions
+            if transaction.order_type is order_type and transaction.t_day == item.t_day
+        ]
+        if len(matching_transactions) != 1:
+            return None
+        return matching_transactions[0]
+
+    def _reconcile_transfer_amount_items_with_document_amounts(
+        self,
+        *,
+        document_text: str,
+        raw_text: str,
+        output_items: list[FundAmountItem],
+        target_fund_scope: TargetFundScope | None,
+    ) -> list[FundAmountItem]:
+        """row-local amount table가 있으면 잘못 결합된 transfer_amount를 문서 근거로 교정한다."""
+        if not output_items:
+            return output_items
+
+        fund_rows = self._build_row_local_fund_rows(
+            markdown_text=self._structured_markdown_view(document_text),
+            raw_text=raw_text,
+            target_fund_scope=target_fund_scope,
+        )
+        if not fund_rows:
+            return output_items
+
+        reconciled_items: list[FundAmountItem] = []
+        replaced_count = 0
+
+        for item in output_items:
+            expected_transaction = self._match_row_local_transaction_to_amount_item(
+                fund_rows=fund_rows,
+                item=item,
+            )
+            if expected_transaction is None:
+                reconciled_items.append(item)
+                continue
+
+            current_amount = self._canonicalize_amount_text(item.transfer_amount)
+            expected_amount = self._canonicalize_amount_text(expected_transaction.transfer_amount)
+            if current_amount == expected_amount and (item.transfer_amount or "") == expected_transaction.transfer_amount:
+                reconciled_items.append(item)
+                continue
+
+            reconciled_items.append(
+                item.model_copy(
+                    update={
+                        "transfer_amount": expected_transaction.transfer_amount,
+                        "reason_code": (
+                            "AMOUNT_EXPLICIT_SUB"
+                            if expected_transaction.order_type is OrderType.SUB
+                            else "AMOUNT_EXPLICIT_RED"
+                        ),
+                    }
+                )
+            )
+            replaced_count += 1
+
+        if replaced_count:
+            logger.info(
+                "Reconciled %s transfer_amount item(s) from structured document evidence",
+                replaced_count,
+            )
+        return self._dedupe_stage_items(reconciled_items)
 
     def _bucket_key_from_pending_note_for_deterministic(
         self,
@@ -6022,13 +5588,16 @@ class FundOrderExtractor:
                 header = rows[0]
                 if self._is_markdown_separator_row(header):
                     continue
+                if self._markdown_header_has_prefix_noise_for_deterministic(header):
+                    continue
+                semantic_header = [self._semantic_header_label_for_deterministic(label) for label in header]
 
-                fund_code_index = self._markdown_fund_code_index(header, body_rows=rows[1:])
-                fund_name_index = self._markdown_fund_name_index(header)
+                fund_code_index = self._markdown_fund_code_index(semantic_header, body_rows=rows[1:])
+                fund_name_index = self._markdown_fund_name_index(semantic_header)
                 if fund_code_index is None:
                     continue
 
-                column_specs = self._deterministic_order_columns(header, base_date)
+                column_specs = self._deterministic_order_columns(semantic_header, base_date)
                 if not column_specs:
                     continue
 
@@ -6067,12 +5636,12 @@ class FundOrderExtractor:
                         amount = self._normalize_amount_for_deterministic(row[column_index])
                         if amount is None or self._is_effectively_zero_amount(amount):
                             continue
-                        label = self._normalize_text(header[column_index])
+                        label = self._normalize_text(semantic_header[column_index])
                         if self._is_pending_request_label_for_deterministic(label):
                             pending_t_day = self._pending_request_t_day_from_row_for_deterministic(
                                 label=label,
                                 row=row,
-                                header=header,
+                                header=semantic_header,
                                 column_index=column_index,
                                 base_date=base_date,
                             )
@@ -6085,7 +5654,7 @@ class FundOrderExtractor:
                         order_type = explicit_order_type
                         if uses_row_context_order_type:
                             order_type = self._row_context_order_type_from_markdown_row(
-                                header=header,
+                                header=semantic_header,
                                 row=row,
                             )
                             if order_type is None:
@@ -6285,14 +5854,18 @@ class FundOrderExtractor:
         expected_order_count: int | None,
     ) -> list[OrderExtraction]:
         """Structured markdown table이 coverage를 증명할 때만 후반 stage를 생략한다."""
-        if (
-            not base_dates
-            or not markdown_text
-            or not raw_text
-            or expected_order_count is None
-            or expected_order_count <= 0
-        ):
+        if not base_dates or not markdown_text or not raw_text:
             return []
+
+        row_local_orders = self._build_row_local_shortcut_orders_after_base_date(
+            base_dates=base_dates,
+            markdown_text=markdown_text,
+            raw_text=raw_text,
+            target_fund_scope=target_fund_scope,
+            expected_order_count=expected_order_count,
+        )
+        if row_local_orders:
+            return row_local_orders
 
         expected_families = self._canonical_fund_families_from_base_dates(base_dates)
         if not expected_families:
@@ -6312,6 +5885,8 @@ class FundOrderExtractor:
             )
         )
         if not markdown_orders:
+            return []
+        if expected_order_count is None or expected_order_count <= 0:
             return []
         if len(markdown_orders) != expected_order_count:
             return []
@@ -6616,9 +6191,12 @@ class FundOrderExtractor:
         """header를 읽어 amount-bearing column의 방향/settle/t_day를 계산한다."""
         raw_specs: list[tuple[int, int, OrderType | None, bool, int | None, bool]] = []
         future_bucket_order: dict[str, int] = {}
-        has_order_context_header = any(self._is_order_context_header_for_deterministic(label) for label in header)
+        semantic_header = [self._semantic_header_label_for_deterministic(label) for label in header]
+        has_order_context_header = any(
+            self._is_order_context_header_for_deterministic(label) for label in semantic_header
+        )
 
-        for index, label in enumerate(header):
+        for index, label in enumerate(semantic_header):
             normalized_label = self._normalize_text(label)
             if not normalized_label:
                 continue
@@ -6951,24 +6529,66 @@ class FundOrderExtractor:
                 return True
         return False
 
-    def _markdown_fund_name_index(self, header: list[str]) -> int | None:
+    def _markdown_fund_name_index(
+        self,
+        header: list[str],
+        *,
+        body_rows: list[list[str]] | None = None,
+    ) -> int | None:
         """header에서 펀드명 열 인덱스를 찾는다."""
         for index, label in enumerate(header):
-            lowered = label.lower()
-            if "펀드명" in label or "fund name" in lowered:
+            semantic_label = self._semantic_header_label_for_deterministic(label)
+            lowered = semantic_label.lower()
+            if "펀드명" in semantic_label or "fund name" in lowered:
+                return index
+        for index, label in enumerate(header):
+            semantic_label = self._semantic_header_label_for_deterministic(label)
+            lowered = self._normalize_text(semantic_label).lower().replace(" ", "")
+            if lowered not in {"펀드", "fund"}:
+                continue
+            values = [
+                self._normalize_text(row[index])
+                for row in body_rows or []
+                if (
+                    not self._is_markdown_separator_row(row)
+                    and not self._is_pipe_placeholder_row(row)
+                    and index < len(row)
+                    and self._normalize_text(row[index])
+                )
+            ]
+            sample = values[: min(len(values), 5)]
+            if sample and not all(self._looks_like_fund_code(value) for value in sample):
                 return index
         return None
 
     @staticmethod
     def _looks_like_total_row(fund_code: str, fund_name: str) -> bool:
         """합계/총계 행처럼 실제 주문이 아닌 행을 건너뛴다."""
-        lowered_code = fund_code.lower()
-        lowered_name = fund_name.lower()
-        total_tokens = ("합계", "총계", "subtotal", "total")
-        if any(token in lowered_code for token in total_tokens) or any(token in lowered_name for token in total_tokens):
+        if FundOrderExtractor._looks_like_total_summary_text(fund_code) or FundOrderExtractor._looks_like_total_summary_text(
+            fund_name
+        ):
             return True
         count_summary_pattern = re.compile(r"\d+\s*개\s*펀드")
-        return bool(count_summary_pattern.search(lowered_code) or count_summary_pattern.search(lowered_name))
+        return bool(count_summary_pattern.search(fund_code.lower()) or count_summary_pattern.search(fund_name.lower()))
+
+    @staticmethod
+    def _looks_like_total_summary_text(value: str | None) -> bool:
+        """공백/구분문자가 섞인 총계·소계 라벨을 canonical token으로 판별한다."""
+        normalized = FundOrderExtractor._normalize_text(value).lower()
+        if not normalized:
+            return False
+        canonical = re.sub(r"[\W_]+", "", normalized)
+        if not canonical:
+            return False
+        total_tokens = (
+            "합계",
+            "총계",
+            "소계",
+            "subtotal",
+            "grandtotal",
+            "total",
+        )
+        return any(token in canonical for token in total_tokens)
 
     @staticmethod
     def _align_amount_with_document_order_type(amount: str, order_type: OrderType) -> str:
@@ -7726,7 +7346,7 @@ class FundOrderExtractor:
     @staticmethod
     def _normalize_settle_class(value: str | None, t_day: int | None, evidence_label: str) -> SettleClass | None:
         """LLM 값, evidence label, t_day를 종합해 최종 settle_class를 정한다."""
-        lower_label = evidence_label.lower()
+        lower_label = FundOrderExtractor._semantic_header_label_for_deterministic(evidence_label).lower()
         if FundOrderExtractor._evidence_implies_schedule(lower_label):
             return SettleClass.PENDING
         if any(token in lower_label for token in ["당일", "확정", "실행", "당일이체", "당일투입", "당일인출", "설정금액", "해지금액", "입금액", "출금액", "buy", "sell"]):
@@ -7751,7 +7371,8 @@ class FundOrderExtractor:
         # Header-label 기반 방향 추론은 deterministic markdown fallback과 동일한 규칙을
         # 재사용해, "펀드납입(인출)금액" 같은 hybrid label이 마지막 fallback 단계에서
         # 한쪽 방향으로 다시 치우치지 않도록 유지한다.
-        label_order_type = FundOrderExtractor._order_type_hint_from_header_label(evidence_label)
+        semantic_label = FundOrderExtractor._semantic_header_label_for_deterministic(evidence_label)
+        label_order_type = FundOrderExtractor._order_type_hint_from_header_label(semantic_label)
 
         value_order_type: OrderType | None = None
         if value:
@@ -7839,6 +7460,31 @@ class FundOrderExtractor:
                 "total",
             ]
         )
+
+    @staticmethod
+    def _looks_like_loader_split_name_fragment(value: str) -> bool:
+        """`A / B` 형태로 잘못 평탄화된 이름 fragment인지 보수적으로 판별한다."""
+        normalized_value = FundOrderExtractor._normalize_text(value)
+        if not normalized_value:
+            return False
+        if any(token in normalized_value for token in ("(", ")", "[", "]", "{", "}", "<", ">")):
+            return False
+        if re.search(r"\d", normalized_value):
+            return False
+        return bool(re.fullmatch(r"[A-Za-z가-힣]+(?:\s+[A-Za-z가-힣]+)*", normalized_value))
+
+    @classmethod
+    def _normalize_output_fund_name(cls, fund_name: str | None) -> str:
+        """최종 output에서 loader split artifact로 보이는 fund_name만 좁게 정리한다."""
+        normalized_name = cls._normalize_text(fund_name)
+        if " / " not in normalized_name:
+            return normalized_name
+        segments = [cls._normalize_text(segment) for segment in normalized_name.split(" / ") if cls._normalize_text(segment)]
+        if len(segments) != 2:
+            return normalized_name
+        if all(cls._looks_like_loader_split_name_fragment(segment) for segment in segments):
+            return " ".join(segments)
+        return normalized_name
 
     @staticmethod
     def _normalize_t_day(value: int | None, settle_class: SettleClass) -> int | None:
@@ -8047,7 +7693,7 @@ class FundOrderExtractor:
         evidence_label: str,
     ) -> str:
         """Deterministic settle_class 생성 시 primary reason_code를 정한다."""
-        normalized_label = self._normalize_text(evidence_label)
+        normalized_label = self._semantic_header_label_for_deterministic(evidence_label)
         lowered_label = normalized_label.lower()
         if self._evidence_implies_schedule(normalized_label):
             if bool(re.search(r"익+영업일", lowered_label)) or bool(re.search(r"제\s*\d+\s*영업일", lowered_label)):
@@ -8309,7 +7955,7 @@ class FundOrderExtractor:
 
         return OrderExtraction(
             fund_code=template.fund_code,
-            fund_name=template.fund_name,
+            fund_name=self._normalize_output_fund_name(template.fund_name),
             settle_class=template.settle_class,
             order_type=order_type,
             base_date=template.base_date,
@@ -9015,7 +8661,7 @@ class FundOrderExtractor:
     @staticmethod
     def _evidence_implies_schedule(evidence_label: str) -> bool:
         """label만 보고도 미래 예정 슬롯임을 강하게 시사하는지 확인한다."""
-        lower_label = evidence_label.lower()
+        lower_label = FundOrderExtractor._semantic_header_label_for_deterministic(evidence_label).lower()
         if any(token in lower_label for token in ["예정", "청구", "예상", "t+"]):
             return True
         if bool(re.search(r"익+영업일", lower_label)):

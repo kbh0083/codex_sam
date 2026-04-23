@@ -82,6 +82,66 @@ class ExtractorLogicTests(unittest.TestCase):
         }
         path.write_text(yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
+    @staticmethod
+    def _row_local_amount_section_raw_text() -> str:
+        return "\n".join(
+            [
+                "메트라이프생명 펀드설정/해지 운용지시서",
+                "2026-04-08",
+                "1. 추가설정 및 부분해지 내용",
+                "/ | 상품 | 펀드 | 운용사 | 수탁은행 | 설정구분 | 추가설정 | 부분해지",
+                "/ | MetLife W | W VA 인덱스주식(1) | 삼성 | 국민 | 부분해지 | 0 | 11,071,695",
+                "/ | MetLife W | W VA II 인덱스주식(2) | 삼성 | 국민 | 부분해지 | 0 | 283,660",
+                "/ | MetLife MyFund | MyFund 변액종신혼합형(주식) | 삼성 | 국민 | 부분해지 | 0 | 0",
+                "/ | MetLife MyFund | MyFund VUL 혼합안정형(주식) | 삼성 | 국민 | 부분해지 | 0 | 0",
+                "/ | MetLife MyFund | MyFund VUL 혼합성장형 | 삼성 | 국민 | 추가설정 | 80,617,172 | 0",
+                "/ | MetLife MasterPlan | MP VUL 인덱스주식형 | 삼성 | 국민 | 부분해지 | 0 | 46,921,767",
+                "/ | MetLife MasterPlan | 인덱스주식형 2호 | 삼성 | 국민 | 추가설정 | 167,394,066 | 0",
+                "/ | MetLife MasterPlan | MP VUL VL II 인덱스형 | 삼성 | 국민 | 추가설정 | 241,062,610 | 0",
+                "/ | MetLife Step Up | SU VA 인덱스주식형 | 삼성 | 국민 | 부분해지 | 0 | 40,714,305",
+                "/ | MetLife 스마트플랜 | 스마트플랜 VUL 종신 장기채권형 | 삼성 | 국민 | 추가설정 | 733,402,399 | 0",
+                "/ | 변액연금보험 동행 Plus | 은퇴맞춤 TDF2035 | 삼성 | 국민 | 추가설정 | 172,387 | 0",
+                "/ | 변액연금보험 동행 Plus | 은퇴맞춤 TDF2045 | 삼성 | 국민 | 부분해지 | 0 | 6,413",
+                "/ | 변액연금보험 동행 Plus | 은퇴맞춤 TDF2055 | 삼성 | 국민 | 추가설정 | 1,782,348 | 0",
+                "/ | 변액연금보험 동행 Plus | 안정 포트폴리오형 | 삼성 | 국민 | 추가설정 | 8,672,148 | 0",
+                "/ | 변액연금보험 동행 Plus | 중립 포트폴리오형 | 삼성 | 국민 | 부분해지 | 0 | 9,456,573",
+                "/ | 변액연금보험 동행 Plus | 적극 포트폴리오형 | 삼성 | 국민 | 추가설정 | 79,861,426 | 0",
+                "/ | Total | Total | Total | Total | Total | 1,312,964,556 | 108,454,413",
+                "2. 결제 금액 및 계좌",
+                "/ | 거래은행 | 예금주 | 결제계좌 | 결제계좌 | 결제계좌 | 결제금액 | 결제금액",
+                "/ | 국민은행 | 국민은행 수탁업무부 | 927-02-0355-250 | 927-02-0355-250 | 927-02-0355-250 | 1,204,510,143 | 1,204,510,143",
+            ]
+        )
+
+    @staticmethod
+    def _row_local_amount_section_base_dates() -> list[FundBaseDateItem]:
+        names = [
+            "W VA 인덱스주식(1)",
+            "W VA II 인덱스주식(2)",
+            "MyFund 변액종신혼합형(주식)",
+            "MyFund VUL 혼합안정형(주식)",
+            "MyFund VUL 혼합성장형",
+            "MP VUL 인덱스주식형",
+            "인덱스주식형 2호",
+            "MP VUL VL II 인덱스형",
+            "SU VA 인덱스주식형",
+            "스마트플랜 VUL 종신 장기채권형",
+            "은퇴맞춤 TDF2035",
+            "은퇴맞춤 TDF2045",
+            "은퇴맞춤 TDF2055",
+            "안정 포트폴리오형",
+            "중립 포트폴리오형",
+            "적극 포트폴리오형",
+        ]
+        return [
+            FundBaseDateItem(
+                fund_code=f"ROW_TMP_{index:03d}",
+                fund_name=name,
+                base_date="2026-04-08",
+            )
+            for index, name in enumerate(names, start=1)
+        ]
+
     def test_build_result_keeps_explicit_inflow_and_outflow_as_separate_orders(self) -> None:
         items = [
             FundResolvedItem(
@@ -1310,6 +1370,38 @@ class ExtractorLogicTests(unittest.TestCase):
         self.assertTrue(self.extractor._looks_like_total_row("7개 펀드", "-"))
         self.assertFalse(self.extractor._looks_like_total_row("450038", "-"))
 
+    def test_looks_like_total_row_handles_spaced_summary_labels(self) -> None:
+        self.assertTrue(self.extractor._looks_like_total_row("합 계", "합 계"))
+        self.assertTrue(self.extractor._looks_like_total_row("총 계", "총 계"))
+        self.assertTrue(self.extractor._looks_like_total_row("sub total", "sub total"))
+        self.assertFalse(self.extractor._looks_like_total_row("D706", "변액연금보험 II 인덱스혼합형"))
+
+    def test_derive_document_fund_seed_items_ignores_spaced_total_row(self) -> None:
+        document_text = "\n".join(
+            [
+                "## MHT 자금운용_해지_5440_20260316.mht",
+                "",
+                "| 수탁사 / 펀드코드 | 교보생명 / 펀드코드 | 펀드명 | 금액 ( 원 ) | 운용사 | 수탁사 | 일반사무 / 관리사 | 비고 1 | 비고 2 |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| D706 | D006 | 변액연금보험 II 인덱스혼합형 ( 채권 _ 삼성 _EMP) | 500,000,000 | 삼성자산운용 ( 채권 _EMP) | ( 주 ) 국민은행 | 하나펀드서비스 ( 주 ) |  |  |",
+                "| Y318 | D018 | 변액연금보험 II 코리아인덱스혼합형 ( 채권 _ 삼성 _ 일반 ) | 5,000,000,000 | 삼성자산운용 ( 채권 ) | ( 주 ) 국민은행 | 하나펀드서비스 ( 주 ) |  |  |",
+                "| 합 계 | 합 계 | 5,500,000,000 | 5,500,000,000 | 5,500,000,000 | 5,500,000,000 | 5,500,000,000 | 5,500,000,000 | 5,500,000,000 |",
+            ]
+        )
+
+        items = self.extractor._derive_document_fund_seed_items(
+            document_text=document_text,
+            target_fund_scope=None,
+        )
+
+        self.assertEqual(
+            [(item.fund_code, item.fund_name) for item in items],
+            [
+                ("D706", "변액연금보험 II 인덱스혼합형 ( 채권 _ 삼성 _EMP)"),
+                ("Y318", "변액연금보험 II 코리아인덱스혼합형 ( 채권 _ 삼성 _ 일반 )"),
+            ],
+        )
+
     def test_build_markdown_shortcut_orders_after_base_date_supports_heungkuk(self) -> None:
         markdown_text = (
             "## EML [흥국생명] 설정해지 내역 운용지시건-삼성-0413\n\n"
@@ -1781,6 +1873,36 @@ class ExtractorLogicTests(unittest.TestCase):
                 (0, "T0_NET", "당일이체금액"),
                 (1, "T1_NET", "2025-11-28 예정금액"),
                 (2, "T2_NET", "2025-12-01 예정금액"),
+            ],
+        )
+
+    def test_build_deterministic_t_day_items_ignores_spaced_total_row(self) -> None:
+        document_text = "\n".join(
+            [
+                "## MHT 자금운용_해지_5440_20260316.mht",
+                "",
+                "| 수탁사 / 펀드코드 | 교보생명 / 펀드코드 | 펀드명 | 금액 ( 원 ) | 운용사 | 수탁사 | 일반사무 / 관리사 | 비고 1 | 비고 2 |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| D706 | D006 | 변액연금보험 II 인덱스혼합형 ( 채권 _ 삼성 _EMP) | 500,000,000 | 삼성자산운용 ( 채권 _EMP) | ( 주 ) 국민은행 | 하나펀드서비스 ( 주 ) |  |  |",
+                "| Y318 | D018 | 변액연금보험 II 코리아인덱스혼합형 ( 채권 _ 삼성 _ 일반 ) | 5,000,000,000 | 삼성자산운용 ( 채권 ) | ( 주 ) 국민은행 | 하나펀드서비스 ( 주 ) |  |  |",
+                "| 합 계 | 합 계 | 5,500,000,000 | 5,500,000,000 | 5,500,000,000 | 5,500,000,000 | 5,500,000,000 | 5,500,000,000 | 5,500,000,000 |",
+            ]
+        )
+        input_items = [
+            {"fund_code": "D706", "fund_name": "변액연금보험 II 인덱스혼합형 ( 채권 _ 삼성 _EMP)", "base_date": "2026-03-16"},
+            {"fund_code": "Y318", "fund_name": "변액연금보험 II 코리아인덱스혼합형 ( 채권 _ 삼성 _ 일반 )", "base_date": "2026-03-16"},
+        ]
+
+        items = self.extractor._build_deterministic_t_day_items(
+            document_text=document_text,
+            input_items=input_items,
+        )
+
+        self.assertEqual(
+            [(item.fund_code, item.fund_name, item.t_day, item.slot_id) for item in items],
+            [
+                ("D706", "변액연금보험 II 인덱스혼합형 ( 채권 _ 삼성 _EMP)", 0, "T0_NET"),
+                ("Y318", "변액연금보험 II 코리아인덱스혼합형 ( 채권 _ 삼성 _ 일반 )", 0, "T0_NET"),
             ],
         )
 
@@ -2861,6 +2983,93 @@ class ExtractorLogicTests(unittest.TestCase):
             [("151128", "2025-11-28"), ("151161", "2025-11-28")],
         )
 
+    def test_resolve_document_base_date_for_seeds_defers_email_fallback_when_attached_table_has_other_date(self) -> None:
+        extractor = object.__new__(FundOrderExtractor)
+        prompt_bundle = _load_prompt_bundle()
+        base_date_stage = prompt_bundle.stages["base_date"]
+        seeds = [
+            FundSeedItem(fund_code="492007", fund_name="액티브배당성장70혼합형"),
+            FundSeedItem(fund_code="004434", fund_name="미국고배당포커스주식형"),
+        ]
+        raw_text = (
+            "[EML 운용지시서_KDB_20251128.eml]\n"
+            "Date: Mon, 16 Mar 2026 23:30:31 +0000\n"
+            "Date (Asia/Seoul): 2026-03-17\n"
+            "운용지시서 | 운용지시서 | 운용지시서\n"
+            "2025-11-28 | 2025-11-28 | 2025-11-28\n"
+            "펀드명 | 수탁코드 | 금액\n"
+            "액티브배당성장70혼합형 | 492007 | 1,605,698\n"
+        )
+        document_text = (
+            "## EML 운용지시서_KDB_20251128.eml\n\n"
+            "```text\n"
+            "Date (Asia/Seoul): 2026-03-17\n"
+            "```\n\n"
+            "| 운용지시서 / 2025-11-28 / 펀드명 | 운용지시서 / 2025-11-28 / 수탁코드 | "
+            "운용지시서 / 2025-11-28 / 금액 |\n"
+            "| --- | --- | --- |\n"
+            "| 액티브배당성장70혼합형 | 492007 | 1,605,698 |\n"
+        )
+        test_case = self
+
+        def fake_invoke_stage_with_issue_retry(
+            self,
+            *,
+            prompt_bundle,
+            stage,
+            document_text,
+            input_items,
+            batch_index,
+            response_model,
+            counterparty_guidance=None,
+        ):
+            test_case.assertEqual(stage.name, "base_date")
+            test_case.assertEqual(batch_index, 1)
+            test_case.assertEqual(len(input_items), 1)
+            return (
+                extractor_module._StageInvocation(
+                    parsed=FundBaseDateResult(
+                        items=[
+                            FundBaseDateItem(
+                                fund_code="492007",
+                                fund_name="액티브배당성장70혼합형",
+                                base_date="2025-11-28",
+                                reason_code="DATE_DOC_HEADER",
+                            )
+                        ],
+                        issues=[],
+                    ),
+                    raw_response=(
+                        '{"items":[{"fund_code":"492007","fund_name":"액티브배당성장70혼합형",'
+                        '"base_date":"2025-11-28","reason_code":"DATE_DOC_HEADER"}],"issues":[]}'
+                    ),
+                ),
+                [],
+                None,
+            )
+
+        extractor._invoke_stage_with_issue_retry = types.MethodType(fake_invoke_stage_with_issue_retry, extractor)
+
+        base_dates = extractor._resolve_document_base_date_for_seeds(
+            prompt_bundle=prompt_bundle,
+            base_date_stage=base_date_stage,
+            seeds=seeds,
+            document_text=document_text,
+            raw_text=raw_text,
+            artifacts=[],
+            counterparty_guidance="KDB guidance",
+        )
+
+        self.assertIsNotNone(base_dates)
+        assert base_dates is not None
+        self.assertEqual(
+            [(item.fund_code, item.base_date, item.reason_code) for item in base_dates],
+            [
+                ("492007", "2025-11-28", "DATE_DOC_HEADER"),
+                ("004434", "2025-11-28", "DATE_DOC_HEADER"),
+            ],
+        )
+
     def test_resolve_document_base_date_for_seeds_uses_one_shot_llm_when_section_nav_dates_conflict(self) -> None:
         extractor = object.__new__(FundOrderExtractor)
         prompt_bundle = _load_prompt_bundle()
@@ -3833,6 +4042,49 @@ class ExtractorLogicTests(unittest.TestCase):
 
         self.assertEqual(result.issues, [])
 
+    def test_markdown_fund_code_index_detects_prefixed_custodian_code_header(self) -> None:
+        header = [
+            "운용지시서 / 2025-11-28 / 펀드명",
+            "운용지시서 / 2025-11-28 / 운용사",
+            "운용지시서 / 2025-11-28 / 수탁코드",
+            "운용지시서 / 2025-11-28 / 구분",
+            "운용지시서 / 2025-11-28 / 금액",
+        ]
+        body_rows = [
+            ["액티브배당성장70혼합형", "삼성액티브 / 자산운용", "492007", "입금", "1,605,698"],
+            ["미국고배당포커스주식형", "삼성자산운용", "004434", "입금", "23,123,105"],
+        ]
+
+        fund_code_index = self.extractor._markdown_fund_code_index(header, body_rows=body_rows)
+
+        self.assertEqual(fund_code_index, 2)
+
+    def test_build_deterministic_markdown_orders_skips_email_prefixed_header_table(self) -> None:
+        raw_text = (
+            "[EML 운용지시서_KDB_20251128.eml]\n"
+            "Date: Mon, 16 Mar 2026 23:30:31 +0000\n"
+            "Date (Asia/Seoul): 2026-03-17\n"
+            "운용지시서 | 운용지시서 | 운용지시서\n"
+            "2025-11-28 | 2025-11-28 | 2025-11-28\n"
+            "펀드명 | 수탁코드 | 금액\n"
+            "액티브배당성장70혼합형 | 492007 | 1,605,698\n"
+        )
+        markdown_text = (
+            "## EML 운용지시서_KDB_20251128.eml\n\n"
+            "| 운용지시서 / 2025-11-28 / 펀드명 | 운용지시서 / 2025-11-28 / 수탁코드 | "
+            "운용지시서 / 2025-11-28 / 금액 |\n"
+            "| --- | --- | --- |\n"
+            "| 액티브배당성장70혼합형 | 492007 | 1,605,698 |\n"
+        )
+
+        orders = self.extractor._build_deterministic_markdown_orders(
+            markdown_text=markdown_text,
+            raw_text=raw_text,
+            target_fund_scope=None,
+        )
+
+        self.assertEqual(orders, [])
+
     def test_reconcile_final_issues_removes_stale_missing_amount_and_order_type_with_complete_sibling(self) -> None:
         items = [
             FundResolvedItem(
@@ -4785,17 +5037,17 @@ class ExtractorLogicTests(unittest.TestCase):
     def test_build_user_prompt_keeps_plain_counterparty_guidance_for_non_sensitive_stage(self) -> None:
         extractor = object.__new__(FundOrderExtractor)
         extractor.prompt_bundle = _load_prompt_bundle()
-        stage = extractor.prompt_bundle.stages["fund_inventory"]
+        stage = extractor.prompt_bundle.stages["settle_class"]
 
         prompt = extractor._build_user_prompt(
             prompt_bundle=extractor.prompt_bundle,
             stage=stage,
             document_text="sample document",
             input_items=None,
-            counterparty_guidance="Recognize BUY & SELL REPORT tables.",
+            counterparty_guidance="Use future bucket wording for settle_class only when visible.",
         )
 
-        self.assertIn("Recognize BUY & SELL REPORT tables.", prompt)
+        self.assertIn("Use future bucket wording for settle_class only when visible.", prompt)
         self.assertNotIn("This counterparty-specific guidance is especially important for this stage.", prompt)
 
     def test_build_retry_user_prompt_includes_previous_output_and_target_issues(self) -> None:
@@ -5600,6 +5852,47 @@ class ExtractorLogicTests(unittest.TestCase):
         self.assertEqual(
             [(item.slot_id, item.settle_class) for item in settle_items],
             [("T0_NET", "CONFIRMED"), ("T2_RED", "PENDING")],
+        )
+
+    def test_build_deterministic_settle_items_from_amount_items_ignores_prefixed_document_date_in_evidence_label(self) -> None:
+        settle_items = self.extractor._build_deterministic_settle_items_from_amount_items(
+            [
+                FundAmountItem(
+                    fund_code="492007",
+                    fund_name="액티브배당성장70혼합형",
+                    base_date="2025-11-28",
+                    t_day=0,
+                    slot_id="T0_SUB",
+                    evidence_label="운용지시서 / 2025-11-28 / 금액",
+                    transfer_amount="1,605,698",
+                ),
+                FundAmountItem(
+                    fund_code="492007",
+                    fund_name="액티브배당성장70혼합형",
+                    base_date="2025-11-28",
+                    t_day=1,
+                    slot_id="T1_SUB",
+                    evidence_label="운용지시서 / 2025-11-28 / D+1(예상금액)",
+                    transfer_amount="41,258,553",
+                ),
+            ]
+        )
+
+        self.assertIsNotNone(settle_items)
+        assert settle_items is not None
+        self.assertEqual(
+            [(item.slot_id, item.settle_class) for item in settle_items],
+            [("T0_SUB", "CONFIRMED"), ("T1_SUB", "PENDING")],
+        )
+
+    def test_normalize_output_fund_name_collapses_loader_split_pair(self) -> None:
+        self.assertEqual(
+            self.extractor._normalize_output_fund_name("글로벌 / 자산배분안정형"),
+            "글로벌 자산배분안정형",
+        )
+        self.assertEqual(
+            self.extractor._normalize_output_fund_name("혼합성장형 / (변액종신 / 보장형) / (주식4)"),
+            "혼합성장형 / (변액종신 / 보장형) / (주식4)",
         )
 
     def test_build_deterministic_resolved_items_from_settle_items_uses_document_backed_hint_for_unsigned_settlement(self) -> None:
@@ -7451,6 +7744,128 @@ class ExtractorLogicTests(unittest.TestCase):
                     0,
                     "22,684,941",
                 ),
+            ],
+        )
+
+    def test_build_row_local_fund_rows_supports_table_without_fund_code(self) -> None:
+        raw_text = self._row_local_amount_section_raw_text()
+
+        rows = self.extractor._build_row_local_fund_rows(
+            markdown_text=raw_text,
+            raw_text=raw_text,
+            target_fund_scope=None,
+        )
+
+        self.assertEqual(
+            [
+                (
+                    row.row_index,
+                    row.fund_name,
+                    [(txn.order_type, txn.transfer_amount) for txn in row.transactions],
+                )
+                for row in rows
+            ],
+            [
+                (1, "W VA 인덱스주식(1)", [(OrderType.RED, "-11,071,695")]),
+                (2, "W VA II 인덱스주식(2)", [(OrderType.RED, "-283,660")]),
+                (3, "MyFund 변액종신혼합형(주식)", []),
+                (4, "MyFund VUL 혼합안정형(주식)", []),
+                (5, "MyFund VUL 혼합성장형", [(OrderType.SUB, "80,617,172")]),
+                (6, "MP VUL 인덱스주식형", [(OrderType.RED, "-46,921,767")]),
+                (7, "인덱스주식형 2호", [(OrderType.SUB, "167,394,066")]),
+                (8, "MP VUL VL II 인덱스형", [(OrderType.SUB, "241,062,610")]),
+                (9, "SU VA 인덱스주식형", [(OrderType.RED, "-40,714,305")]),
+                (10, "스마트플랜 VUL 종신 장기채권형", [(OrderType.SUB, "733,402,399")]),
+                (11, "은퇴맞춤 TDF2035", [(OrderType.SUB, "172,387")]),
+                (12, "은퇴맞춤 TDF2045", [(OrderType.RED, "-6,413")]),
+                (13, "은퇴맞춤 TDF2055", [(OrderType.SUB, "1,782,348")]),
+                (14, "안정 포트폴리오형", [(OrderType.SUB, "8,672,148")]),
+                (15, "중립 포트폴리오형", [(OrderType.RED, "-9,456,573")]),
+                (16, "적극 포트폴리오형", [(OrderType.SUB, "79,861,426")]),
+            ],
+        )
+
+    def test_build_markdown_shortcut_orders_after_base_date_supports_row_local_table_without_fund_code(self) -> None:
+        raw_text = self._row_local_amount_section_raw_text()
+
+        orders = self.extractor._build_markdown_shortcut_orders_after_base_date(
+            base_dates=self._row_local_amount_section_base_dates(),
+            markdown_text=raw_text,
+            raw_text=raw_text,
+            target_fund_scope=None,
+            expected_order_count=14,
+        )
+
+        self.assertEqual(len(orders), 14)
+        self.assertEqual(
+            [
+                (order.fund_code, order.fund_name, order.order_type, order.transfer_amount)
+                for order in orders
+                if order.fund_code in {"ROW_TMP_008", "ROW_TMP_010"}
+            ],
+            [
+                ("ROW_TMP_008", "MP VUL VL II 인덱스형", OrderType.SUB, "241,062,610"),
+                ("ROW_TMP_010", "스마트플랜 VUL 종신 장기채권형", OrderType.SUB, "733,402,399"),
+            ],
+        )
+
+    def test_build_markdown_shortcut_orders_after_base_date_supports_row_local_table_without_expected_order_count(self) -> None:
+        raw_text = self._row_local_amount_section_raw_text()
+
+        orders = self.extractor._build_markdown_shortcut_orders_after_base_date(
+            base_dates=self._row_local_amount_section_base_dates(),
+            markdown_text=raw_text,
+            raw_text=raw_text,
+            target_fund_scope=None,
+            expected_order_count=0,
+        )
+
+        self.assertEqual(len(orders), 14)
+        self.assertEqual(
+            [
+                (order.fund_code, order.fund_name, order.order_type, order.transfer_amount)
+                for order in orders
+                if order.fund_code in {"ROW_TMP_008", "ROW_TMP_010"}
+            ],
+            [
+                ("ROW_TMP_008", "MP VUL VL II 인덱스형", OrderType.SUB, "241,062,610"),
+                ("ROW_TMP_010", "스마트플랜 VUL 종신 장기채권형", OrderType.SUB, "733,402,399"),
+            ],
+        )
+
+    def test_reconcile_transfer_amount_items_with_document_amounts_repairs_adjacent_row_borrow_in_row_local_table(self) -> None:
+        raw_text = self._row_local_amount_section_raw_text()
+        reconciled = self.extractor._reconcile_transfer_amount_items_with_document_amounts(
+            document_text=raw_text,
+            raw_text=raw_text,
+            output_items=[
+                FundAmountItem(
+                    fund_code="ROW_TMP_008",
+                    fund_name="MP VUL VL II 인덱스형",
+                    base_date="2026-04-08",
+                    t_day=0,
+                    slot_id="T0_SUB",
+                    evidence_label="추가설정",
+                    transfer_amount="733402399",
+                ),
+                FundAmountItem(
+                    fund_code="ROW_TMP_010",
+                    fund_name="스마트플랜 VUL 종신 장기채권형",
+                    base_date="2026-04-08",
+                    t_day=0,
+                    slot_id="T0_SUB",
+                    evidence_label="추가설정",
+                    transfer_amount="733402399",
+                ),
+            ],
+            target_fund_scope=None,
+        )
+
+        self.assertEqual(
+            [(item.fund_code, item.transfer_amount) for item in reconciled],
+            [
+                ("ROW_TMP_008", "241,062,610"),
+                ("ROW_TMP_010", "733,402,399"),
             ],
         )
 

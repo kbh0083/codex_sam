@@ -1,8 +1,11 @@
 This document is from KDB Life.
 - When the document is wrapped in an email, ignore email sent/received metadata for base-date extraction and use the instruction date shown in the attached order content itself.
 - The base date is the instruction date of the order sheet, and for this document family it should come from the attached instruction content rather than wrapper metadata.
+- The wrapper line `Date (Asia/Seoul)` is email metadata only. Even if it appears before the table, it is not the order-sheet base date when the attached instruction content shows its own date.
+- If the attached instruction table or repeated header shows `2025-11-28`, that attached order-sheet date governs the entire document.
 - The main instruction table uses "구분", "금액", and "D+1(예상금액)" as the key transaction columns.
 - Use "구분" to determine direction: "입금" means SUB and "출금" means RED.
+- The row direction from "구분" governs both the same-row "금액" and the same-row `D+1(예상금액)` value. Do not flip a future bucket just because the amount is positive.
 - Use the exact numeric value in "금액" as the same-day confirmed amount and the exact numeric value in "D+1(예상금액)" as the future pending amount for the same direction.
 - A row is a transaction candidate only when at least one of "금액" or "D+1(예상금액)" contains a visible non-zero numeric value. If both cells are "-", blank, or zero, discard the row even if "구분" or "내용" looks transaction-like.
 - Ignore rows whose "내용" is a subtotal/summary cue such as "입금소계" or "출금소계", and ignore rows whose effective amount is "-", blank, or zero.
@@ -10,6 +13,7 @@ This document is from KDB Life.
 - Do not create a same-day slot from a row that has no visible non-zero value in "금액". Do not create a future slot from a row that has no visible non-zero value in "D+1(예상금액)".
 - If a row shows transaction-like text but both amount cells are empty, "-", or zero, discard the row before later stages. Do not ask later stages to guess a missing amount, settle_class, or order_type for that row.
 - Use the visible fund row with non-zero amount evidence, not nearby subtotal rows, as the logical order source.
+- Flattened loader artifacts such as `글로벌 / 자산배분안정형` are not the final DB fund name. Normalize slash-split fragments back to the actual printed fund name when the row clearly represents one fund.
 - The email wrapper metadata is not transaction evidence; the order table is the source of truth.
 - Emit orders only from rows whose fund/content identity and non-zero amount cell are explicitly visible in the attached order content.
 - Do not invent extra rows, directions, or future buckets beyond the printed "금액" and "D+1(예상금액)" cells.

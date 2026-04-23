@@ -148,6 +148,7 @@ stages:
       - Resolve one document-level base_date that governs the order rows.
       - Unless the document explicitly proves otherwise, apply the same base_date consistently to all input funds.
       - Use 기준일, 기준일자, T일, 결제일, settlement date, document date, or the explicit document header date when it governs the fund rows.
+      - If an email wrapper date conflicts with a date printed in the attached instruction table, repeated table header, or order-sheet title, prefer the attached instruction content date over the wrapper email date.
       - If a schedule table shows both a sheet date and a date aligned to the T일 transaction columns, prefer the date aligned to T일 or the transaction grid.
       - Return YYYY-MM-DD.
       - If not found, set base_date to null and add BASE_DATE_MISSING.
@@ -181,6 +182,8 @@ stages:
       - If a row has 결제금액, 순유입금액, 순투입금액, 당일이체금액, 실행금액, or 이체예정금액 for that bucket, that bucket still gets only one slot.
       - If the same fund appears in multiple sections but one occurrence has '-' or blank amount and another occurrence has a numeric amount, keep only the amount-bearing occurrence.
       - For sectioned documents such as Subscription / Redemption lists, evidence_label must come from the section that contains the numeric amount for that fund.
+      - Future schedule cells such as 예정, 청구, 예상, D+1, or future-date columns inherit the explicit direction context from the same row or section when that context exists, such as 구분, 내용, Transaction Type, Subscription, or Redemption.
+      - Do not emit slots from subtotal rows such as 합계, 총계, subtotal, total, 입금소계, or 출금소계 even when those rows repeat numeric values.
       - When grouped headers define T일 and T+N buckets, keep each amount in the bucket shown directly above that column. Do not slide a value into an adjacent T+N bucket.
       - Never use columns whose header contains 좌수, unit, shares, 누적좌수, 전일좌수, 변경 후 누적좌수, 순투입좌수, 증감좌수.
       - Ignore 합계, 총계, summary, total, subtotal, and row labels that are not individual fund rows.
@@ -276,6 +279,7 @@ stages:
       - If the same fund appears in both Subscription and Redemption sections but only one section has a numeric amount, use that amount-bearing section and ignore the other section.
       - Otherwise use source labels: 투입, 설정, 입금, 매입, Buy, Subscription map to SUB; 인출, 해지, 출금, 환매, Sell, Redemption map to RED.
       - If a table has 구분 or Transaction Type and the value is Subscription, use SUB. If Redemption, use RED.
+      - When a row or section explicitly states the direction, keep that direction even for future or pending slots. Do not convert a positive pending amount into SUB when the same row or section clearly says 출금, 해지, 인출, Sell, or Redemption.
       - If still uncertain, set order_type to null and add ORDER_TYPE_MISSING.
     retry_instructions: |-
       - Re-check only the slots related to the retry target issues.
