@@ -25,6 +25,11 @@ except Exception:  # pragma: no cover - browser fallback can still work
     algorithms = None
     modes = None
 
+try:  # pragma: no cover - optional dependency in some environments
+    from bs4 import BeautifulSoup
+except Exception:  # pragma: no cover - standalone copies may omit HTML extras
+    BeautifulSoup = None
+
 logger = logging.getLogger(__name__)
 
 _JS_STRING_LITERAL_RE = re.compile(
@@ -466,8 +471,16 @@ class HtmlDocumentLoaderMixin:
         section_label: str,
     ) -> tuple[str, dict[str, object]]:
         """HTML 문자열을 raw_text와 markdown render hint로 함께 변환한다."""
-        body_match = re.search(r"<body\b[^>]*>(.*?)</body>", html_text, flags=re.IGNORECASE | re.DOTALL)
-        body_html = body_match.group(1) if body_match else html_text
+        body_html = html_text
+        soup = self._parse_html_with_bs4(html_text)
+        if soup is not None:
+            container = soup.body or soup
+            serialized_body = "".join(str(child) for child in container.contents).strip()
+            if serialized_body:
+                body_html = serialized_body
+        else:
+            body_match = re.search(r"<body\b[^>]*>(.*?)</body>", html_text, flags=re.IGNORECASE | re.DOTALL)
+            body_html = body_match.group(1) if body_match else html_text
         lines: list[str] = [f"[{section_label} {source_label}]"]
         markdown_blocks: list[str] = []
         pipe_table_hints: list[dict[str, object]] = []
@@ -475,6 +488,7 @@ class HtmlDocumentLoaderMixin:
         table_row_tokens: list[str] = []
         inherited_row_tokens: list[str] = []
         row_kind_tokens: list[str] = []
+        fund_code_tokens: list[str] = []
         canonical_blocks = self._extract_html_canonical_blocks(body_html)
 
         for block in canonical_blocks:
@@ -497,6 +511,7 @@ class HtmlDocumentLoaderMixin:
                     table_row_tokens.extend(markdown_lines)
                     inherited_row_tokens.extend(self._html_inherited_markdown_rows(block, markdown_lines))
                     row_kind_tokens.extend(self._html_row_kind_tokens(block))
+                    fund_code_tokens.extend(self._html_fund_code_tokens(block))
                     label_tokens.extend(self._html_table_label_tokens(markdown_lines))
             if not block_lines:
                 continue
@@ -520,6 +535,7 @@ class HtmlDocumentLoaderMixin:
                 "table_row_tokens": self._dedupe_preserve_order(table_row_tokens),
                 "inherited_row_tokens": self._dedupe_preserve_order(inherited_row_tokens),
                 "row_kind_tokens": self._dedupe_preserve_order(row_kind_tokens),
+                "fund_code_tokens": self._dedupe_preserve_order(fund_code_tokens),
             },
         }
         render_hints["preferred_markdown_text"] = self._compose_html_section_markdown(
@@ -569,6 +585,47 @@ class HtmlDocumentLoaderMixin:
         self,
         html_fragment: str,
     ) -> list[HtmlTextBlockProjection | HtmlTableBlockProjection]:
+        soup = self._parse_html_with_bs4(html_fragment)
+        if soup is None:
+            return self._extract_html_canonical_blocks_via_regex(html_fragment)
+
+        container = soup.body or soup
+        serialized = "".join(str(child) for child in container.contents)
+        table_blocks: list[tuple[str, HtmlTableBlockProjection]] = []
+
+        # Nested layout tables are common in insurer HTML. Only replacing leaf tables
+        # avoids swallowing the real data table into an outer wrapper block.
+        for index, table_tag in enumerate(list(container.find_all("table"))):
+            if table_tag.find("table") is not None:
+                continue
+            projection = self._build_html_table_block_from_tag(table_tag)
+            if projection is None:
+                continue
+            marker = f"__VA_HTML_TABLE_BLOCK_{index}__"
+            table_blocks.append((marker, projection))
+            table_tag.replace_with(marker)
+
+        serialized = "".join(str(child) for child in container.contents)
+        blocks: list[HtmlTextBlockProjection | HtmlTableBlockProjection] = []
+        for marker, projection in table_blocks:
+            text_fragment, found, remainder = serialized.partition(marker)
+            if not found:
+                continue
+            text_block = self._build_html_text_block(text_fragment)
+            if text_block is not None:
+                blocks.append(text_block)
+            blocks.append(projection)
+            serialized = remainder
+
+        tail_block = self._build_html_text_block(serialized)
+        if tail_block is not None:
+            blocks.append(tail_block)
+        return blocks or self._extract_html_canonical_blocks_via_regex(html_fragment)
+
+    def _extract_html_canonical_blocks_via_regex(
+        self,
+        html_fragment: str,
+    ) -> list[HtmlTextBlockProjection | HtmlTableBlockProjection]:
         blocks: list[HtmlTextBlockProjection | HtmlTableBlockProjection] = []
         cursor = 0
         for table_match in self.HTML_TABLE_RE.finditer(html_fragment):
@@ -576,7 +633,7 @@ class HtmlDocumentLoaderMixin:
             text_block = self._build_html_text_block(text_fragment)
             if text_block is not None:
                 blocks.append(text_block)
-            table_block = self._build_html_table_block(table_match.group(0))
+            table_block = self._build_html_table_block_via_regex(table_match.group(0))
             if table_block is not None:
                 blocks.append(table_block)
             cursor = table_match.end()
@@ -659,12 +716,47 @@ class HtmlDocumentLoaderMixin:
         return expanded_rows, inherited_rows
 
     def _build_html_table_block(self, table_html: str) -> HtmlTableBlockProjection | None:
+        soup = self._parse_html_with_bs4(table_html)
+        if soup is not None:
+            table_tag = soup.find("table")
+            if table_tag is not None:
+                projection = self._build_html_table_block_from_tag(table_tag)
+                if projection is not None:
+                    return projection
+        return self._build_html_table_block_via_regex(table_html)
+
+    def _parse_html_with_bs4(self, html_text: str):
+        if BeautifulSoup is None:
+            return None
+        try:
+            return BeautifulSoup(html_text, "lxml")
+        except Exception:
+            logger.warning("BeautifulSoup HTML parsing failed; falling back to regex extraction.")
+            return None
+
+    def _build_html_table_block_via_regex(self, table_html: str) -> HtmlTableBlockProjection | None:
+        row_groups = [
+            self._parse_html_cells_with_metadata(row_html)
+            for row_html in self.HTML_ROW_RE.findall(table_html)
+        ]
+        return self._project_html_table_rows(row_groups)
+
+    def _build_html_table_block_from_tag(self, table_tag) -> HtmlTableBlockProjection | None:
+        row_groups = [
+            self._parse_html_cells_with_tag_metadata_from_tag(row_tag, table_tag)
+            for row_tag in self._iter_html_table_rows(table_tag)
+        ]
+        return self._project_html_table_rows(row_groups)
+
+    def _project_html_table_rows(
+        self,
+        row_groups: list[list[tuple[str, str, int, int]]],
+    ) -> HtmlTableBlockProjection | None:
         pending_cells: dict[int, tuple[HtmlTableCellProjection, int]] = {}
         expanded_rows: list[HtmlTableRowProjection] = []
         max_columns = 0
 
-        for source_row, row_html in enumerate(self.HTML_ROW_RE.findall(table_html)):
-            row_cells = self._parse_html_cells_with_metadata(row_html)
+        for source_row, row_cells in enumerate(row_groups):
             if not row_cells:
                 continue
 
@@ -745,6 +837,28 @@ class HtmlDocumentLoaderMixin:
                 )
         return HtmlTableBlockProjection(rows=expanded_rows)
 
+    @staticmethod
+    def _iter_html_table_rows(table_tag):
+        for row_tag in table_tag.find_all("tr"):
+            if row_tag.find_parent("table") is table_tag:
+                yield row_tag
+
+    @staticmethod
+    def _iter_html_row_cells(row_tag, table_tag):
+        direct_cells = row_tag.find_all(["th", "td"], recursive=False)
+        if direct_cells:
+            for cell_tag in direct_cells:
+                if cell_tag.find_parent("table") is table_tag:
+                    yield cell_tag
+            return
+
+        for cell_tag in row_tag.find_all(["th", "td"]):
+            if cell_tag.find_parent("tr") is not row_tag:
+                continue
+            if cell_tag.find_parent("table") is not table_tag:
+                continue
+            yield cell_tag
+
     def _parse_html_cells(self, row_html: str) -> list[tuple[str, int, int]]:
         """`<tr>` 내부의 각 셀을 `(text, rowspan, colspan)` 튜플로 읽는다."""
         parsed_cells: list[tuple[str, int, int]] = []
@@ -765,6 +879,19 @@ class HtmlDocumentLoaderMixin:
             rowspan = self._html_span_value(attrs, "rowspan")
             colspan = self._html_span_value(attrs, "colspan")
             parsed_cells.append(("header" if cell_tag.lower() == "h" else "body", text, rowspan, colspan))
+        return parsed_cells
+
+    def _parse_html_cells_with_tag_metadata_from_tag(
+        self,
+        row_tag,
+        table_tag,
+    ) -> list[tuple[str, str, int, int]]:
+        parsed_cells: list[tuple[str, str, int, int]] = []
+        for cell_tag in self._iter_html_row_cells(row_tag, table_tag):
+            text = self._html_cell_text_from_tag(cell_tag)
+            rowspan = self._html_tag_span_value(cell_tag, "rowspan")
+            colspan = self._html_tag_span_value(cell_tag, "colspan")
+            parsed_cells.append(("header" if cell_tag.name.lower() == "th" else "body", text, rowspan, colspan))
         return parsed_cells
 
     def _infer_html_row_kind(self, cells: list[HtmlTableCellProjection]) -> str | None:
@@ -857,10 +984,38 @@ class HtmlDocumentLoaderMixin:
             if not row.is_header and row.row_kind
         ]
 
+    def _html_fund_code_tokens(self, block: HtmlTableBlockProjection) -> list[str]:
+        candidate_codes: list[str] = []
+        for row in block.rows:
+            if row.is_header:
+                continue
+            for cell in row.cells[:8]:
+                value = cell.text.strip()
+                if not value or self._is_total_like_text(value):
+                    continue
+                if self._looks_like_fund_code(value):
+                    candidate_codes.append(value)
+                    break
+
+        unique_codes = self._dedupe_preserve_order(candidate_codes)
+        if not unique_codes:
+            return []
+
+        indices = (0, len(unique_codes) // 2, len(unique_codes) - 1)
+        tokens: list[str] = []
+        for index in indices:
+            token = unique_codes[index]
+            if token not in tokens:
+                tokens.append(token)
+        return tokens
+
     def _html_table_label_tokens(self, markdown_lines: list[str]) -> list[str]:
         if not markdown_lines:
             return []
         return [markdown_lines[0]]
+
+    def _html_cell_text_from_tag(self, cell_tag) -> str:
+        return self._html_cell_text(cell_tag.decode_contents())
 
     def _html_cell_text(self, cell_html: str) -> str:
         """셀 내부 HTML을 사람이 읽을 수 있는 한 줄 문자열로 정리한다."""
@@ -868,6 +1023,16 @@ class HtmlDocumentLoaderMixin:
         normalized = self.HTML_TAG_RE.sub(" ", normalized)
         normalized = unescape(normalized)
         return re.sub(r"\s+", " ", normalized).strip()
+
+    @staticmethod
+    def _html_tag_span_value(cell_tag, name: str) -> int:
+        raw_value = cell_tag.get(name)
+        if raw_value is None:
+            return 1
+        try:
+            return max(1, int(str(raw_value).strip()))
+        except (TypeError, ValueError):
+            return 1
 
     def _read_html_text(self, file_path: Path, password: str | None = None) -> str:
         """HTML을 utf-8 우선, 필요 시 한국어 legacy encoding fallback 으로 읽는다.

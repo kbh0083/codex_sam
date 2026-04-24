@@ -63,7 +63,11 @@ class DocumentLoaderCoreMixin:
         render_hints: dict[str, Any] | None = None,
     ) -> ExtractedDocumentText:
         markdown_text = self.build_markdown(raw_text, render_hints=render_hints)
-        markdown_loss_reasons = tuple(self._audit_html_markdown_loss(markdown_text, render_hints))
+        markdown_loss_reasons = self._resolve_markdown_loss_reasons(
+            markdown_text=markdown_text,
+            content_type=content_type,
+            render_hints=render_hints,
+        )
         effective_llm_text_kind: Literal["markdown_text", "raw_text"] = (
             "raw_text" if markdown_loss_reasons else "markdown_text"
         )
@@ -75,6 +79,36 @@ class DocumentLoaderCoreMixin:
             markdown_loss_reasons=markdown_loss_reasons,
             effective_llm_text_kind=effective_llm_text_kind,
         )
+
+    def _resolve_markdown_loss_reasons(
+        self,
+        *,
+        markdown_text: str,
+        content_type: str,
+        render_hints: dict[str, Any] | None = None,
+    ) -> tuple[str, ...]:
+        reasons = list(self._audit_html_markdown_loss(markdown_text, render_hints))
+        if content_type in {"text/html", "multipart/related"}:
+            audit_payload = render_hints.get("html_markdown_audit") if isinstance(render_hints, dict) else None
+            if not isinstance(audit_payload, dict):
+                reasons.append("html_markdown_unverified")
+            else:
+                token_keys = (
+                    "label_tokens",
+                    "table_row_tokens",
+                    "inherited_row_tokens",
+                    "row_kind_tokens",
+                    "fund_code_tokens",
+                )
+                audit_tokens = [
+                    str(token).strip()
+                    for key in token_keys
+                    for token in audit_payload.get(key, [])
+                    if str(token).strip()
+                ]
+                if not audit_tokens:
+                    reasons.append("html_markdown_unverified")
+        return tuple(dict.fromkeys(reasons))
 
     def split_for_llm(self, document_text: str, chunk_size_chars: int) -> list[str]:
         delimiter = self._detect_section_delimiter(document_text)

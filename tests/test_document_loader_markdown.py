@@ -620,6 +620,80 @@ class DocumentLoaderMarkdownTests(unittest.TestCase):
             tuple(self.loader.split_for_llm(payload.raw_text, chunk_size_chars=12000)),
         )
 
+    def test_load_html_preserves_nested_table_fund_rows_in_raw_and_markdown(self) -> None:
+        html = """<!doctype html>
+<html lang="ko">
+  <body>
+    <div>특별계정사업부 실적배당형 펀드별 설정 및 해지내역서</div>
+    <table class="layout">
+      <tr>
+        <td>
+          <div>수탁은행 수령금액내역</div>
+          <table class="fund-data">
+            <tr><th>펀드코드</th><th>펀드명</th><th>구분</th><th>수탁은행</th><th>판매사</th></tr>
+            <tr><td>V3301P</td><td>변액연금 혼합형</td><td>입금</td><td>0</td><td>0</td></tr>
+            <tr><td>V530318</td><td>변액연금 성장주혼합형</td><td>입금</td><td>0</td><td>0</td></tr>
+            <tr><td>V230428</td><td>변액연금 가치주식형</td><td>입금</td><td>0</td><td>0</td></tr>
+            <tr><td>V430234</td><td>변액연금 배당주혼합형</td><td>입금</td><td>0</td><td>0</td></tr>
+            <tr><td>V530239</td><td>변액연금 액티브주식형</td><td>입금</td><td>0</td><td>0</td></tr>
+            <tr><td>V630116</td><td>변액연금 글로벌채권형</td><td>입금</td><td>0</td><td>0</td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+    <p>익영업일 이체예상금액은 공시기준가를 적용합니다.</p>
+  </body>
+</html>
+"""
+        with TemporaryDirectory() as tmp_dir:
+            html_path = Path(tmp_dir) / "nested_wrapper.html"
+            html_path.write_text(html, encoding="utf-8")
+
+            extracted = self.loader.load(html_path)
+
+        for fund_code in ("V3301P", "V530318", "V230428", "V430234", "V530239", "V630116"):
+            self.assertIn(fund_code, extracted.raw_text)
+            self.assertIn(fund_code, extracted.markdown_text)
+        self.assertFalse(extracted.markdown_loss_detected)
+
+    def test_load_html_falls_back_to_regex_when_bs4_parser_fails(self) -> None:
+        html = """<!doctype html>
+<html><body><table><tr><th>펀드코드</th><th>펀드명</th></tr><tr><td>V3301P</td><td>변액연금 혼합형</td></tr></table></body></html>
+"""
+        with TemporaryDirectory() as tmp_dir:
+            html_path = Path(tmp_dir) / "bs4-fallback.html"
+            html_path.write_text(html, encoding="utf-8")
+
+            with patch("app.document_loaders.html_loader.BeautifulSoup", side_effect=RuntimeError("parser unavailable")):
+                extracted = self.loader.load(html_path)
+
+        self.assertIn("V3301P", extracted.raw_text)
+        self.assertIn("V3301P", extracted.markdown_text)
+
+    def test_build_task_payload_falls_back_to_raw_chunks_when_html_markdown_audit_is_missing(self) -> None:
+        html = """<!doctype html><html><body><div>테스트 헤더</div></body></html>"""
+        with TemporaryDirectory() as tmp_dir:
+            html_path = Path(tmp_dir) / "audit-missing.html"
+            html_path.write_text(html, encoding="utf-8")
+
+            with patch.object(
+                self.loader,
+                "_load_html_with_render_hints",
+                return_value=(
+                    "[HTML audit-missing.html]\n\n테스트 헤더\nV3301P | 변액연금 혼합형 | 입금 | 0 | 0",
+                    {"preferred_markdown_text": "## HTML audit-missing.html\n\n```text\n테스트 헤더\n```"},
+                ),
+            ):
+                payload = self.loader.build_task_payload(html_path, chunk_size_chars=12000)
+
+        self.assertTrue(payload.markdown_loss_detected)
+        self.assertEqual(payload.markdown_loss_reasons, ("html_markdown_unverified",))
+        self.assertEqual(payload.effective_llm_text_kind, "raw_text")
+        self.assertEqual(
+            payload.chunks,
+            tuple(self.loader.split_for_llm(payload.raw_text, chunk_size_chars=12000)),
+        )
+
     def test_load_xls_uses_biff_parser_and_skips_hidden_rows_cols(self) -> None:
         fake_sheet = MagicMock()
         fake_sheet.visibility = 0

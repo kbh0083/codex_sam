@@ -111,6 +111,8 @@ class DocumentLoaderCommonMixin:
         "html_table_shape_collapsed",
         "html_label_missing",
         "html_row_kind_missing",
+        "html_fund_code_missing",
+        "html_markdown_unverified",
     )
     STRONG_INSTRUCTION_MARKERS = (
         "운용지시서",

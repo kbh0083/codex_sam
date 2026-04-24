@@ -4,8 +4,11 @@
 `ExtractionService`를 그대로 붙이는 방식이 아니라 **queue + task handler 구조**로 옮기는 방법을 설명한다.
 
 > 2026-04-24 기준 인계 보강.
+> 최신 active handoff는 [handoff_26042401.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042401.md)다.
 > 공통 최신 상태와 테스트 보고 원칙은 [00_시작_안내.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/00_시작_안내.md)를 출처로 둔다.
-> 이 문서는 WAS 포팅/병합 전용 규칙만 유지한다. 하나생명 accepted 병합 근거는 [merge_report/merge_result_report_20260420_01.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_20260420_01.md), 메트라이프 selective merge와 focused 검수 근거는 [test_report/20260421/000000_WAS_메트라이프_병합_데이터추출_테스트_보고서.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/000000_WAS_메트라이프_병합_데이터추출_테스트_보고서.md), [test_report/20260421/000000_WAS_9건_데이터추출_검수_보고서.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/000000_WAS_9건_데이터추출_검수_보고서.md)를 따른다.
+> 이 문서는 WAS 포팅/병합 전용 규칙만 유지한다.
+> 병합 계획서/결과보고서의 파일명, 저장 경로, canonical 정리 방식은 [06_WAS_병합_보고서_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/06_WAS_병합_보고서_가이드.md)를 따른다.
+> 최신 selective merge acceptance는 [mr0001.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260424/mr0001.md), [tt1432.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt1432.md), [tt1520.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt1520.md)를 따른다.
 > 본문의 `2026-04-14`, `2026-04-16` 표기는 과거 stable 기준선 설명이다.
 
 먼저 범위를 분명히 하면:
@@ -61,7 +64,8 @@
 - 현재 로컬 source-of-truth 실행 경로에서 duplicate/legacy copy는 service/component boundary의 guidance helper가 `counterparty_guidance + loader shape` 기준으로 먼저 `SKIPPED`를 surface한다.
 - WAS 병합 시에는 이 동작을 extractor core가 아니라 handler/task/pipeline side에서 유지하는 것을 기본값으로 둔다.
 - merge scope 밖에서 배포 blocker를 발견하면 임의 수정하지 않고 blocker로 문서화한다.
-- 현재 프로젝트 전체 clean deployment verdict를 막는 known blocker는 `app/common/tasks/system_tasks.py`가 `system_cleanup_tasks.yaml`을 찾지만 실제 파일은 `system_cleanup_task.yaml`이라 `cleanup_events`가 startup 시 등록되지 않는 점이다. 이 리소스는 현재 WAS 병합 대상 밖이다.
+- 과거 문서에 적혀 있던 `cleanup_events` startup blocker(`system_tasks.py` vs `system_cleanup_tasks.yaml` 경로 mismatch)는 현재 repo 상태에서 재현 근거가 없다.
+- 따라서 현재 WAS 병합 판단에서는 그 항목을 active known blocker로 유지하지 않는다.
 
 추가로 최종 JSON/CSV 출력 계약에서는 상태값을 문자열 코드로 치환한다.
 - `settle_class`
@@ -78,6 +82,20 @@
 - handler A: `DocumentLoader.build_task_payload()` -> JSON 저장
 - handler B: `DocumentLoadTaskPayload.read_json()` -> `FundOrderExtractor.extract_from_task_payload()`
 - 현재 로컬 기준 duplicate/legacy copy enforcement는 service/component 경계에서, WAS 병합 기준 enforcement는 handler B 직전 task/pipeline 경계에서 `counterparty_guidance`와 loader shape를 함께 읽는 helper로 처리하고, extractor core 안에는 다시 넣지 않는다.
+
+## 최신 selective merge 상태 (2026-04-24)
+
+- 이번 세션 병합 범위는 `019dbd25-8ef7-7ba3-aa92-fd7726aea8c3` 세션의 HTML/MHT markdown 안정화 기능만이다.
+- 반영된 핵심 동작:
+  - nested wrapper HTML에서도 leaf table 기준 fund row 보존
+  - `BeautifulSoup + lxml` 우선, 실패 시 regex fallback
+  - `html_markdown_audit` + `fund_code_tokens`
+  - HTML/MHT audit 미검증 시 `raw_text` fail-safe
+- acceptance 수치:
+  - helper regression `9 passed`
+  - focused smoke `4 PASS / 0 FAIL / 0 BLOCKED`
+  - full document review `38 PASS / 0 FAIL / 0 BLOCKED`
+- 2026-04-20, 2026-04-21, 2026-04-16 병합 문서는 historical accepted baseline로 유지한다.
 
 ## 참고. 2026-04-14 stable 병합/검증 기준
 
@@ -103,7 +121,7 @@
 
 ## 참고. 2026-04-20~2026-04-21 최신 병합/검증 기준
 
-2026-04-20 하나생명 XLSX 전환 병합은 하나생명 XLSX 전환과 loader/extractor deterministic 보정을 선별 반영했다. 검증 수치와 케이스별 결과는 중복 기재하지 않고 [merge_report/merge_result_report_20260420_01.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_20260420_01.md)를 출처로 둔다.
+2026-04-20 하나생명 XLSX 전환 병합은 하나생명 XLSX 전환과 loader/extractor deterministic 보정을 선별 반영했다. 검증 수치와 케이스별 결과는 중복 기재하지 않고 [merge_report/20260420/mr0001.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260420/mr0001.md)를 출처로 둔다.
 
 - WAS repo 기준 production 반영 파일:
   - `src/app/services/variable_annuity/extract/document_loader.py`
@@ -140,7 +158,7 @@
 - focused validation 결과:
   - 메트라이프 targeted regression `2/2 PASS`
   - 메트라이프 3건 포함 임의 9건 원본 대조 검수 `9 PASS / 0 FAIL`
-  - 세부 보고서: [test_report/20260421/000000_WAS_메트라이프_병합_데이터추출_테스트_보고서.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/000000_WAS_메트라이프_병합_데이터추출_테스트_보고서.md), [test_report/20260421/000000_WAS_9건_데이터추출_검수_보고서.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/000000_WAS_9건_데이터추출_검수_보고서.md)
+  - 세부 보고서: [test_report/20260421/tt0002.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/tt0002.md), [test_report/20260421/tt0001.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/tt0001.md)
 
 ## 0-1. 주석 읽는 순서
 
@@ -803,7 +821,7 @@ queue 기반 WAS에서는 `ExtractionService`를 그대로 쓰지 말고,
 ## 2026-04-16 업데이트 메모
 
 - 현재 accepted WAS 병합 기준 보고서는 아래다.
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_26041601.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260416/mr0001.md`
 - 2026-04-16 1차 병합 범위는 아래 6개로 고정했다.
   - `extract/amount_normalization.py`
   - `extract/document_loaders/excel_loader.py`
@@ -821,12 +839,12 @@ queue 기반 WAS에서는 `ExtractionService`를 그대로 쓰지 말고,
   - `use_counterparty_prompt`
   - `only_pending`
   - `designated_password`
-- 당시 DB prompt parity와 acceptance 상세는 [merge_report/merge_result_report_26041601.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_26041601.md)를 출처로 둔다.
+- 당시 DB prompt parity와 acceptance 상세는 [merge_report/20260416/mr0001.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260416/mr0001.md)를 출처로 둔다.
 - 테스트/검증 결과 보고 기준은 [03_테스트_실행_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/03_테스트_실행_가이드.md)를 출처로 둔다.
 
 ## 2026-04-20 업데이트 메모
 
-- 현재 accepted WAS 병합 기준 보고서는 [merge_report/merge_result_report_20260420_01.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_20260420_01.md)다.
+- 현재 accepted WAS 병합 기준 보고서는 [merge_report/20260420/mr0001.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260420/mr0001.md)다.
 - 백업 manifest는 [manifest.json](/Users/bhkim/Documents/codex_prj_sam_asset/output/was_backup/was_merge_20260420_01/manifest.json)이다.
 - 이번 병합에서도 아래 운영 코드는 수정하지 않았다.
   - `src/app/common/document/parser.py`
@@ -846,17 +864,21 @@ queue 기반 WAS에서는 `ExtractionService`를 그대로 쓰지 말고,
   - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/was_validation_20260421_01`
 - 새 테스트 실행의 최종 산출물 저장 규칙은 [03_테스트_실행_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/03_테스트_실행_가이드.md)를 따른다.
 
-## 2026-04-23 pending WAS merge
+## 2026-04-24 pending WAS merge
 
-- 2026-04-23 기준 다음 WAS 병합 대상은 메트라이프 후속이 아니라 최신 로컬 변경 묶음이다.
+- 2026-04-24 기준 다음 WAS 병합 대상은 메트라이프 후속이 아니라 최신 로컬 변경 묶음이다.
 - 현재 로컬 확인 사실:
-  - unit/component `450 tests OK`
-  - live regression `22 tests OK`
-  - `document` 전체 검수 `37 PASS / 0 FAIL / 0 BLOCKED`
+  - deterministic/unit suite `461 tests OK`
+  - latest retained live regression `22 tests OK`
+  - HTML/MHT 7건 검수 `7 PASS / 0 FAIL / 0 BLOCKED`
+  - `document` 전체 재검수 `38 PASS / 0 FAIL / 0 BLOCKED`
   - 선별 4건 smoke `4 PASS / 0 FAIL / 0 BLOCKED`
   - `동양생명_20260318` -> `52건`, `issues=[]`, exact same
   - `동양생명_20260413` -> `48건`, `issues=[]`, exact same
   - `카디프` -> `46건`, `base_date=2025-11-27`, exact same
+- 2026-04-24 full rerun에서는 JSON exact/source review는 모두 통과했고, legacy metadata-heavy answer CSV 13건만 canonical 7컬럼 계약으로 갱신했다.
+- 최신 full rerun 보고서:
+  - [tt1520.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt1520.md)
 - 이번 selective merge의 로컬 변경 범위는 아래 두 묶음으로 본다.
   - 구조 정렬 묶음:
     - `app/document_loader.py`
@@ -887,13 +909,13 @@ queue 기반 WAS에서는 `ExtractionService`를 그대로 쓰지 말고,
   1. 로컬 변경 범위 mirror
   2. WAS syntax/preflight
   3. WAS focused smoke
-  4. 필요 시 WAS full 37건 재검수
+  4. 필요 시 WAS full 38건 재검수
 - post-merge 검증 최소 기준은 아래 4건 smoke다.
   1. `자금운용_해지_5440_20260316.mht`
   2. `운용지시서_KDB_20251128.eml`
   3. `동양생명_20260413.html`
   4. `test.eml`
 - 위 4건은 아래 보고서를 최신 근거로 둔다.
-  - [test_report/20260423/140507_document_선별4건_smoke_검수_보고서.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260423/140507_document_선별4건_smoke_검수_보고서.md)
+  - [test_report/20260423/tt1405.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260423/tt1405.md)
 - full rerun이 필요하면 아래 보고서를 기준으로 판정한다.
-  - [test_report/20260423/133555_document_전체_지시서_검수_보고서.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260423/133555_document_전체_지시서_검수_보고서.md)
+  - [test_report/20260424/tt1520.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt1520.md)

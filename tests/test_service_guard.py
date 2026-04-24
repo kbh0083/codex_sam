@@ -786,6 +786,55 @@ class ServiceGuardTests(unittest.TestCase):
         self.assertEqual(len(outcome.result.orders), 1)
         self.assertEqual(outcome.result.orders[0].fund_code, "F001")
 
+    def test_extract_from_task_payload_forwards_markdown_loss_detected_flag(self) -> None:
+        extractor = FundOrderExtractor(get_settings())
+        task_payload = DocumentLoadTaskPayload(
+            source_path="/tmp/wrapper_20260415.html",
+            file_name="wrapper_20260415.html",
+            pdf_password=None,
+            content_type="text/html",
+            raw_text="[HTML wrapper_20260415.html]\n\nV3301P | 변액연금 혼합형 | 입금 | 0 | 0",
+            markdown_text="## HTML wrapper_20260415.html\n\n```text\ntruncated\n```",
+            chunks=("raw-chunk",),
+            non_instruction_reason=None,
+            allow_empty_result=False,
+            scope_excludes_all_funds=False,
+            expected_order_count=1,
+            target_fund_scope=TargetFundScope(manager_column_present=False),
+            markdown_loss_detected=True,
+            markdown_loss_reasons=("html_fund_code_missing",),
+            effective_llm_text_kind="raw_text",
+        )
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_extract(**kwargs):  # type: ignore[no-untyped-def]
+            captured_kwargs.update(kwargs)
+            return LLMExtractionOutcome(
+                result=ExtractionResult(
+                    orders=[
+                        OrderExtraction(
+                            fund_code="V3301P",
+                            fund_name="변액연금 혼합형",
+                            settle_class=SettleClass.CONFIRMED,
+                            order_type=OrderType.SUB,
+                            base_date="2026-04-15",
+                            t_day=0,
+                            transfer_amount="0",
+                        )
+                    ],
+                    issues=[],
+                )
+            )
+
+        extractor.extract = fake_extract  # type: ignore[method-assign]
+
+        outcome = extractor.extract_from_task_payload(task_payload)
+
+        self.assertEqual(len(outcome.result.orders), 1)
+        self.assertIs(captured_kwargs.get("markdown_loss_detected"), True)
+        self.assertEqual(captured_kwargs.get("markdown_text"), task_payload.markdown_text)
+        self.assertEqual(captured_kwargs.get("raw_text"), task_payload.raw_text)
+
     def test_service_extract_file_path_to_payload_skips_prompt_directed_duplicate_pdf_before_llm(self) -> None:
         service = ExtractionService()
         task_payload = DocumentLoadTaskPayload(

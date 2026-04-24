@@ -65,6 +65,7 @@ class MhtDocumentLoaderMixin:
         table_row_tokens: list[str] = []
         inherited_row_tokens: list[str] = []
         row_kind_tokens: list[str] = []
+        fund_code_tokens: list[str] = []
         for html in html_parts:
             if not html:
                 continue
@@ -101,6 +102,9 @@ class MhtDocumentLoaderMixin:
                     row_kind_tokens.extend(
                         str(token) for token in raw_audit.get("row_kind_tokens", []) if str(token).strip()
                     )
+                    fund_code_tokens.extend(
+                        str(token) for token in raw_audit.get("fund_code_tokens", []) if str(token).strip()
+                    )
             body_text = self._strip_mht_header_from_raw_text(html_raw_text, file_path.name)
             if body_text:
                 text_parts.append(body_text)
@@ -116,6 +120,7 @@ class MhtDocumentLoaderMixin:
                     "table_row_tokens": self._dedupe_preserve_order(table_row_tokens),
                     "inherited_row_tokens": self._dedupe_preserve_order(inherited_row_tokens),
                     "row_kind_tokens": self._dedupe_preserve_order(row_kind_tokens),
+                    "fund_code_tokens": self._dedupe_preserve_order(fund_code_tokens),
                 },
             }
             if markdown_blocks:

@@ -11,11 +11,12 @@
   - `handoff_26041601.md`
   - `handoff_26042001.md`
 - 기존 `handoff_consolidated_26042001.md`의 역할을 이 archive가 대체한다.
-- `handoff_26042201.md`는 최신 실행 인계본이며, 다음 세션에서는 그 문서를 먼저 읽는다.
-- 이 문서는 과거 handoff를 보관용으로 압축한 archive이면서, 새 세션에서 다시 확인해야 할 source of truth와 운영 제약도 함께 정리한다.
+- 현재 active handoff는 [handoff_26042401.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042401.md)다.
+- [handoff_26042201.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042201.md)는 직전 active snapshot으로 남겨 둔다.
+- 이 문서는 pre-260422 장기 기록과 운영 제약을 보관용으로 압축한 archive다.
 
 ## Superseded Note
-- 현재 authoritative 실행 인계 기준은 [handoff_26042201.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042201.md)와 최신 `readme` 문서들이다.
+- 현재 authoritative 실행 인계 기준은 [handoff_26042401.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042401.md)와 최신 `readme` 문서들이다.
 - 이 archive 안의 duplicate-copy precheck, extractor-core guard, 과거 clean/dirty 상태 설명은 **역사 기록**으로만 본다.
 - 특히 과거 duplicate-copy 설명은 현재 규칙을 대체하지 않는다. 현재 기준은 “extractor core 하드코딩 금지 + 상위 실행 경로 guidance enforcement”다.
 
@@ -280,7 +281,7 @@
 - 2026-04-20 하나생명 병합 라운드에서는 `output_contract.py`가 조건부 대상이었지만 수정하지 않았다.
   - `11_카디프`, `14_흥국생명`, `17_메트라이프` final payload drift가 재현되지 않았기 때문이다.
   - 이후 금액 source-scale 보존 정책 라운드에서는 `output_contract.py`를 수정했다.
-- 2026-04-16 라운드에서 반영한 금액 canonicalization 및 output contract 계열 WAS 병합 내역은 `merge_result_report_26041601.md`를 기준으로 확인한다.
+- 2026-04-16 라운드에서 반영한 금액 canonicalization 및 output contract 계열 WAS 병합 내역은 `merge_report/20260416/mr0001.md`를 기준으로 확인한다.
 - 2026-04-20 백업과 보고서 경로는 보고서와 산출물 섹션에 모아 둔다.
 
 ## WAS DB Prompt 상태
@@ -428,24 +429,24 @@
 - 아래 `output/debug/...` 경로는 모두 당시 생성된 legacy run root다.
 - 새 테스트 실행의 최종 산출물 저장 규칙은 [readme/03_테스트_실행_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/03_테스트_실행_가이드.md)를 따른다.
 - 2026-04-14 WAS direct extraction:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/was_counterparty_direct_report_260414140106.md`
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/was_counterparty_direct_report_260414140106_detailed.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260414/tt1401.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260414/tt1401.md`
 - 2026-04-16 로컬 17거래처 review:
   - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/local_counterparty_review_20260416_101947`
 - 2026-04-16 WAS 병합 보고서:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_26041601.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260416/mr0001.md`
 - 2026-04-20 WAS 병합 계획서:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_plan_20260420_01.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260420/mp0001.md`
 - 2026-04-20 WAS 병합 보고서:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_20260420_01.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260420/mr0001.md`
 - 2026-04-20 데이터 추출 테스트 보고서:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260420/000000_WAS_병합_데이터추출_테스트_보고서.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260420/tt0001.md`
 - 2026-04-21 메트라이프 WAS 병합 테스트 보고서:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/000000_WAS_메트라이프_병합_데이터추출_테스트_보고서.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/tt0002.md`
 - 2026-04-21 WAS 9건 데이터 추출 검수 보고서:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/000000_WAS_9건_데이터추출_검수_보고서.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/tt0001.md`
 - 거래처별 최대 2건 데이터 추출 테스트 보고서:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260416/000000_거래처별_최대2건_추출테스트_보고서.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260416/tt0001.md`
 - 2026-04-20 accepted 병합 debug root:
   - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/was_merge_20260420_01`
 - 2026-04-20 accepted 병합 backup root:
@@ -494,14 +495,15 @@
 - 새 세션에서 로컬 작업을 이어갈 때는 이 변경을 임의로 revert하지 말고 현재 diff와 2026-04-22 handoff를 함께 본다.
 
 ## 다음 세션 시작 순서
-1. `/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042201.md`를 먼저 읽는다.
-2. 이 통합 handoff를 읽는다.
-3. 필요한 경우 원본 handoff는 세부 이력 확인용으로만 연다.
-4. 로컬 repo에서 `git status --short --untracked-files=all`을 확인하고, 최신 로컬 변경 묶음을 merge-first 기준으로 정리한다.
-5. WAS repo에서 `git status --short --untracked-files=all`을 확인하고 clean 상태를 재확인한다.
-6. LLM 터널을 확인한다.
-7. 로컬 변경을 WAS에 selective merge한다.
-8. guard 3건 + 동양생명 2건 focused validation을 수행한다.
+1. `/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042401.md`를 먼저 읽는다.
+2. 필요하면 `/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042201.md`를 직전 active snapshot으로 읽는다.
+3. 이 통합 handoff를 읽는다.
+4. 필요한 경우 원본 handoff는 세부 이력 확인용으로만 연다.
+5. 로컬 repo에서 `git status --short --untracked-files=all`을 확인하고, 최신 로컬 변경 묶음을 merge-first 기준으로 정리한다.
+6. WAS repo에서 `git status --short --untracked-files=all`을 확인하고 clean 상태를 재확인한다.
+7. LLM 터널을 확인한다.
+8. 로컬 변경을 WAS에 selective merge한다.
+9. guard 3건 + 동양생명 2건 focused validation을 수행한다.
 9. 배포 전 운영 DB row를 백업한다.
 10. 가능하면 official 17-case 또는 운영 가능한 subset smoke를 수행한다.
 11. 모든 데이터 추출 결과 보고서에는 retry count와 elapsed time을 포함해 `test_report`에 저장한다.

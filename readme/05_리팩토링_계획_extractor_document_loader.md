@@ -6,6 +6,9 @@
 - 큰 파일의 책임을 내부 패키지로 분리해 읽기/수정 단위를 줄인다.
 - 동작 변경 없이 WAS mirror가 가능한 구조를 만든다.
 - 이번 라운드에서는 로컬 구조 정리까지만 수행하고, 실제 WAS 병합은 하지 않는다.
+- 최신 active handoff는 [handoff_26042401.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042401.md)다.
+- 2026-04-24 기준으로 `document_loading/` 분리 구조 위에 HTML/MHT markdown 안정화가 추가 반영됐다.
+  - `html_loader.py`, `mht_loader.py`, `document_loading/common.py`, `loader_core.py`, `markdown.py`가 이 구조 위에서 함께 움직인다.
 
 ## 가드레일
 
@@ -73,6 +76,11 @@
 - 미완료
   - `FundOrderExtractor` method-level 세부 분해는 1차 분리만 적용
   - `pipeline.py`, `deterministic.py`, `reconcile.py`는 후속 라운드에서 class method 이관 예정
+
+## 2026-04-24 추가 메모
+
+- 이번 세션에서 WAS selective merge는 구조 정렬 묶음 전체가 아니라 HTML/MHT markdown 안정화 범위만 수행했다.
+- 즉 현재 구조 상태는 “facade/내부 패키지 분리 완료 + HTML/MHT audit/fail-safe 보강 완료 + extractor method-level 추가 분해는 아직 계획 상태”로 본다.
 
 ## 검증 기준
 

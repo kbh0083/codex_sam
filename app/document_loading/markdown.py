@@ -67,6 +67,9 @@ class DocumentLoaderMarkdownMixin:
         row_kind_tokens = [
             str(token).strip() for token in audit_payload.get("row_kind_tokens", []) if str(token).strip()
         ]
+        fund_code_tokens = [
+            str(token).strip() for token in audit_payload.get("fund_code_tokens", []) if str(token).strip()
+        ]
 
         if label_tokens and any(token not in markdown_text for token in label_tokens):
             reasons.append("html_label_missing")
@@ -76,6 +79,8 @@ class DocumentLoaderMarkdownMixin:
             reasons.append("html_inherited_context_missing")
         if row_kind_tokens and any(token not in markdown_text for token in row_kind_tokens):
             reasons.append("html_row_kind_missing")
+        if fund_code_tokens and any(token not in markdown_text for token in fund_code_tokens):
+            reasons.append("html_fund_code_missing")
         return reasons
 
     def _detect_section_delimiter(self, document_text: str) -> str:
