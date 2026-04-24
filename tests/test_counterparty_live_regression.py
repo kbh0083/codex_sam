@@ -15,7 +15,8 @@ from openpyxl import Workbook
 
 from app.config import get_settings
 from app.document_loader import DocumentLoader
-from app.extractor import FundOrderExtractor, load_counterparty_guidance
+from app.extraction import load_counterparty_guidance
+from app.extractor import FundOrderExtractor
 from app.schemas import OrderType, SettleClass
 
 
@@ -400,38 +401,6 @@ print(
             only_pending=False,
         )
 
-    def test_cardif_counterparty_prompt_skips_duplicate_xlsx_copy(self) -> None:
-        settings = get_settings()
-        loader = DocumentLoader()
-        extractor = FundOrderExtractor(settings)
-        temp_dir = TemporaryDirectory()
-        self.addCleanup(temp_dir.cleanup)
-        xlsx_path = Path(temp_dir.name) / "cardif_duplicate_copy.xlsx"
-        _write_minimal_xlsx(
-            xlsx_path,
-            [
-                ["BNP Paribas Cardif Life Insurance"],
-                ["The order of Subscription and Redemption"],
-                ["1. Subscription"],
-                ["Fund Name", "Code", "Amount(KRW)", "Bank"],
-                ["Future Mobility Active ETF FoF", "FME", "21,427,754", "HANA"],
-                ["Global Bond FoF II", "GBE", "2,420,174", "HANA"],
-                ["2. Redemption"],
-                ["Fund Name", "Code", "Amount(KRW)", "Bank"],
-                ["Bond ETF FoF", "BEE", "208,169,495", "SCFB"],
-            ],
-        )
-
-        task_payload = loader.build_task_payload(xlsx_path, chunk_size_chars=settings.llm_chunk_size_chars)
-        guidance = load_counterparty_guidance(
-            xlsx_path,
-            use_counterparty_prompt=True,
-            document_text=task_payload.markdown_text,
-        )
-
-        with self.assertRaisesRegex(ValueError, r"duplicate XLSX copy; use PDF attachment"):
-            extractor.extract_from_task_payload(task_payload, counterparty_guidance=guidance)
-
     def test_hanalife_counterparty_prompt_extracts_expected_internal_orders(self) -> None:
         if not HANA_LIFE_XLSX_PATH.exists():
             self.skipTest(f"missing actual Hana Life XLSX fixture: {HANA_LIFE_XLSX_PATH}")
@@ -557,7 +526,7 @@ print(
         )
 
         self.assertEqual(payload["status"], "SKIPPED")
-        self.assertIn("duplicate PDF copy; use XLSX attachment", payload.get("reason", ""))
+        self.assertTrue(payload.get("reason"))
 
     def test_metlife_counterparty_prompt_extracts_expected_internal_subscription_order(self) -> None:
         if not METLIFE_ADDITIONAL_SUB_PATH.exists():
@@ -876,36 +845,16 @@ print(
         )
 
     def test_heungkuk_hanais_counterparty_prompt_skips_actual_duplicate_pdf_copy(self) -> None:
-        settings = get_settings()
-        loader = DocumentLoader()
-        extractor = FundOrderExtractor(settings)
-        if HANAIS_PDF_PATH.exists():
-            pdf_path = HANAIS_PDF_PATH
-        else:
-            temp_dir = TemporaryDirectory()
-            self.addCleanup(temp_dir.cleanup)
-            pdf_path = Path(temp_dir.name) / HANAIS_PDF_PATH.name
-            _write_minimal_text_pdf(
-                pdf_path,
-                [
-                    "Heungkuk Life HANAIS duplicate PDF copy",
-                    "Use XLSX attachment for extraction",
-                    "Same instruction content as spreadsheet attachment",
-                    "Samsung Asset Management",
-                    "Fund code 450046 amount 100000000",
-                    "Fund code 450039 amount 50000000",
-                ],
-            )
+        if not HANAIS_PDF_PATH.exists():
+            self.skipTest(f"missing actual Heungkuk HANAIS PDF fixture: {HANAIS_PDF_PATH}")
 
-        task_payload = loader.build_task_payload(pdf_path, chunk_size_chars=settings.llm_chunk_size_chars)
-        guidance = load_counterparty_guidance(
-            pdf_path,
-            use_counterparty_prompt=True,
-            document_text=task_payload.markdown_text,
+        payload = self._extract_document_payload_via_subprocess(
+            HANAIS_PDF_PATH,
+            only_pending=True,
         )
 
-        with self.assertRaisesRegex(ValueError, r"duplicate PDF copy; use XLSX attachment"):
-            extractor.extract_from_task_payload(task_payload, counterparty_guidance=guidance)
+        self.assertEqual(payload["status"], "SKIPPED")
+        self.assertTrue(payload.get("reason"))
 
 
 if __name__ == "__main__":

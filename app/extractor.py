@@ -6,7 +6,6 @@ import json
 import logging
 import re
 import time
-import unicodedata
 from contextvars import copy_context
 from datetime import datetime
 from dataclasses import dataclass
@@ -25,8 +24,6 @@ from app.document_loader import DocumentLoadTaskPayload, DocumentLoader, TargetF
 from app.schemas import ExtractionResult, OrderExtraction, OrderType, SettleClass
 from app.extraction.constants import (
     BLOCKING_EXTRACTION_ISSUES,
-    COUNTERPARTY_DUPLICATE_COPY_REASONS,
-    HANAIS_DUPLICATE_PDF_HINT_TOKENS,
     INSTRUCTION_DOCUMENT_STAGE_ISSUE_RETRY_ATTEMPTS,
     INTERNAL_RETRY_FINDING_PREFIX,
     MAX_PARALLEL_LLM_BATCH_WORKERS,
@@ -44,7 +41,6 @@ from app.extraction.constants import (
     VA_LLM_TEMPERATURE,
     VA_LLM_TIMEOUT_SECONDS,
 )
-from app.extraction.counterparty import load_counterparty_guidance, resolve_counterparty_prompt_name
 from app.extraction.models import (
     ExtractionOutcomeError,
     FundAmountItem,
@@ -178,82 +174,6 @@ class FundOrderExtractor:
         if not combined:
             return False
         return "[SHEET " in combined or "## Sheet " in combined
-
-    @staticmethod
-    def _document_has_page_loader_shape(
-        *,
-        raw_text: str | None,
-        markdown_text: str | None,
-    ) -> bool:
-        """loader 산출물이 page/PDF 기반 문서인지 본다."""
-        combined = "\n".join(part for part in (markdown_text, raw_text) if part)
-        if not combined:
-            return False
-        return "[PAGE " in combined or "## Page " in combined
-
-    @staticmethod
-    def _document_has_hanais_duplicate_pdf_hint(
-        *,
-        raw_text: str | None,
-        markdown_text: str | None,
-    ) -> bool:
-        """흥국생명-hanais duplicate PDF 안내 문구를 deterministic 하게 감지한다."""
-        normalized_text = " ".join(
-            unicodedata.normalize("NFC", part).lower()
-            for part in (markdown_text, raw_text)
-            if part
-        )
-        if not normalized_text:
-            return False
-        compact_text = re.sub(r"\s+", " ", normalized_text)
-        return any(token in compact_text for token in HANAIS_DUPLICATE_PDF_HINT_TOKENS)
-
-    def _detect_pre_llm_non_instruction_reason(
-        self,
-        task_payload: DocumentLoadTaskPayload,
-    ) -> str | None:
-        """LLM stage 1 이전에 deterministic duplicate-copy guard를 먼저 적용한다."""
-        if task_payload.non_instruction_reason:
-            return task_payload.non_instruction_reason
-
-        try:
-            prompt_name = resolve_counterparty_prompt_name(
-                task_payload.source_path,
-                document_text=task_payload.markdown_text or task_payload.raw_text,
-            )
-        except Exception as exc:
-            logger.warning(
-                "Failed to resolve counterparty prompt during pre-LLM duplicate-copy guard for source=%s; "
-                "skipping deterministic duplicate-copy precheck: %s",
-                task_payload.file_name,
-                exc,
-            )
-            return None
-        if prompt_name is None:
-            return None
-
-        if prompt_name == "카디프" and self._document_has_sheet_loader_shape(
-            raw_text=task_payload.raw_text,
-            markdown_text=task_payload.markdown_text,
-        ):
-            return COUNTERPARTY_DUPLICATE_COPY_REASONS[prompt_name]
-        if prompt_name == "하나생명" and self._document_has_page_loader_shape(
-            raw_text=task_payload.raw_text,
-            markdown_text=task_payload.markdown_text,
-        ):
-            return COUNTERPARTY_DUPLICATE_COPY_REASONS[prompt_name]
-        if prompt_name == "흥국생명-hanais" and (
-            self._document_has_page_loader_shape(
-                raw_text=task_payload.raw_text,
-                markdown_text=task_payload.markdown_text,
-            )
-            or self._document_has_hanais_duplicate_pdf_hint(
-                raw_text=task_payload.raw_text,
-                markdown_text=task_payload.markdown_text,
-            )
-        ):
-            return COUNTERPARTY_DUPLICATE_COPY_REASONS[prompt_name]
-        return None
 
     def extract(
         self,
@@ -647,11 +567,10 @@ class FundOrderExtractor:
         log_token = _ACTIVE_EXTRACT_LOG_PATH.set(extract_log_path)
         metrics_token = _ACTIVE_EXTRACT_METRICS.set(metrics_state)
         try:
-            pre_llm_non_instruction_reason = self._detect_pre_llm_non_instruction_reason(task_payload)
-            if pre_llm_non_instruction_reason:
+            if task_payload.non_instruction_reason:
                 raise ValueError(
                     "Document is not a variable-annuity order instruction. "
-                    f"path={task_payload.source_path} reason={pre_llm_non_instruction_reason}"
+                    f"path={task_payload.source_path} reason={task_payload.non_instruction_reason}"
                 )
 
             if task_payload.allow_empty_result or task_payload.scope_excludes_all_funds:

@@ -7,13 +7,16 @@ from typing import Any
 
 from app.config import get_settings
 from app.document_loader import DocumentLoadTaskPayload, DocumentLoader
+from app.extraction import (
+    detect_counterparty_guidance_non_instruction_reason,
+    load_counterparty_guidance,
+    resolve_counterparty_prompt_name,
+)
 from app.extractor import (
     ExtractionOutcomeError,
     FundOrderExtractor,
     apply_only_pending_filter,
     build_extract_llm_log_path,
-    load_counterparty_guidance,
-    resolve_counterparty_prompt_name,
     write_invalid_response_debug_files,
 )
 from app.output_contract import (
@@ -77,6 +80,13 @@ class ExtractionService:
         # service를 직접 쓰는 경로도 DocumentLoader 결과를 파일로 저장했다가 다시 읽는다.
         # 따라서 handoff 결과물을 남길 기본 디렉터리도 함께 보장해 둔다.
         self.settings.task_payload_output_dir.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _non_instruction_error_message(task_payload: DocumentLoadTaskPayload, reason: str) -> str:
+        return (
+            "Document is not a variable-annuity order instruction. "
+            f"path={task_payload.source_path} reason={reason}"
+        )
 
     def extract_file_path(
         self,
@@ -232,6 +242,15 @@ class ExtractionService:
             document_text=task_payload.markdown_text,
         )
         task_payload = self._reload_task_payload_via_handoff_file(task_payload, normalized_path)
+        prompt_directed_reason = detect_counterparty_guidance_non_instruction_reason(
+            counterparty_guidance=counterparty_guidance,
+            markdown_text=task_payload.markdown_text,
+            raw_text=task_payload.raw_text,
+        )
+        if prompt_directed_reason:
+            raise NonInstructionDocumentError(
+                self._non_instruction_error_message(task_payload, prompt_directed_reason)
+            )
         try:
             extraction_outcome = self.extractor.extract_from_task_payload(
                 task_payload,

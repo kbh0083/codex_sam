@@ -1,6 +1,6 @@
 # Handoff Archive Pre260422
 
-- last updated: 2026-04-22
+- last updated: 2026-04-24
 
 ## 목적
 - `/Users/bhkim/Documents/codex_prj_sam_asset/세션` 폴더의 `handoff_26042201.md` 이전 handoff들을 하나로 통합한 archive 문서다.
@@ -13,6 +13,11 @@
 - 기존 `handoff_consolidated_26042001.md`의 역할을 이 archive가 대체한다.
 - `handoff_26042201.md`는 최신 실행 인계본이며, 다음 세션에서는 그 문서를 먼저 읽는다.
 - 이 문서는 과거 handoff를 보관용으로 압축한 archive이면서, 새 세션에서 다시 확인해야 할 source of truth와 운영 제약도 함께 정리한다.
+
+## Superseded Note
+- 현재 authoritative 실행 인계 기준은 [handoff_26042201.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042201.md)와 최신 `readme` 문서들이다.
+- 이 archive 안의 duplicate-copy precheck, extractor-core guard, 과거 clean/dirty 상태 설명은 **역사 기록**으로만 본다.
+- 특히 과거 duplicate-copy 설명은 현재 규칙을 대체하지 않는다. 현재 기준은 “extractor core 하드코딩 금지 + 상위 실행 경로 guidance enforcement”다.
 
 ## 기준 경로
 - 로컬 워크스페이스:
@@ -420,6 +425,8 @@
 - `13_한화생명`은 자동 evidence 탐지 초기 결과와 달리 원문 `기준일 : 20250826` 확인 후 최종 `PASS`로 확정했다.
 
 ## 보고서와 산출물
+- 아래 `output/debug/...` 경로는 모두 당시 생성된 legacy run root다.
+- 새 테스트 실행의 최종 산출물 저장 규칙은 [readme/03_테스트_실행_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/03_테스트_실행_가이드.md)를 따른다.
 - 2026-04-14 WAS direct extraction:
   - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/was_counterparty_direct_report_260414140106.md`
   - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/was_counterparty_direct_report_260414140106_detailed.md`
@@ -432,13 +439,13 @@
 - 2026-04-20 WAS 병합 보고서:
   - `/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/merge_result_report_20260420_01.md`
 - 2026-04-20 데이터 추출 테스트 보고서:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260420_WAS_병합_데이터추출_테스트_보고서.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260420/000000_WAS_병합_데이터추출_테스트_보고서.md`
 - 2026-04-21 메트라이프 WAS 병합 테스트 보고서:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421_WAS_메트라이프_병합_데이터추출_테스트_보고서.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/000000_WAS_메트라이프_병합_데이터추출_테스트_보고서.md`
 - 2026-04-21 WAS 9건 데이터 추출 검수 보고서:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421_WAS_9건_데이터추출_검수_보고서.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260421/000000_WAS_9건_데이터추출_검수_보고서.md`
 - 거래처별 최대 2건 데이터 추출 테스트 보고서:
-  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260416_거래처별_최대2건_추출테스트_보고서.md`
+  - `/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260416/000000_거래처별_최대2건_추출테스트_보고서.md`
 - 2026-04-20 accepted 병합 debug root:
   - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/was_merge_20260420_01`
 - 2026-04-20 accepted 병합 backup root:

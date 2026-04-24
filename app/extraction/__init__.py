@@ -1,5 +1,6 @@
 from .constants import *  # noqa: F401,F403
 from .counterparty import load_counterparty_guidance, resolve_counterparty_prompt_name
+from .guidance import detect_counterparty_guidance_non_instruction_reason
 from .models import (
     ExtractionOutcomeError,
     InvalidResponseArtifact,
@@ -21,6 +22,7 @@ __all__ = [
     "apply_only_pending_filter",
     "build_extract_llm_log_path",
     "build_extract_llm_metrics_path",
+    "detect_counterparty_guidance_non_instruction_reason",
     "load_counterparty_guidance",
     "resolve_counterparty_prompt_name",
     "write_invalid_response_debug_files",

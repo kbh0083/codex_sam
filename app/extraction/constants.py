@@ -116,17 +116,3 @@ ORDER_TYPE_REASON_CODES = frozenset(
         "ORDER_OTHER_VERIFIED",
     }
 )
-COUNTERPARTY_DUPLICATE_COPY_REASONS = {
-    "카디프": "duplicate XLSX copy; use PDF attachment",
-    "하나생명": "duplicate PDF copy; use XLSX attachment",
-    "흥국생명-hanais": "duplicate PDF copy; use XLSX attachment",
-}
-HANAIS_DUPLICATE_PDF_HINT_TOKENS = (
-    "duplicate pdf copy",
-    "use xlsx attachment",
-    "xlsx attachment for extraction",
-    "xlsx 첨부",
-    "xlsx attachment",
-    "pdf 사본",
-)
-

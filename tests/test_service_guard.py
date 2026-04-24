@@ -9,13 +9,16 @@ from unittest.mock import patch
 
 from app.config import get_settings
 from app.document_loader import DocumentLoadTaskPayload, TargetFundScope
+from app.extraction import (
+    detect_counterparty_guidance_non_instruction_reason,
+    load_counterparty_guidance,
+    resolve_counterparty_prompt_name,
+)
 from app.extractor import (
     ExtractionOutcomeError,
     FundOrderExtractor,
     InvalidResponseArtifact,
     LLMExtractionOutcome,
-    load_counterparty_guidance,
-    resolve_counterparty_prompt_name,
     write_invalid_response_debug_files,
 )
 from app.schemas import ExtractionResult, OrderExtraction, OrderType, SettleClass
@@ -458,6 +461,34 @@ class ServiceGuardTests(unittest.TestCase):
         self.assertNotIn("HANAIS-style export sheets", guidance or "")
         self.assertNotIn("source label/file name", guidance or "")
 
+    def test_detect_counterparty_guidance_non_instruction_reason_skips_page_based_hanalife_pdf(self) -> None:
+        guidance = load_counterparty_guidance(
+            "/tmp/하나생명(액티브)_251127.pdf",
+            use_counterparty_prompt=True,
+        )
+
+        reason = detect_counterparty_guidance_non_instruction_reason(
+            counterparty_guidance=guidance,
+            markdown_text="## Page 1\n\n거래유형명\n설정해지금액\n",
+            raw_text="[PAGE 1]\n거래유형명\n설정해지금액\n",
+        )
+
+        self.assertEqual(reason, "duplicate PDF copy; use XLSX attachment")
+
+    def test_detect_counterparty_guidance_non_instruction_reason_skips_sheet_based_cardif_copy(self) -> None:
+        guidance = load_counterparty_guidance(
+            "/tmp/카디프_251127.xlsx",
+            use_counterparty_prompt=True,
+        )
+
+        reason = detect_counterparty_guidance_non_instruction_reason(
+            counterparty_guidance=guidance,
+            markdown_text="## Sheet Instruction\n\n| Amount(KRW) |\n| --- |\n| 1 |\n",
+            raw_text="[SHEET Instruction]\nAmount(KRW)\n",
+        )
+
+        self.assertEqual(reason, "duplicate XLSX copy; use PDF attachment")
+
     def test_resolve_counterparty_prompt_name_does_not_overmatch_metlife_from_filename_only(self) -> None:
         self.assertIsNone(resolve_counterparty_prompt_name("/tmp/미래에셋_메트라이프생명_참고.txt"))
 
@@ -601,7 +632,7 @@ class ServiceGuardTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "incomplete"):
             extractor.extract_from_task_payload(task_payload)
 
-    def test_extract_from_task_payload_preemptively_rejects_cardif_duplicate_xlsx_copy(self) -> None:
+    def test_extract_from_task_payload_allows_cardif_duplicate_like_xlsx_to_reach_extraction(self) -> None:
         extractor = FundOrderExtractor(get_settings())
         task_payload = DocumentLoadTaskPayload(
             source_path="/tmp/카디프_251127.xlsx",
@@ -617,12 +648,28 @@ class ServiceGuardTests(unittest.TestCase):
             expected_order_count=1,
             target_fund_scope=TargetFundScope(manager_column_present=False),
         )
-        extractor.extract = lambda *args, **kwargs: self.fail("duplicate copy should not reach LLM extraction")  # type: ignore[method-assign]
+        extractor.extract = lambda *args, **kwargs: LLMExtractionOutcome(  # type: ignore[method-assign]
+            result=ExtractionResult(
+                orders=[
+                    OrderExtraction(
+                        fund_code="F001",
+                        fund_name="Alpha",
+                        settle_class=SettleClass.CONFIRMED,
+                        order_type=OrderType.SUB,
+                        base_date="2025-11-27",
+                        t_day=0,
+                        transfer_amount="100",
+                    )
+                ],
+                issues=[],
+            )
+        )
 
-        with self.assertRaisesRegex(ValueError, r"duplicate XLSX copy; use PDF attachment"):
-            extractor.extract_from_task_payload(task_payload)
+        outcome = extractor.extract_from_task_payload(task_payload)
+        self.assertEqual(len(outcome.result.orders), 1)
+        self.assertEqual(outcome.result.orders[0].fund_code, "F001")
 
-    def test_extract_from_task_payload_preemptively_rejects_hanalife_legacy_pdf_copy(self) -> None:
+    def test_extract_from_task_payload_allows_hanalife_duplicate_like_pdf_to_reach_extraction(self) -> None:
         extractor = FundOrderExtractor(get_settings())
         task_payload = DocumentLoadTaskPayload(
             source_path="/tmp/하나생명(액티브)_251127.pdf",
@@ -638,12 +685,28 @@ class ServiceGuardTests(unittest.TestCase):
             expected_order_count=1,
             target_fund_scope=TargetFundScope(manager_column_present=False),
         )
-        extractor.extract = lambda *args, **kwargs: self.fail("duplicate copy should not reach LLM extraction")  # type: ignore[method-assign]
+        extractor.extract = lambda *args, **kwargs: LLMExtractionOutcome(  # type: ignore[method-assign]
+            result=ExtractionResult(
+                orders=[
+                    OrderExtraction(
+                        fund_code="F001",
+                        fund_name="Alpha",
+                        settle_class=SettleClass.CONFIRMED,
+                        order_type=OrderType.SUB,
+                        base_date="2025-11-27",
+                        t_day=0,
+                        transfer_amount="100",
+                    )
+                ],
+                issues=[],
+            )
+        )
 
-        with self.assertRaisesRegex(ValueError, r"duplicate PDF copy; use XLSX attachment"):
-            extractor.extract_from_task_payload(task_payload)
+        outcome = extractor.extract_from_task_payload(task_payload)
+        self.assertEqual(len(outcome.result.orders), 1)
+        self.assertEqual(outcome.result.orders[0].fund_code, "F001")
 
-    def test_extract_from_task_payload_preemptively_rejects_heungkuk_hanais_duplicate_pdf_hint(self) -> None:
+    def test_extract_from_task_payload_allows_heungkuk_duplicate_like_pdf_hint_to_reach_extraction(self) -> None:
         extractor = FundOrderExtractor(get_settings())
         task_payload = DocumentLoadTaskPayload(
             source_path="/tmp/흥국생명-hanais-0407-지시서.pdf",
@@ -663,12 +726,28 @@ class ServiceGuardTests(unittest.TestCase):
             expected_order_count=1,
             target_fund_scope=TargetFundScope(manager_column_present=False),
         )
-        extractor.extract = lambda *args, **kwargs: self.fail("duplicate copy should not reach LLM extraction")  # type: ignore[method-assign]
+        extractor.extract = lambda *args, **kwargs: LLMExtractionOutcome(  # type: ignore[method-assign]
+            result=ExtractionResult(
+                orders=[
+                    OrderExtraction(
+                        fund_code="F001",
+                        fund_name="Alpha",
+                        settle_class=SettleClass.CONFIRMED,
+                        order_type=OrderType.SUB,
+                        base_date="2025-11-27",
+                        t_day=0,
+                        transfer_amount="100",
+                    )
+                ],
+                issues=[],
+            )
+        )
 
-        with self.assertRaisesRegex(ValueError, r"duplicate PDF copy; use XLSX attachment"):
-            extractor.extract_from_task_payload(task_payload)
+        outcome = extractor.extract_from_task_payload(task_payload)
+        self.assertEqual(len(outcome.result.orders), 1)
+        self.assertEqual(outcome.result.orders[0].fund_code, "F001")
 
-    def test_extract_from_task_payload_ignores_precheck_prompt_mapping_failure(self) -> None:
+    def test_extract_from_task_payload_does_not_consult_counterparty_mapping_precheck(self) -> None:
         extractor = FundOrderExtractor(get_settings())
         task_payload = DocumentLoadTaskPayload(
             source_path="/tmp/sample.pdf",
@@ -701,11 +780,49 @@ class ServiceGuardTests(unittest.TestCase):
             )
         )
 
-        with patch("app.extractor.resolve_counterparty_prompt_name", side_effect=RuntimeError("broken mapping")):
+        with patch("app.extraction.counterparty.resolve_counterparty_prompt_name", side_effect=RuntimeError("broken mapping")):
             outcome = extractor.extract_from_task_payload(task_payload)
 
         self.assertEqual(len(outcome.result.orders), 1)
         self.assertEqual(outcome.result.orders[0].fund_code, "F001")
+
+    def test_service_extract_file_path_to_payload_skips_prompt_directed_duplicate_pdf_before_llm(self) -> None:
+        service = ExtractionService()
+        task_payload = DocumentLoadTaskPayload(
+            source_path="/tmp/하나생명(액티브)_251127.pdf",
+            file_name="하나생명(액티브)_251127.pdf",
+            pdf_password=None,
+            content_type="application/pdf",
+            raw_text="[PAGE 1]\n거래유형명\n설정해지금액\n",
+            markdown_text="## Page 1\n\n거래유형명\n설정해지금액\n",
+            chunks=("chunk-1",),
+            non_instruction_reason=None,
+            allow_empty_result=False,
+            scope_excludes_all_funds=False,
+            expected_order_count=1,
+            target_fund_scope=TargetFundScope(manager_column_present=False),
+        )
+
+        with patch.object(
+            service,
+            "_build_task_payload",
+            return_value=(task_payload, Path(task_payload.source_path)),
+        ), patch.object(
+            service,
+            "_reload_task_payload_via_handoff_file",
+            return_value=task_payload,
+        ), patch.object(
+            service.extractor,
+            "extract_from_task_payload",
+            side_effect=AssertionError("LLM extraction should not run for prompt-directed duplicate copy"),
+        ):
+            payload = service.extract_file_path_to_payload(
+                Path(task_payload.source_path),
+                use_counterparty_prompt=True,
+            )
+
+        self.assertEqual(payload["status"], "SKIPPED")
+        self.assertIn("duplicate PDF copy; use XLSX attachment", payload["reason"])
 
     def test_extract_from_task_payload_rejects_llm_classified_non_instruction_document(self) -> None:
         extractor = FundOrderExtractor(get_settings())

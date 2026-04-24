@@ -9,13 +9,16 @@ from typing import Any
 
 from app.config import Settings, get_settings
 from app.document_loader import DocumentLoadTaskPayload, DocumentLoader
+from app.extraction import (
+    detect_counterparty_guidance_non_instruction_reason,
+    load_counterparty_guidance,
+    resolve_counterparty_prompt_name,
+)
 from app.extractor import (
     ExtractionOutcomeError,
     FundOrderExtractor,
     apply_only_pending_filter,
     build_extract_llm_log_path,
-    load_counterparty_guidance,
-    resolve_counterparty_prompt_name,
     write_invalid_response_debug_files,
 )
 from app.output_contract import (
@@ -450,6 +453,16 @@ class ExtractionComponent:
             return self._build_skipped_payload(
                 task_payload=task_payload,
                 reason="대상 거래처 scope에 해당하는 주문 없음",
+            )
+        prompt_directed_reason = detect_counterparty_guidance_non_instruction_reason(
+            counterparty_guidance=counterparty_guidance,
+            markdown_text=task_payload.markdown_text,
+            raw_text=task_payload.raw_text,
+        )
+        if prompt_directed_reason:
+            return self._build_skipped_payload(
+                task_payload=task_payload,
+                reason=self._non_instruction_error_message(task_payload, prompt_directed_reason),
             )
         try:
             outcome = self.extractor.extract_from_task_payload(
