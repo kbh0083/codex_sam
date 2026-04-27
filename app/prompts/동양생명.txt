@@ -1,3 +1,23 @@
+[[COUNTERPARTY_PROMPT_META]]
+fixed_stage_columns:
+  t_day:
+    include:
+      - 설정액
+      - 해지액
+      - 설정금액
+      - 해지금액
+    exclude:
+      - 정산액
+  transfer_amount:
+    include:
+      - 설정액
+      - 해지액
+      - 설정금액
+      - 해지금액
+    exclude:
+      - 정산액
+[[/COUNTERPARTY_PROMPT_META]]
+
 This document is from Dongyang Life.
 
 Common rules
@@ -8,19 +28,25 @@ Common rules
 - Do not create parallel outputs from spacing-only differences in fund_name. Keep one canonical fund_name per fund_code.
 
 정산내역
-- In "정산내역", read the columns "펀드코드", "펀드명", and "정산액".
+- In "정산내역", read the columns "펀드코드", "펀드명", "설정액", and "해지액".
+- In "정산내역", treat "정산액" only as a reference total. Do not use "정산액" as slot or transfer_amount evidence.
 - base_date: use the report date / base date shown at the top-right of the document.
 - fund_code: map from "펀드코드".
 - fund_name: map from "펀드명".
-- transfer_amount: map from "정산액".
-- order_type: determine from the sign of "정산액".
-  - positive "정산액" -> SUB
-  - negative "정산액" -> RED
+- Read "정산내역" by source column, not by net total.
+- Each non-zero same-day amount cell creates exactly one order.
+- transfer_amount: map from the exact selected same-day amount cell.
+- order_type: determine from the source amount column.
+  - "설정액" -> SUB
+  - "해지액" -> RED
 - t_day: use the internal same-day bucket, which is always 0 for "정산내역".
 - settle_class: classify every "정산내역" row as CONFIRMED.
-- In settle_class stage, any slot whose evidence comes from "정산액" in "정산내역" must stay CONFIRMED.
-- If "정산액" is 0, do not create an order from that row.
-- "정산내역" creates only the same-day settlement order. Do not create future slots from "정산내역".
+- In settle_class stage, any slot whose evidence comes from "설정액" or "해지액" in "정산내역" must stay CONFIRMED.
+- If one same-day column is 0 and the other is non-zero, emit only the surviving non-zero direction.
+- If both "설정액" and "해지액" are non-zero, emit both same-day orders.
+- If both same-day columns are 0, do not create an order from that row.
+- Do not create any same-day order from "정산액".
+- "정산내역" creates only same-day explicit-direction orders. Do not create future slots from "정산내역".
 
 예상내역
 - In "예상내역", read the columns "펀드코드", "펀드명", "설정금액", "해지금액", and the visible future-date headers.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from functools import lru_cache
 import logging
 from pathlib import Path
 import re
@@ -11,9 +13,116 @@ from .prompts import _default_counterparty_prompt_map_path, _default_prompt_path
 
 logger = logging.getLogger(__name__)
 
+_COUNTERPARTY_PROMPT_META_BEGIN = "[[COUNTERPARTY_PROMPT_META]]"
+_COUNTERPARTY_PROMPT_META_END = "[[/COUNTERPARTY_PROMPT_META]]"
+
+
+@dataclass(frozen=True, slots=True)
+class CounterpartyStageColumnPolicy:
+    include: tuple[str, ...] = ()
+    exclude: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CounterpartyPromptMetadata:
+    visible_guidance: str = ""
+    fixed_stage_columns: dict[str, CounterpartyStageColumnPolicy] | None = None
+
+    def stage_policy(self, stage_name: str) -> CounterpartyStageColumnPolicy | None:
+        if not self.fixed_stage_columns:
+            return None
+        return self.fixed_stage_columns.get(str(stage_name).strip())
+
 
 def _normalize_counterparty_token(text: str) -> str:
     return unicodedata.normalize("NFC", text).casefold()
+
+
+def _normalize_prompt_column_labels(raw_labels: object) -> tuple[str, ...]:
+    if raw_labels is None:
+        return ()
+    if not isinstance(raw_labels, list):
+        return ()
+    labels: list[str] = []
+    seen: set[str] = set()
+    for raw_label in raw_labels:
+        label = str(raw_label).strip()
+        if not label or label in seen:
+            continue
+        seen.add(label)
+        labels.append(label)
+    return tuple(labels)
+
+
+def _split_counterparty_prompt_meta_block(guidance: str) -> tuple[str, str | None]:
+    start = guidance.find(_COUNTERPARTY_PROMPT_META_BEGIN)
+    end = guidance.find(_COUNTERPARTY_PROMPT_META_END)
+    if start == -1 or end == -1 or end < start:
+        return guidance.strip(), None
+
+    meta_text = guidance[start + len(_COUNTERPARTY_PROMPT_META_BEGIN) : end].strip()
+    prefix = guidance[:start].strip()
+    suffix = guidance[end + len(_COUNTERPARTY_PROMPT_META_END) :].strip()
+    visible_guidance = "\n\n".join(part for part in (prefix, suffix) if part).strip()
+    return visible_guidance, meta_text or None
+
+
+@lru_cache(maxsize=128)
+def _parse_counterparty_prompt_metadata_cached(guidance: str) -> CounterpartyPromptMetadata:
+    visible_guidance, meta_text = _split_counterparty_prompt_meta_block(guidance)
+    if not meta_text:
+        return CounterpartyPromptMetadata(
+            visible_guidance=visible_guidance,
+            fixed_stage_columns={},
+        )
+
+    try:
+        payload = yaml.safe_load(meta_text)
+    except yaml.YAMLError as exc:
+        logger.warning("Failed to parse counterparty prompt meta block; ignoring structured guidance (%s)", exc)
+        return CounterpartyPromptMetadata(
+            visible_guidance=visible_guidance,
+            fixed_stage_columns={},
+        )
+
+    if not isinstance(payload, dict):
+        logger.warning("Counterparty prompt meta block is not an object; ignoring structured guidance")
+        return CounterpartyPromptMetadata(
+            visible_guidance=visible_guidance,
+            fixed_stage_columns={},
+        )
+
+    raw_stage_columns = payload.get("fixed_stage_columns")
+    if not isinstance(raw_stage_columns, dict):
+        return CounterpartyPromptMetadata(
+            visible_guidance=visible_guidance,
+            fixed_stage_columns={},
+        )
+
+    fixed_stage_columns: dict[str, CounterpartyStageColumnPolicy] = {}
+    for raw_stage_name, raw_policy in raw_stage_columns.items():
+        stage_name = str(raw_stage_name).strip()
+        if not stage_name or not isinstance(raw_policy, dict):
+            continue
+        policy = CounterpartyStageColumnPolicy(
+            include=_normalize_prompt_column_labels(raw_policy.get("include")),
+            exclude=_normalize_prompt_column_labels(raw_policy.get("exclude")),
+        )
+        if not policy.include and not policy.exclude:
+            continue
+        fixed_stage_columns[stage_name] = policy
+
+    return CounterpartyPromptMetadata(
+        visible_guidance=visible_guidance,
+        fixed_stage_columns=fixed_stage_columns,
+    )
+
+
+def parse_counterparty_guidance(counterparty_guidance: str | None) -> CounterpartyPromptMetadata:
+    guidance = (counterparty_guidance or "").strip()
+    if not guidance:
+        return CounterpartyPromptMetadata(visible_guidance="", fixed_stage_columns={})
+    return _parse_counterparty_prompt_metadata_cached(guidance)
 
 
 def _tokenize_counterparty_name(text: str) -> tuple[str, ...]:
@@ -216,4 +325,3 @@ def load_counterparty_guidance(
         )
         return None
     return guidance
-

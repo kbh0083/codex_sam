@@ -168,16 +168,6 @@ class ExtractionService:
                 issues=[str(exc)],
             )
 
-        base_date = next((order.base_date for order in extraction_result.orders if order.base_date), None)
-        status = STATUS_COMPLETED if extraction_result.orders else STATUS_SKIPPED
-        if extraction_result.orders:
-            reason = None
-        elif task_payload.allow_empty_result:
-            reason = "거래가 없는 문서"
-        elif task_payload.scope_excludes_all_funds:
-            reason = "대상 거래처 scope에 해당하는 주문 없음"
-        else:
-            reason = "추출된 주문 데이터 없음"
         prompt_name = resolve_counterparty_prompt_name(
             task_payload.source_path,
             document_text=task_payload.markdown_text,
@@ -187,9 +177,19 @@ class ExtractionService:
             prompt_name=prompt_name,
         )
         order_payloads = dedupe_serialized_order_payloads(order_payloads)
+        base_date = next((order.get("base_date") for order in order_payloads if order.get("base_date")), None)
+        status = STATUS_COMPLETED if order_payloads else STATUS_SKIPPED
+        if order_payloads:
+            reason = None
+        elif task_payload.allow_empty_result:
+            reason = "거래가 없는 문서"
+        elif task_payload.scope_excludes_all_funds:
+            reason = "대상 거래처 scope에 해당하는 주문 없음"
+        else:
+            reason = "추출된 주문 데이터 없음"
         logger.info(
             "Payload extraction completed: orders=%s base_date=%s issues=%s status=%s reason=%s",
-            len(extraction_result.orders),
+            len(order_payloads),
             base_date,
             extraction_result.issues,
             status,

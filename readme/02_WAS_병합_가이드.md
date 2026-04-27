@@ -3,12 +3,12 @@
 이 문서는 **현재 구현된 데이터 추출 기능을 개발 WAS 서버로 포팅할 때**,  
 `ExtractionService`를 그대로 붙이는 방식이 아니라 **queue + task handler 구조**로 옮기는 방법을 설명한다.
 
-> 2026-04-24 기준 인계 보강.
-> 최신 active handoff는 [handoff_26042401.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042401.md)다.
+> 2026-04-27 기준 인계 보강.
+> 최신 active handoff는 [handoff_26042701.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042701.md)다.
 > 공통 최신 상태와 테스트 보고 원칙은 [00_시작_안내.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/00_시작_안내.md)를 출처로 둔다.
 > 이 문서는 WAS 포팅/병합 전용 규칙만 유지한다.
 > 병합 계획서/결과보고서의 파일명, 저장 경로, canonical 정리 방식은 [06_WAS_병합_보고서_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/06_WAS_병합_보고서_가이드.md)를 따른다.
-> 최신 selective merge acceptance는 [mr0001.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260424/mr0001.md), [tt1432.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt1432.md), [tt1520.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt1520.md)를 따른다.
+> 최신 selective merge acceptance와 retained full review 기준은 [mr2024.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260424/mr2024.md), [tt2050.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2050.md)를 따른다.
 > 본문의 `2026-04-14`, `2026-04-16` 표기는 과거 stable 기준선 설명이다.
 
 먼저 범위를 분명히 하면:
@@ -85,16 +85,29 @@
 
 ## 최신 selective merge 상태 (2026-04-24)
 
-- 이번 세션 병합 범위는 `019dbd25-8ef7-7ba3-aa92-fd7726aea8c3` 세션의 HTML/MHT markdown 안정화 기능만이다.
+- 이번 세션 병합 범위는 아래 네 묶음이다.
+  - 거래처 prompt structured marker 기반 fixed-column contract
+  - `동양생명`/`한화생명`/`신한라이프` final serialized `t_day=="02"` 제거
+  - extractor LLM hardcode `temperature=0.0`, `max_tokens=16384`
+  - `동양생명`, `IBK연금보험` DB prompt sync
 - 반영된 핵심 동작:
-  - nested wrapper HTML에서도 leaf table 기준 fund row 보존
-  - `BeautifulSoup + lxml` 우선, 실패 시 regex fallback
-  - `html_markdown_audit` + `fund_code_tokens`
-  - HTML/MHT audit 미검증 시 `raw_text` fail-safe
+  - `[[COUNTERPARTY_PROMPT_META]]` block 분리와 `fixed_stage_columns` runtime wiring
+  - `동양생명` same-day `정산내역`은 `정산액`을 제외하고 `설정액`/`해지액`만 사용
+  - `IBK연금보험` same-day `정산액`은 제외하고 `설정액`/`해지액`만 사용, future `예정 정산액 기준일+N`은 유지
+  - pipeline 최종 저장도 shared output-contract dedupe 기준 사용
 - acceptance 수치:
-  - helper regression `9 passed`
-  - focused smoke `4 PASS / 0 FAIL / 0 BLOCKED`
-  - full document review `38 PASS / 0 FAIL / 0 BLOCKED`
+  - helper regression `26 passed`
+  - affected exact compare `5 PASS / 0 FAIL / 0 BLOCKED`
+  - full direct validation `38 PASS / 0 FAIL / 0 BLOCKED`
+  - pipeline smoke `2 PASS / 0 FAIL / 0 BLOCKED`
+- post-merge follow-up:
+  - latest retained WAS full review는 [tt2050.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2050.md)다.
+  - WAS deployment review에서 plain DB company name `흥국생명`이 heungkuk canonical output normalization을 타지 못할 수 있는 issue를 [output_contract.py](/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/src/app/services/variable_annuity/extract/output_contract.py)에서 수정했다.
+  - post-merge targeted helper/output-contract regression은 `27 passed`다.
+- canonical 보고서:
+  - [mr2024.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260424/mr2024.md)
+  - merge-time snapshot: [tt2024.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2024.md)
+  - latest retained full review: [tt2050.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2050.md)
 - 2026-04-20, 2026-04-21, 2026-04-16 병합 문서는 historical accepted baseline로 유지한다.
 
 ## 참고. 2026-04-14 stable 병합/검증 기준
@@ -844,7 +857,7 @@ queue 기반 WAS에서는 `ExtractionService`를 그대로 쓰지 말고,
 
 ## 2026-04-20 업데이트 메모
 
-- 현재 accepted WAS 병합 기준 보고서는 [merge_report/20260420/mr0001.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260420/mr0001.md)다.
+- 2026-04-20 당시 accepted WAS 병합 기준 보고서는 [merge_report/20260420/mr0001.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260420/mr0001.md)다.
 - 백업 manifest는 [manifest.json](/Users/bhkim/Documents/codex_prj_sam_asset/output/was_backup/was_merge_20260420_01/manifest.json)이다.
 - 이번 병합에서도 아래 운영 코드는 수정하지 않았다.
   - `src/app/common/document/parser.py`
@@ -864,58 +877,33 @@ queue 기반 WAS에서는 `ExtractionService`를 그대로 쓰지 말고,
   - `/Users/bhkim/Documents/codex_prj_sam_asset/output/debug/was_validation_20260421_01`
 - 새 테스트 실행의 최종 산출물 저장 규칙은 [03_테스트_실행_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/03_테스트_실행_가이드.md)를 따른다.
 
-## 2026-04-24 pending WAS merge
+## 2026-04-24 최신 WAS merge 메모
 
-- 2026-04-24 기준 다음 WAS 병합 대상은 메트라이프 후속이 아니라 최신 로컬 변경 묶음이다.
-- 현재 로컬 확인 사실:
-  - deterministic/unit suite `461 tests OK`
-  - latest retained live regression `22 tests OK`
-  - HTML/MHT 7건 검수 `7 PASS / 0 FAIL / 0 BLOCKED`
-  - `document` 전체 재검수 `38 PASS / 0 FAIL / 0 BLOCKED`
-  - 선별 4건 smoke `4 PASS / 0 FAIL / 0 BLOCKED`
-  - `동양생명_20260318` -> `52건`, `issues=[]`, exact same
-  - `동양생명_20260413` -> `48건`, `issues=[]`, exact same
-  - `카디프` -> `46건`, `base_date=2025-11-27`, exact same
-- 2026-04-24 full rerun에서는 JSON exact/source review는 모두 통과했고, legacy metadata-heavy answer CSV 13건만 canonical 7컬럼 계약으로 갱신했다.
-- 최신 full rerun 보고서:
-  - [tt1520.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt1520.md)
-- 이번 selective merge의 로컬 변경 범위는 아래 두 묶음으로 본다.
-  - 구조 정렬 묶음:
-    - `app/document_loader.py`
-    - `app/document_loading/`
-    - `app/document_loaders/`
-  - extractor/prompt 묶음:
-    - `app/extractor.py`
-    - `app/extraction/`
-    - `app/prompts/extraction_prompts.yaml`
-    - `app/prompts/KDB.txt`
-    - 필요 시 `app/prompts/메트라이프생명.txt`
-- 최신 correctness delta는 아래 세 가지를 기준으로 본다.
-  - KDB EML 원문 기준 정답 복구
-    - wrapper date가 final `base_date`를 선점하지 않음
-    - `t_day/order_type` guidance가 본문 표 해석 기준으로 반영됨
-  - spaced total-row 필터 보강
-    - `합 계`, `총 계`, `소 계`, `sub total`, `grand total`이 deterministic structured-markdown 경로에서 order로 승격되지 않음
-  - `DocumentLoader` facade-only refactor 완료
-    - `DocumentLoaderCommonMixin` 추가
-    - common helper가 `document_loading/common.py`로 이동
-    - standalone/facade 구조는 AST 기반 테스트로 검증
-- 외부 계약은 그대로 유지한다.
-  - `DocumentLoadTaskPayload`, 외부 payload, DB 저장 계약은 변경하지 않는다.
-- duplicate/legacy copy는 extractor core의 하드코딩 pre-skip 계약으로 옮기지 않는다. 최종 `SKIPPED`는 상위 정책, 입력, 판정 결과에서 surface되도록 유지한다.
-- metrics sidecar는 로컬 debug artifact이며, WAS 이식은 필요 여부를 보고 선택한다.
-- `parser.py`, `settings.py`, `.env`는 이번 라운드 merge 대상에서 제외한다.
-- 병합 순서는 아래로 고정한다.
-  1. 로컬 변경 범위 mirror
-  2. WAS syntax/preflight
-  3. WAS focused smoke
-  4. 필요 시 WAS full 38건 재검수
-- post-merge 검증 최소 기준은 아래 4건 smoke다.
-  1. `자금운용_해지_5440_20260316.mht`
-  2. `운용지시서_KDB_20251128.eml`
-  3. `동양생명_20260413.html`
-  4. `test.eml`
-- 위 4건은 아래 보고서를 최신 근거로 둔다.
-  - [test_report/20260423/tt1405.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260423/tt1405.md)
-- full rerun이 필요하면 아래 보고서를 기준으로 판정한다.
-  - [test_report/20260424/tt1520.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt1520.md)
+- 이번 병합은 pending 상태가 아니라 완료 상태다.
+- 병합 대상 코드는 아래로 닫혔다.
+  - `src/app/services/variable_annuity/extract/extractor.py`
+  - `src/app/services/variable_annuity/extract/output_contract.py`
+  - `src/app/services/variable_annuity/extract/extraction/*`
+  - `src/app/services/variable_annuity/extract/prompts/extraction_prompts.yaml`
+  - `src/app/services/variable_annuity/tasks/llm/pipeline.py`
+  - `tests/test_variable_annuity_extract_helpers.py`
+  - `tests/test_variable_annuity_output_contract.py`
+- DB row update는 `tb_variable_counterparties`의 아래 2건만 수행했다.
+  - `company_name='동양생명'`
+  - `company_name='IBK연금보험'`
+- preserved fields는 모두 유지했다.
+  - `use_counterparty_prompt`
+  - `only_pending`
+  - `designated_password`
+  - `delivery_type`
+- `parser.py`, `settings.py`, `.env`는 이번 라운드에서도 수정하지 않았다.
+- post-merge acceptance는 아래 5개 축으로 닫는다.
+  - helper regression `26 passed`
+  - prompt parity `2/2 match`
+  - affected exact compare `5 PASS / 0 FAIL / 0 BLOCKED`
+  - direct full validation `38 PASS / 0 FAIL / 0 BLOCKED`
+  - pipeline smoke `2 PASS / 0 FAIL / 0 BLOCKED`
+- 최신 근거 문서:
+  - [mr2024.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260424/mr2024.md)
+  - merge-time snapshot: [tt2024.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2024.md)
+  - latest retained review: [tt2050.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2050.md)

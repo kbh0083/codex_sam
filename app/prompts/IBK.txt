@@ -1,3 +1,25 @@
+[[COUNTERPARTY_PROMPT_META]]
+fixed_stage_columns:
+  t_day:
+    include:
+      - 설정액
+      - 해지액
+      - 예정 정산액 기준일+1
+      - 예정 정산액 기준일+2
+      - 예정 정산액 기준일+3
+    exclude:
+      - 정산액
+  transfer_amount:
+    include:
+      - 설정액
+      - 해지액
+      - 예정 정산액 기준일+1
+      - 예정 정산액 기준일+2
+      - 예정 정산액 기준일+3
+    exclude:
+      - 정산액
+[[/COUNTERPARTY_PROMPT_META]]
+
 This document is from IBK Pension Insurance.
 
 Document structure
@@ -7,6 +29,8 @@ Document structure
 - The key columns are:
   - "펀드명"
   - "운용사"
+  - "설정액"
+  - "해지액"
   - "정산액"
   - "예정 정산액 기준일+1"
   - "예정 정산액 기준일+2"
@@ -14,20 +38,26 @@ Document structure
   - "펀드코드"
 
 Transaction rules
-- Treat "정산액" as one same-day T0 net slot for that row.
+- Treat same-day "설정액" and "해지액" as explicit same-day T0 direction slots for that row.
+- Treat "정산액" only as a reference total. Do not use "정산액" as slot or transfer_amount evidence.
 - Treat "예정 정산액 기준일+1", "예정 정산액 기준일+2", and "예정 정산액 기준일+3" as future net slots for T+1, T+2, and T+3 respectively.
-- Use only the net amount columns "정산액" and "예정 정산액 기준일+N" as order evidence for this format.
-- Do not emit any separate T0 or future SUB/RED orders from side columns such as "설정액" and "해지액", even when "정산액" is blank.
+- Use "설정액" and "해지액" as the only same-day order evidence for this format.
+- Keep using future net amount columns "예정 정산액 기준일+N" as the future order evidence for this format.
 - Determine order_type from the sign of the selected net amount:
   - negative = RED
   - positive = SUB
-- Classify "정산액" as CONFIRMED internally.
+- Determine same-day order_type from the source amount column:
+  - "설정액" = SUB
+  - "해지액" = RED
+- Classify same-day "설정액" and "해지액" slots as CONFIRMED internally.
 - Classify every "예정 정산액 기준일+N" slot as PENDING internally.
-- Ignore any row whose "정산액" and every visible future scheduled amount are 0, blank, or "-".
+- If one same-day direction column is 0, blank, or "-", emit only the surviving non-zero same-day direction.
+- If both same-day direction columns are non-zero, emit both same-day directions.
+- Ignore any row whose same-day "설정액", same-day "해지액", and every visible future scheduled amount are 0, blank, or "-".
 
 Field handling
 - Use the printed "펀드코드" and "펀드명" values as they appear in the document.
-- Preserve the exact numeric string from the selected net amount cell.
+- Preserve the exact numeric string from the selected evidence cell.
 - Do not invent extra funds, extra slots, or separate same-day direction rows that are not directly supported by the document.
 
 Output discipline

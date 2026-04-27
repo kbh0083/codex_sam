@@ -210,6 +210,80 @@ class _FakeOnlyPendingEmptyAfterFilterExtractor:
         )
 
 
+class _FakeCounterpartyTDayFilterExtractor:
+    """거래처별 외부계약에서 serialized t_day=02 row를 제거하는지 검증한다."""
+
+    def extract_from_task_payload(
+        self,
+        task_payload: DocumentLoadTaskPayload,
+        *,
+        counterparty_guidance: str | None = None,
+        extract_log_path: Path | None = None,
+    ) -> LLMExtractionOutcome:
+        return LLMExtractionOutcome(
+            result=ExtractionResult(
+                orders=[
+                    OrderExtraction(
+                        fund_code="F001",
+                        fund_name="Alpha",
+                        settle_class=SettleClass.PENDING,
+                        order_type=OrderType.SUB,
+                        base_date="2026-03-16",
+                        t_day=0,
+                        transfer_amount="100",
+                    ),
+                    OrderExtraction(
+                        fund_code="F002",
+                        fund_name="Beta",
+                        settle_class=SettleClass.PENDING,
+                        order_type=OrderType.SUB,
+                        base_date="2026-03-17",
+                        t_day=1,
+                        transfer_amount="200",
+                    ),
+                    OrderExtraction(
+                        fund_code="F003",
+                        fund_name="Gamma",
+                        settle_class=SettleClass.PENDING,
+                        order_type=OrderType.SUB,
+                        base_date="2026-03-18",
+                        t_day=2,
+                        transfer_amount="300",
+                    ),
+                ],
+                issues=[],
+            )
+        )
+
+
+class _FakeCounterpartyTDayFilterEmptyExtractor:
+    """거래처별 output policy 적용 후 최종 row가 0건이 되는 경로를 검증한다."""
+
+    def extract_from_task_payload(
+        self,
+        task_payload: DocumentLoadTaskPayload,
+        *,
+        counterparty_guidance: str | None = None,
+        extract_log_path: Path | None = None,
+    ) -> LLMExtractionOutcome:
+        return LLMExtractionOutcome(
+            result=ExtractionResult(
+                orders=[
+                    OrderExtraction(
+                        fund_code="F002",
+                        fund_name="Beta",
+                        settle_class=SettleClass.PENDING,
+                        order_type=OrderType.SUB,
+                        base_date="2026-03-17",
+                        t_day=1,
+                        transfer_amount="200",
+                    )
+                ],
+                issues=["ORDER_COVERAGE_ESTIMATE_MISMATCH"],
+            )
+        )
+
+
 class _FakeExtractionOutcomeErrorExtractor:
     """실제 추출 실패를 FAILED payload로 정규화하는지 검증하는 fake extractor."""
 
@@ -456,6 +530,47 @@ class ExtractionComponentTests(unittest.TestCase):
             )
 
         self.assertEqual(payload["status"], "SKIPPED")
+        self.assertEqual(payload["orders"], [])
+        self.assertEqual(payload["reason"], "추출된 주문 데이터 없음")
+        self.assertEqual(payload["issues"], ["ORDER_COVERAGE_ESTIMATE_MISMATCH"])
+
+    def test_extract_document_payload_filters_counterparty_t_day_02_rows_in_final_output(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            temp_root = Path(tmp_dir)
+            (temp_root / "동양생명_20260318.html").write_text("dummy", encoding="utf-8")
+            component = ExtractionComponent(
+                settings=replace(get_settings(), document_input_dir=temp_root),
+                document_loader=_FakeDocumentLoader(),
+                extractor=_FakeCounterpartyTDayFilterExtractor(),
+            )
+
+            payload = component.extract_document_payload(
+                DocumentExtractionRequest("동양생명_20260318.html"),
+                handoff_dir=temp_root / "handoff",
+            )
+
+        self.assertEqual(payload["status"], "COMPLETED")
+        self.assertEqual(payload["base_date"], "2026-03-16")
+        self.assertEqual([order["fund_code"] for order in payload["orders"]], ["F001", "F003"])
+        self.assertEqual([order["t_day"] for order in payload["orders"]], ["01", "03"])
+
+    def test_extract_document_payload_marks_counterparty_filtered_zero_rows_as_skipped(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            temp_root = Path(tmp_dir)
+            (temp_root / "신한라이프_251127_20260116_212233.pdf").write_text("dummy", encoding="utf-8")
+            component = ExtractionComponent(
+                settings=replace(get_settings(), document_input_dir=temp_root),
+                document_loader=_FakeDocumentLoader(),
+                extractor=_FakeCounterpartyTDayFilterEmptyExtractor(),
+            )
+
+            payload = component.extract_document_payload(
+                DocumentExtractionRequest("신한라이프_251127_20260116_212233.pdf"),
+                handoff_dir=temp_root / "handoff",
+            )
+
+        self.assertEqual(payload["status"], "SKIPPED")
+        self.assertIsNone(payload["base_date"])
         self.assertEqual(payload["orders"], [])
         self.assertEqual(payload["reason"], "추출된 주문 데이터 없음")
         self.assertEqual(payload["issues"], ["ORDER_COVERAGE_ESTIMATE_MISMATCH"])

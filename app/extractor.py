@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 import json
 import logging
 import re
 import time
-from contextvars import copy_context
+from contextvars import ContextVar, copy_context
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from threading import RLock
@@ -22,6 +23,7 @@ from app.amount_normalization import canonicalize_transfer_amount, format_source
 from app.config import Settings
 from app.document_loader import DocumentLoadTaskPayload, DocumentLoader, TargetFundScope, normalize_fund_name_key
 from app.schemas import ExtractionResult, OrderExtraction, OrderType, SettleClass
+from app.extraction.counterparty import CounterpartyPromptMetadata, CounterpartyStageColumnPolicy, parse_counterparty_guidance
 from app.extraction.constants import (
     BLOCKING_EXTRACTION_ISSUES,
     INSTRUCTION_DOCUMENT_STAGE_ISSUE_RETRY_ATTEMPTS,
@@ -89,6 +91,10 @@ from app.extraction.telemetry import (
 )
 
 logger = logging.getLogger(__name__)
+_ACTIVE_COUNTERPARTY_PROMPT_METADATA: ContextVar[CounterpartyPromptMetadata | None] = ContextVar(
+    "active_counterparty_prompt_metadata",
+    default=None,
+)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -196,145 +202,334 @@ class FundOrderExtractor:
         if not chunks:
             return LLMExtractionOutcome(result=ExtractionResult(issues=["DOCUMENT_EMPTY"]))
 
-        logger.info("Starting staged LLM extraction for %s chunk(s)", len(chunks))
-        full_text = self._compose_document_context(
-            primary_text="\n\n==== SECTION ====\n\n".join(chunk for chunk in chunks if chunk.strip()).strip(),
-            raw_text=raw_text,
-        )
-        structured_markdown_text = None if markdown_loss_detected else (markdown_text or self._structured_markdown_view(full_text))
-        issues: list[str] = []
-        artifacts: list[InvalidResponseArtifact] = []
-
-        is_instruction_document, non_instruction_reason = self._classify_instruction_document(
-            prompt_bundle=prompt_bundle,
-            document_text=full_text,
-            artifacts=artifacts,
-            counterparty_guidance=counterparty_guidance,
-        )
-        if is_instruction_document is False:
-            issue = "DOCUMENT_NOT_INSTRUCTION"
-            if non_instruction_reason:
-                issue = f"{issue}: {non_instruction_reason}"
-            self._append_unique(issues, issue)
-            logger.info("Document was classified as non-instruction by LLM: %s", non_instruction_reason or "no reason")
-            return LLMExtractionOutcome(
-                result=ExtractionResult(issues=self._unique_preserve_order(issues)),
-                invalid_response_artifacts=artifacts,
+        with self._activate_counterparty_prompt_metadata(counterparty_guidance):
+            logger.info("Starting staged LLM extraction for %s chunk(s)", len(chunks))
+            full_text = self._compose_document_context(
+                primary_text="\n\n==== SECTION ====\n\n".join(chunk for chunk in chunks if chunk.strip()).strip(),
+                raw_text=raw_text,
             )
+            structured_markdown_text = None if markdown_loss_detected else (markdown_text or self._structured_markdown_view(full_text))
+            issues: list[str] = []
+            artifacts: list[InvalidResponseArtifact] = []
 
-        # fund inventory stage는 chunk 단위로 수행한다. 문서 전체를 다 본 결과가 필요해서
-        # chunk별 seed 를 모은 뒤 dedupe 한다. 그 다음에는 target_fund_scope 필터와
-        # structured markdown 기반 deterministic seed augmentation 을 연달아 적용해,
-        # 한쪽 금액만 0인 라이나 row 같은 seed 누락을 줄인다.
-        seeds = self._extract_fund_seeds(
-            prompt_bundle,
-            chunks,
-            raw_text,
-            issues,
-            artifacts,
-            target_fund_scope=target_fund_scope,
-            counterparty_guidance=counterparty_guidance,
-        )
-        seeds = self._filter_fund_seeds_by_scope(seeds, target_fund_scope)
-        if not markdown_loss_detected:
-            seeds = self._augment_fund_seeds_from_document(
+            is_instruction_document, non_instruction_reason = self._classify_instruction_document(
+                prompt_bundle=prompt_bundle,
                 document_text=full_text,
+                artifacts=artifacts,
+                counterparty_guidance=counterparty_guidance,
+            )
+            if is_instruction_document is False:
+                issue = "DOCUMENT_NOT_INSTRUCTION"
+                if non_instruction_reason:
+                    issue = f"{issue}: {non_instruction_reason}"
+                self._append_unique(issues, issue)
+                logger.info("Document was classified as non-instruction by LLM: %s", non_instruction_reason or "no reason")
+                return LLMExtractionOutcome(
+                    result=ExtractionResult(issues=self._unique_preserve_order(issues)),
+                    invalid_response_artifacts=artifacts,
+                )
+
+            # fund inventory stage는 chunk 단위로 수행한다. 문서 전체를 다 본 결과가 필요해서
+            # chunk별 seed 를 모은 뒤 dedupe 한다. 그 다음에는 target_fund_scope 필터와
+            # structured markdown 기반 deterministic seed augmentation 을 연달아 적용해,
+            # 한쪽 금액만 0인 라이나 row 같은 seed 누락을 줄인다.
+            seeds = self._extract_fund_seeds(
+                prompt_bundle,
+                chunks,
+                raw_text,
+                issues,
+                artifacts,
+                target_fund_scope=target_fund_scope,
+                counterparty_guidance=counterparty_guidance,
+            )
+            seeds = self._filter_fund_seeds_by_scope(seeds, target_fund_scope)
+            if not markdown_loss_detected:
+                seeds = self._augment_fund_seeds_from_document(
+                    document_text=full_text,
+                    seeds=seeds,
+                    target_fund_scope=target_fund_scope,
+                )
+            if not seeds:
+                direct_result = self._recover_direct_orders_from_document(
+                    document_text=full_text,
+                    issues=issues,
+                    target_fund_scope=target_fund_scope,
+                )
+                if direct_result is not None:
+                    return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
+                self._append_unique(issues, "FUND_DISCOVERY_EMPTY")
+                return LLMExtractionOutcome(
+                    result=ExtractionResult(issues=self._unique_preserve_order(issues)),
+                    invalid_response_artifacts=artifacts,
+                )
+            logger.info("Stage %s completed: discovered %s unique fund(s)", self._stage(prompt_bundle, "fund_inventory").number, len(seeds))
+
+            base_date_stage = self._stage(prompt_bundle, "base_date")
+            base_dates = self._resolve_document_base_date_for_seeds(
+                prompt_bundle=prompt_bundle,
+                base_date_stage=base_date_stage,
                 seeds=seeds,
-                target_fund_scope=target_fund_scope,
-            )
-        if not seeds:
-            direct_result = self._recover_direct_orders_from_document(
                 document_text=full_text,
-                issues=issues,
-                target_fund_scope=target_fund_scope,
-            )
-            if direct_result is not None:
-                return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
-            self._append_unique(issues, "FUND_DISCOVERY_EMPTY")
-            return LLMExtractionOutcome(result=ExtractionResult(issues=self._unique_preserve_order(issues)), invalid_response_artifacts=artifacts)
-        logger.info("Stage %s completed: discovered %s unique fund(s)", self._stage(prompt_bundle, "fund_inventory").number, len(seeds))
-
-        base_date_stage = self._stage(prompt_bundle, "base_date")
-        base_dates = self._resolve_document_base_date_for_seeds(
-            prompt_bundle=prompt_bundle,
-            base_date_stage=base_date_stage,
-            seeds=seeds,
-            document_text=full_text,
-            raw_text=raw_text,
-            artifacts=artifacts,
-            counterparty_guidance=counterparty_guidance,
-        )
-        if base_dates is None:
-            logger.info("Falling back to legacy per-fund base_date batches")
-            # base_date~order_type stage는 "문서 전체 + 이전 단계 결과 batch" 형태로 수행한다.
-            # 문서 전체 문맥은 유지하되, input_items 수를 제한해서 token 폭주와 응답 누락을 막는다.
-            base_dates = self._run_batched_stage(
-                prompt_bundle=prompt_bundle,
-                stage=base_date_stage,
-                document_text=full_text,
-                input_items=[item.model_dump(mode="json") for item in seeds],
-                response_model=FundBaseDateResult,
-                issues=issues,
+                raw_text=raw_text,
                 artifacts=artifacts,
                 counterparty_guidance=counterparty_guidance,
             )
-        if not base_dates:
-            direct_result = self._recover_direct_orders_from_document(
-                document_text=full_text,
-                issues=issues,
-                target_fund_scope=target_fund_scope,
-            )
-            if direct_result is not None:
-                return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
-            return LLMExtractionOutcome(result=ExtractionResult(issues=self._unique_preserve_order(issues)), invalid_response_artifacts=artifacts)
-        logger.info("Stage %s completed: resolved %s base-date item(s)", base_date_stage.number, len(base_dates))
+            if base_dates is None:
+                logger.info("Falling back to legacy per-fund base_date batches")
+                # base_date~order_type stage는 "문서 전체 + 이전 단계 결과 batch" 형태로 수행한다.
+                # 문서 전체 문맥은 유지하되, input_items 수를 제한해서 token 폭주와 응답 누락을 막는다.
+                base_dates = self._run_batched_stage(
+                    prompt_bundle=prompt_bundle,
+                    stage=base_date_stage,
+                    document_text=full_text,
+                    input_items=[item.model_dump(mode="json") for item in seeds],
+                    response_model=FundBaseDateResult,
+                    issues=issues,
+                    artifacts=artifacts,
+                    counterparty_guidance=counterparty_guidance,
+                )
+            if not base_dates:
+                direct_result = self._recover_direct_orders_from_document(
+                    document_text=full_text,
+                    issues=issues,
+                    target_fund_scope=target_fund_scope,
+                )
+                if direct_result is not None:
+                    return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
+                return LLMExtractionOutcome(
+                    result=ExtractionResult(issues=self._unique_preserve_order(issues)),
+                    invalid_response_artifacts=artifacts,
+                )
+            logger.info("Stage %s completed: resolved %s base-date item(s)", base_date_stage.number, len(base_dates))
 
-        structure_shortcut_orders = self._build_structure_shortcut_orders_after_base_date(
-            base_dates=base_dates,
-            raw_text=raw_text or full_text,
-            markdown_text=structured_markdown_text,
-            target_fund_scope=target_fund_scope,
-            expected_order_count=expected_order_count,
-        )
-        if structure_shortcut_orders:
-            result = ExtractionResult(
-                orders=self._filter_orders_by_scope(structure_shortcut_orders, target_fund_scope),
-                issues=self._unique_preserve_order(list(issues)),
-            )
-            self._reconcile_final_issues(
-                [],
-                result,
-                markdown_text=structured_markdown_text,
-                document_text=full_text,
-                raw_text=raw_text,
-                target_fund_scope=target_fund_scope,
-                expected_order_count=expected_order_count,
-            )
-            logger.info(
-                "Recovered extraction from structure shortcut after base_date: orders=%s issues=%s",
-                len(result.orders),
-                result.issues,
-            )
-            return LLMExtractionOutcome(result=result, invalid_response_artifacts=artifacts)
-
-        markdown_shortcut_orders: list[OrderExtraction] = []
-        if structured_markdown_text:
-            markdown_shortcut_orders = self._build_markdown_shortcut_orders_after_base_date(
+            structure_shortcut_orders = self._build_structure_shortcut_orders_after_base_date(
                 base_dates=base_dates,
-                markdown_text=structured_markdown_text,
                 raw_text=raw_text or full_text,
+                markdown_text=structured_markdown_text,
                 target_fund_scope=target_fund_scope,
                 expected_order_count=expected_order_count,
             )
-        if markdown_shortcut_orders:
-            shortcut_issues = self._remove_issues_by_code(list(issues), "DUPLICATE_FUND_CODE_IN_OUTPUT")
-            shortcut_issues = self._remove_issues_by_code(shortcut_issues, "AMBIGUOUS_PENDING_DATE_IN_BIGO")
-            result = ExtractionResult(
-                orders=self._filter_orders_by_scope(markdown_shortcut_orders, target_fund_scope),
-                issues=self._unique_preserve_order(shortcut_issues),
+            if structure_shortcut_orders:
+                result = ExtractionResult(
+                    orders=self._filter_orders_by_scope(structure_shortcut_orders, target_fund_scope),
+                    issues=self._unique_preserve_order(list(issues)),
+                )
+                self._reconcile_final_issues(
+                    [],
+                    result,
+                    markdown_text=structured_markdown_text,
+                    document_text=full_text,
+                    raw_text=raw_text,
+                    target_fund_scope=target_fund_scope,
+                    expected_order_count=expected_order_count,
+                )
+                logger.info(
+                    "Recovered extraction from structure shortcut after base_date: orders=%s issues=%s",
+                    len(result.orders),
+                    result.issues,
+                )
+                return LLMExtractionOutcome(result=result, invalid_response_artifacts=artifacts)
+
+            markdown_shortcut_orders: list[OrderExtraction] = []
+            if structured_markdown_text:
+                markdown_shortcut_orders = self._build_markdown_shortcut_orders_after_base_date(
+                    base_dates=base_dates,
+                    markdown_text=structured_markdown_text,
+                    raw_text=raw_text or full_text,
+                    target_fund_scope=target_fund_scope,
+                    expected_order_count=expected_order_count,
+                )
+            if markdown_shortcut_orders:
+                shortcut_issues = self._remove_issues_by_code(list(issues), "DUPLICATE_FUND_CODE_IN_OUTPUT")
+                shortcut_issues = self._remove_issues_by_code(shortcut_issues, "AMBIGUOUS_PENDING_DATE_IN_BIGO")
+                result = ExtractionResult(
+                    orders=self._filter_orders_by_scope(markdown_shortcut_orders, target_fund_scope),
+                    issues=self._unique_preserve_order(shortcut_issues),
+                )
+                self._reconcile_final_issues(
+                    [],
+                    result,
+                    markdown_text=structured_markdown_text,
+                    document_text=full_text,
+                    raw_text=raw_text,
+                    target_fund_scope=target_fund_scope,
+                    expected_order_count=expected_order_count,
+                )
+                logger.info(
+                    "Recovered extraction from markdown shortcut after base_date: orders=%s issues=%s",
+                    len(result.orders),
+                    result.issues,
+                )
+                return LLMExtractionOutcome(result=result, invalid_response_artifacts=artifacts)
+
+            t_day_stage = self._stage(prompt_bundle, "t_day")
+            slots = self._run_batched_stage(
+                prompt_bundle=prompt_bundle,
+                stage=t_day_stage,
+                document_text=full_text,
+                input_items=[item.model_dump(mode="json") for item in base_dates],
+                response_model=FundSlotResult,
+                issues=issues,
+                artifacts=artifacts,
+                counterparty_guidance=counterparty_guidance,
             )
+            slots = self._augment_t_day_items_from_document(
+                document_text=full_text,
+                input_items=[item.model_dump(mode="json") for item in base_dates],
+                output_items=slots,
+            )
+            slots = self._replace_incomplete_t_day_items_with_deterministic_document_slots(
+                document_text=full_text,
+                input_items=[item.model_dump(mode="json") for item in base_dates],
+                output_items=slots,
+            )
+            slots, forced_t_day_issues = self._reconcile_t_day_stage_output(
+                document_text=full_text,
+                input_items=[item.model_dump(mode="json") for item in base_dates],
+                output_items=slots,
+            )
+            for issue in forced_t_day_issues:
+                self._append_unique(issues, issue)
+            if slots and self._t_day_document_slots_are_complete(
+                document_text=full_text,
+                input_items=[item.model_dump(mode="json") for item in base_dates],
+                output_items=slots,
+            ):
+                issues = self._remove_issues_by_code(issues, "T_DAY_MISSING")
+                issues = self._remove_issues_by_code(issues, "T_DAY_STAGE_PARTIAL")
+            if not slots:
+                direct_result = self._recover_direct_orders_from_document(
+                    document_text=full_text,
+                    issues=issues,
+                    target_fund_scope=target_fund_scope,
+                )
+                if direct_result is not None:
+                    return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
+                self._append_unique(issues, "TRANSACTION_SLOT_EMPTY")
+                return LLMExtractionOutcome(
+                    result=ExtractionResult(issues=self._unique_preserve_order(issues)),
+                    invalid_response_artifacts=artifacts,
+                )
+            logger.info("Stage %s completed: resolved %s slot(s)", t_day_stage.number, len(slots))
+
+            transfer_amount_stage = self._stage(prompt_bundle, "transfer_amount")
+            amounts = self._run_batched_stage(
+                prompt_bundle=prompt_bundle,
+                stage=transfer_amount_stage,
+                document_text=full_text,
+                input_items=[item.model_dump(mode="json") for item in slots],
+                response_model=FundAmountResult,
+                issues=issues,
+                artifacts=artifacts,
+                counterparty_guidance=counterparty_guidance,
+            )
+            amounts = self._post_validate_transfer_amount_items(amounts)
+            amounts = self._reconcile_transfer_amount_items_with_document_amounts(
+                document_text=full_text,
+                raw_text=raw_text or full_text,
+                output_items=amounts,
+                target_fund_scope=target_fund_scope,
+            )
+            if not amounts:
+                direct_result = self._recover_direct_orders_from_document(
+                    document_text=full_text,
+                    issues=issues,
+                    target_fund_scope=target_fund_scope,
+                )
+                if direct_result is not None:
+                    return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
+                self._append_unique(issues, "TRANSFER_AMOUNT_EMPTY")
+                return LLMExtractionOutcome(
+                    result=ExtractionResult(issues=self._unique_preserve_order(issues)),
+                    invalid_response_artifacts=artifacts,
+                )
+            amounts = self._drop_zero_amount_stage_items(amounts, stage_name="settle_class")
+            if not amounts:
+                direct_result = self._recover_direct_orders_from_document(
+                    document_text=full_text,
+                    issues=issues,
+                    target_fund_scope=target_fund_scope,
+                )
+                if direct_result is not None:
+                    return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
+                self._append_unique(issues, "TRANSFER_AMOUNT_EMPTY")
+                return LLMExtractionOutcome(
+                    result=ExtractionResult(issues=self._unique_preserve_order(issues)),
+                    invalid_response_artifacts=artifacts,
+                )
+            logger.info("Stage %s completed: resolved %s amount item(s)", transfer_amount_stage.number, len(amounts))
+
+            settle_class_stage = self._stage(prompt_bundle, "settle_class")
+            deterministic_settle_items = self._build_deterministic_settle_items_from_amount_items(amounts)
+            if deterministic_settle_items is not None:
+                settle_items = deterministic_settle_items
+                logger.info(
+                    "Recovered settle_class for %s item(s) deterministically from amount items; skipped Stage %s LLM batches",
+                    len(settle_items),
+                    settle_class_stage.number,
+                )
+            else:
+                settle_items = self._run_batched_stage(
+                    prompt_bundle=prompt_bundle,
+                    stage=settle_class_stage,
+                    document_text=full_text,
+                    input_items=[item.model_dump(mode="json") for item in amounts],
+                    response_model=FundSettleResult,
+                    issues=issues,
+                    artifacts=artifacts,
+                    counterparty_guidance=counterparty_guidance,
+                )
+            if not settle_items:
+                direct_result = self._recover_direct_orders_from_document(
+                    document_text=full_text,
+                    issues=issues,
+                    target_fund_scope=target_fund_scope,
+                )
+                if direct_result is not None:
+                    return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
+                self._append_unique(issues, "SETTLE_CLASS_EMPTY")
+                return LLMExtractionOutcome(
+                    result=ExtractionResult(issues=self._unique_preserve_order(issues)),
+                    invalid_response_artifacts=artifacts,
+                )
+            logger.info("Stage %s completed: resolved %s settle item(s)", settle_class_stage.number, len(settle_items))
+
+            order_type_stage = self._stage(prompt_bundle, "order_type")
+            deterministic_resolved_items = self._build_deterministic_resolved_items_from_settle_items(
+                settle_items,
+                document_text=full_text,
+                raw_text=raw_text,
+                target_fund_scope=target_fund_scope,
+            )
+            if deterministic_resolved_items is not None:
+                resolved_items = deterministic_resolved_items
+                logger.info(
+                    "Recovered order_type for %s item(s) deterministically from settle items; skipped Stage %s LLM batches",
+                    len(resolved_items),
+                    order_type_stage.number,
+                )
+            else:
+                resolved_items = self._run_batched_stage(
+                    prompt_bundle=prompt_bundle,
+                    stage=order_type_stage,
+                    document_text=full_text,
+                    input_items=[item.model_dump(mode="json") for item in settle_items],
+                    response_model=FundResolvedResult,
+                    issues=issues,
+                    artifacts=artifacts,
+                    counterparty_guidance=counterparty_guidance,
+                )
+                resolved_items = self._replace_incomplete_order_type_items_with_deterministic_values(
+                    input_items=settle_items,
+                    output_items=resolved_items,
+                )
+            logger.info("Stage %s completed: resolved %s final item(s)", order_type_stage.number, len(resolved_items))
+
+            # 여기부터는 LLM 결과를 바로 믿지 않고, 결정론적 후처리로 최종 domain order 를 만든다.
+            result = self._build_result(resolved_items, issues, document_text=full_text)
+            result.orders = self._filter_orders_by_scope(result.orders, target_fund_scope)
             self._reconcile_final_issues(
-                [],
+                resolved_items,
                 result,
                 markdown_text=structured_markdown_text,
                 document_text=full_text,
@@ -342,178 +537,32 @@ class FundOrderExtractor:
                 target_fund_scope=target_fund_scope,
                 expected_order_count=expected_order_count,
             )
-            logger.info(
-                "Recovered extraction from markdown shortcut after base_date: orders=%s issues=%s",
-                len(result.orders),
-                result.issues,
-            )
+            logger.info("Staged LLM extraction finished: orders=%s issues=%s", len(result.orders), result.issues)
             return LLMExtractionOutcome(result=result, invalid_response_artifacts=artifacts)
 
-        t_day_stage = self._stage(prompt_bundle, "t_day")
-        slots = self._run_batched_stage(
-            prompt_bundle=prompt_bundle,
-            stage=t_day_stage,
-            document_text=full_text,
-            input_items=[item.model_dump(mode="json") for item in base_dates],
-            response_model=FundSlotResult,
-            issues=issues,
-            artifacts=artifacts,
-            counterparty_guidance=counterparty_guidance,
-        )
-        slots = self._augment_t_day_items_from_document(
-            document_text=full_text,
-            input_items=[item.model_dump(mode="json") for item in base_dates],
-            output_items=slots,
-        )
-        slots = self._replace_incomplete_t_day_items_with_deterministic_document_slots(
-            document_text=full_text,
-            input_items=[item.model_dump(mode="json") for item in base_dates],
-            output_items=slots,
-        )
-        slots, forced_t_day_issues = self._reconcile_t_day_stage_output(
-            document_text=full_text,
-            input_items=[item.model_dump(mode="json") for item in base_dates],
-            output_items=slots,
-        )
-        for issue in forced_t_day_issues:
-            self._append_unique(issues, issue)
-        if slots and self._t_day_document_slots_are_complete(
-            document_text=full_text,
-            input_items=[item.model_dump(mode="json") for item in base_dates],
-            output_items=slots,
-        ):
-            issues = self._remove_issues_by_code(issues, "T_DAY_MISSING")
-            issues = self._remove_issues_by_code(issues, "T_DAY_STAGE_PARTIAL")
-        if not slots:
-            direct_result = self._recover_direct_orders_from_document(
-                document_text=full_text,
-                issues=issues,
-                target_fund_scope=target_fund_scope,
-            )
-            if direct_result is not None:
-                return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
-            self._append_unique(issues, "TRANSACTION_SLOT_EMPTY")
-            return LLMExtractionOutcome(result=ExtractionResult(issues=self._unique_preserve_order(issues)), invalid_response_artifacts=artifacts)
-        logger.info("Stage %s completed: resolved %s slot(s)", t_day_stage.number, len(slots))
+    def _counterparty_adjusted_expected_order_count(
+        self,
+        *,
+        task_payload: DocumentLoadTaskPayload,
+        counterparty_guidance: str | None,
+    ) -> int:
+        metadata = parse_counterparty_guidance(counterparty_guidance)
+        if not metadata.fixed_stage_columns:
+            return task_payload.expected_order_count
+        if not task_payload.markdown_text:
+            return task_payload.expected_order_count
 
-        transfer_amount_stage = self._stage(prompt_bundle, "transfer_amount")
-        amounts = self._run_batched_stage(
-            prompt_bundle=prompt_bundle,
-            stage=transfer_amount_stage,
-            document_text=full_text,
-            input_items=[item.model_dump(mode="json") for item in slots],
-            response_model=FundAmountResult,
-            issues=issues,
-            artifacts=artifacts,
-            counterparty_guidance=counterparty_guidance,
-        )
-        amounts = self._post_validate_transfer_amount_items(amounts)
-        amounts = self._reconcile_transfer_amount_items_with_document_amounts(
-            document_text=full_text,
-            raw_text=raw_text or full_text,
-            output_items=amounts,
-            target_fund_scope=target_fund_scope,
-        )
-        if not amounts:
-            direct_result = self._recover_direct_orders_from_document(
-                document_text=full_text,
-                issues=issues,
-                target_fund_scope=target_fund_scope,
+        with self._activate_counterparty_prompt_metadata(counterparty_guidance):
+            deterministic_orders = self._dedupe_orders_by_signature(
+                self._build_deterministic_markdown_orders(
+                    markdown_text=task_payload.markdown_text,
+                    raw_text=task_payload.raw_text,
+                    target_fund_scope=task_payload.target_fund_scope,
+                )
             )
-            if direct_result is not None:
-                return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
-            self._append_unique(issues, "TRANSFER_AMOUNT_EMPTY")
-            return LLMExtractionOutcome(result=ExtractionResult(issues=self._unique_preserve_order(issues)), invalid_response_artifacts=artifacts)
-        amounts = self._drop_zero_amount_stage_items(amounts, stage_name="settle_class")
-        if not amounts:
-            direct_result = self._recover_direct_orders_from_document(
-                document_text=full_text,
-                issues=issues,
-                target_fund_scope=target_fund_scope,
-            )
-            if direct_result is not None:
-                return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
-            self._append_unique(issues, "TRANSFER_AMOUNT_EMPTY")
-            return LLMExtractionOutcome(result=ExtractionResult(issues=self._unique_preserve_order(issues)), invalid_response_artifacts=artifacts)
-        logger.info("Stage %s completed: resolved %s amount item(s)", transfer_amount_stage.number, len(amounts))
-
-        settle_class_stage = self._stage(prompt_bundle, "settle_class")
-        deterministic_settle_items = self._build_deterministic_settle_items_from_amount_items(amounts)
-        if deterministic_settle_items is not None:
-            settle_items = deterministic_settle_items
-            logger.info(
-                "Recovered settle_class for %s item(s) deterministically from amount items; skipped Stage %s LLM batches",
-                len(settle_items),
-                settle_class_stage.number,
-            )
-        else:
-            settle_items = self._run_batched_stage(
-                prompt_bundle=prompt_bundle,
-                stage=settle_class_stage,
-                document_text=full_text,
-                input_items=[item.model_dump(mode="json") for item in amounts],
-                response_model=FundSettleResult,
-                issues=issues,
-                artifacts=artifacts,
-                counterparty_guidance=counterparty_guidance,
-            )
-        if not settle_items:
-            direct_result = self._recover_direct_orders_from_document(
-                document_text=full_text,
-                issues=issues,
-                target_fund_scope=target_fund_scope,
-            )
-            if direct_result is not None:
-                return LLMExtractionOutcome(result=direct_result, invalid_response_artifacts=artifacts)
-            self._append_unique(issues, "SETTLE_CLASS_EMPTY")
-            return LLMExtractionOutcome(result=ExtractionResult(issues=self._unique_preserve_order(issues)), invalid_response_artifacts=artifacts)
-        logger.info("Stage %s completed: resolved %s settle item(s)", settle_class_stage.number, len(settle_items))
-
-        order_type_stage = self._stage(prompt_bundle, "order_type")
-        deterministic_resolved_items = self._build_deterministic_resolved_items_from_settle_items(
-            settle_items,
-            document_text=full_text,
-            raw_text=raw_text,
-            target_fund_scope=target_fund_scope,
-        )
-        if deterministic_resolved_items is not None:
-            resolved_items = deterministic_resolved_items
-            logger.info(
-                "Recovered order_type for %s item(s) deterministically from settle items; skipped Stage %s LLM batches",
-                len(resolved_items),
-                order_type_stage.number,
-            )
-        else:
-            resolved_items = self._run_batched_stage(
-                prompt_bundle=prompt_bundle,
-                stage=order_type_stage,
-                document_text=full_text,
-                input_items=[item.model_dump(mode="json") for item in settle_items],
-                response_model=FundResolvedResult,
-                issues=issues,
-                artifacts=artifacts,
-                counterparty_guidance=counterparty_guidance,
-            )
-            resolved_items = self._replace_incomplete_order_type_items_with_deterministic_values(
-                input_items=settle_items,
-                output_items=resolved_items,
-            )
-        logger.info("Stage %s completed: resolved %s final item(s)", order_type_stage.number, len(resolved_items))
-
-        # 여기부터는 LLM 결과를 바로 믿지 않고, 결정론적 후처리로 최종 domain order 를 만든다.
-        result = self._build_result(resolved_items, issues, document_text=full_text)
-        result.orders = self._filter_orders_by_scope(result.orders, target_fund_scope)
-        self._reconcile_final_issues(
-            resolved_items,
-            result,
-            markdown_text=structured_markdown_text,
-            document_text=full_text,
-            raw_text=raw_text,
-            target_fund_scope=target_fund_scope,
-            expected_order_count=expected_order_count,
-        )
-        logger.info("Staged LLM extraction finished: orders=%s issues=%s", len(result.orders), result.issues)
-        return LLMExtractionOutcome(result=result, invalid_response_artifacts=artifacts)
+        if not deterministic_orders:
+            return task_payload.expected_order_count
+        return len(deterministic_orders)
 
     def _recover_direct_orders_from_document(
         self,
@@ -575,6 +624,13 @@ class FundOrderExtractor:
 
             if task_payload.allow_empty_result or task_payload.scope_excludes_all_funds:
                 return LLMExtractionOutcome(result=ExtractionResult(orders=[], issues=[]))
+
+            adjusted_expected_order_count = self._counterparty_adjusted_expected_order_count(
+                task_payload=task_payload,
+                counterparty_guidance=counterparty_guidance,
+            )
+            if adjusted_expected_order_count != task_payload.expected_order_count:
+                task_payload = replace(task_payload, expected_order_count=adjusted_expected_order_count)
 
             extract_kwargs: dict[str, Any] = {
                 "chunks": list(task_payload.chunks),
@@ -6106,6 +6162,8 @@ class FundOrderExtractor:
         self,
         header: list[str],
         base_date: str,
+        *,
+        stage_name: str = "t_day",
     ) -> list[tuple[int, SettleClass, int, OrderType | None, bool, bool]]:
         """header를 읽어 amount-bearing column의 방향/settle/t_day를 계산한다."""
         raw_specs: list[tuple[int, int, OrderType | None, bool, int | None, bool]] = []
@@ -6118,6 +6176,11 @@ class FundOrderExtractor:
         for index, label in enumerate(semantic_header):
             normalized_label = self._normalize_text(label)
             if not normalized_label:
+                continue
+            if not self._stage_column_allowed_by_counterparty_policy(
+                stage_name=stage_name,
+                label=normalized_label,
+            ):
                 continue
 
             future_bucket_key = self._deterministic_future_bucket_key(normalized_label, base_date)
@@ -6803,6 +6866,117 @@ class FundOrderExtractor:
             logger.info("Loaded extraction prompts from %s", self.prompt_path)
             return prompt_bundle
 
+    @contextmanager
+    def _activate_counterparty_prompt_metadata(
+        self,
+        counterparty_guidance: str | None,
+    ):
+        metadata = parse_counterparty_guidance(counterparty_guidance)
+        token = _ACTIVE_COUNTERPARTY_PROMPT_METADATA.set(metadata)
+        try:
+            yield metadata
+        finally:
+            _ACTIVE_COUNTERPARTY_PROMPT_METADATA.reset(token)
+
+    @staticmethod
+    def _current_counterparty_prompt_metadata() -> CounterpartyPromptMetadata:
+        return _ACTIVE_COUNTERPARTY_PROMPT_METADATA.get() or CounterpartyPromptMetadata(
+            visible_guidance="",
+            fixed_stage_columns={},
+        )
+
+    def _counterparty_stage_column_policy(
+        self,
+        *,
+        stage_name: str,
+        counterparty_guidance: str | None = None,
+    ) -> CounterpartyStageColumnPolicy | None:
+        if counterparty_guidance is not None:
+            parsed_policy = parse_counterparty_guidance(counterparty_guidance).stage_policy(stage_name)
+            if parsed_policy is not None:
+                return parsed_policy
+        return self._current_counterparty_prompt_metadata().stage_policy(stage_name)
+
+    def _render_counterparty_stage_column_policy_for_stage(
+        self,
+        *,
+        stage_name: str,
+        counterparty_guidance: str | None,
+    ) -> str:
+        policy = self._counterparty_stage_column_policy(
+            stage_name=stage_name,
+            counterparty_guidance=counterparty_guidance,
+        )
+        if policy is None or (not policy.include and not policy.exclude):
+            return "None. Use the general stage rules."
+
+        lines = [
+            "This stage has a counterparty-fixed amount-column policy.",
+            "- Follow this fixed-column policy for this counterparty when it conflicts with the general stage rules.",
+        ]
+        if policy.include:
+            lines.append(
+                "- Treat only these columns as eligible transaction evidence for this stage: "
+                + ", ".join(f'"{label}"' for label in policy.include)
+                + "."
+            )
+        if policy.exclude:
+            lines.append(
+                "- Ignore these columns for this stage even if they appear in the same row or bucket: "
+                + ", ".join(f'"{label}"' for label in policy.exclude)
+                + "."
+            )
+        return "\n".join(lines)
+
+    @classmethod
+    def _counterparty_stage_column_policy_label_matches(
+        cls,
+        *,
+        candidate_label: str,
+        policy_label: str,
+    ) -> bool:
+        normalized_candidate = cls._normalize_text(cls._semantic_header_label_for_deterministic(candidate_label))
+        normalized_policy = cls._normalize_text(cls._semantic_header_label_for_deterministic(policy_label))
+        if not normalized_candidate or not normalized_policy:
+            return False
+        if normalized_candidate == normalized_policy:
+            return True
+        return any(
+            normalized_candidate.startswith(f"{normalized_policy}{suffix}")
+            for suffix in (" / ", "/", " (", " [", ": ", ":")
+        )
+
+    def _stage_column_allowed_by_counterparty_policy(
+        self,
+        *,
+        stage_name: str,
+        label: str,
+        counterparty_guidance: str | None = None,
+    ) -> bool:
+        policy = self._counterparty_stage_column_policy(
+            stage_name=stage_name,
+            counterparty_guidance=counterparty_guidance,
+        )
+        if policy is None:
+            return True
+        if any(
+            self._counterparty_stage_column_policy_label_matches(
+                candidate_label=label,
+                policy_label=blocked_label,
+            )
+            for blocked_label in policy.exclude
+        ):
+            return False
+        if not policy.include:
+            return True
+        return any(
+            self._counterparty_stage_column_policy_label_matches(
+                candidate_label=label,
+                policy_label=allowed_label,
+            )
+            for allowed_label in policy.include
+        )
+
     def _build_user_prompt(
         self,
         prompt_bundle: PromptBundle,
@@ -6821,6 +6995,10 @@ class FundOrderExtractor:
             stage_name=stage.name,
             counterparty_guidance=counterparty_guidance,
         )
+        rendered_counterparty_stage_column_policy = self._render_counterparty_stage_column_policy_for_stage(
+            stage_name=stage.name,
+            counterparty_guidance=counterparty_guidance,
+        )
         try:
             rendered_prompt = prompt_bundle.user_prompt_template.format(
                 stage_number=stage.number,
@@ -6828,6 +7006,7 @@ class FundOrderExtractor:
                 stage_goal=stage.goal,
                 stage_name=stage.name,
                 counterparty_guidance=rendered_counterparty_guidance,
+                counterparty_stage_column_policy=rendered_counterparty_stage_column_policy,
                 stage_instructions=stage.instructions,
                 output_contract=stage.output_contract,
                 input_items_json=input_block,
@@ -6852,6 +7031,10 @@ class FundOrderExtractor:
             stage_name=stage.name,
             counterparty_guidance=counterparty_guidance,
         )
+        rendered_counterparty_stage_column_policy = self._render_counterparty_stage_column_policy_for_stage(
+            stage_name=stage.name,
+            counterparty_guidance=counterparty_guidance,
+        )
         try:
             rendered_prompt = prompt_bundle.retry_user_prompt_template.format(
                 stage_number=stage.number,
@@ -6859,6 +7042,7 @@ class FundOrderExtractor:
                 stage_goal=stage.goal,
                 stage_name=stage.name,
                 counterparty_guidance=rendered_counterparty_guidance,
+                counterparty_stage_column_policy=rendered_counterparty_stage_column_policy,
                 stage_instructions=stage.instructions,
                 retry_instructions=stage.retry_instructions,
                 output_contract=stage.output_contract,
@@ -6919,7 +7103,7 @@ class FundOrderExtractor:
         그래서 이 단계에서는 단순 참고 문구가 아니라 "해석 우선순위"에 가깝게 읽히도록
         짧은 강조 래퍼를 붙인다. 다만 원문 근거보다 우선하면 안 되므로 그 제한도 함께 준다.
         """
-        guidance = (counterparty_guidance or "").strip()
+        guidance = parse_counterparty_guidance(counterparty_guidance).visible_guidance
         if not guidance:
             return ""
         if stage_name not in SENSITIVE_COUNTERPARTY_GUIDANCE_STAGES:
@@ -8262,6 +8446,33 @@ class FundOrderExtractor:
                 seen_pairs.add(pair)
             if not duplicate_pair_present:
                 result.issues = self._remove_issues_by_code(result.issues, "DUPLICATE_FUND_CODE_NAME_PAIRS")
+
+        if self._issues_include_code(result.issues, "FUND_WITH_ZERO_ALL_AMOUNTS"):
+            if result.orders and all(
+                self._normalize_amount(order.transfer_amount) is not None
+                and not self._is_effectively_zero_amount(order.transfer_amount)
+                for order in result.orders
+            ):
+                result.issues = self._remove_issues_by_code(result.issues, "FUND_WITH_ZERO_ALL_AMOUNTS")
+
+        if self._issues_include_code(result.issues, "FUND_NO_ORDER_EVIDENCE"):
+            if result.orders and all(
+                self._normalize_amount(order.transfer_amount) is not None
+                and not self._is_effectively_zero_amount(order.transfer_amount)
+                for order in result.orders
+            ):
+                result.issues = self._remove_issues_by_code(result.issues, "FUND_NO_ORDER_EVIDENCE")
+
+        if self._issues_include_code(result.issues, "FUND_CODE_DUPLICATE"):
+            names_by_code: dict[str, set[str]] = {}
+            for order in result.orders:
+                normalized_code = self._normalize_text(order.fund_code)
+                normalized_name = self._normalize_text(order.fund_name)
+                if not normalized_code:
+                    continue
+                names_by_code.setdefault(normalized_code, set()).add(normalized_name)
+            if names_by_code and all(len(names) <= 1 for names in names_by_code.values()):
+                result.issues = self._remove_issues_by_code(result.issues, "FUND_CODE_DUPLICATE")
 
         if independently_corroborated_final_orders:
             result.issues = self._remove_issues_by_code(result.issues, SOFT_COVERAGE_WARNING)

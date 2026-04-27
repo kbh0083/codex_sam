@@ -222,10 +222,10 @@ class ExtractionComponent:
     def _classify_document_status(
         *,
         task_payload: DocumentLoadTaskPayload,
-        extraction_result: Any,
+        has_orders: bool,
     ) -> tuple[str, str | None]:
         """문서 1건의 최종 상태를 COMPLETED/SKIPPED/FAILED로 정규화한다."""
-        if extraction_result.orders:
+        if has_orders:
             return STATUS_COMPLETED, None
         if task_payload.non_instruction_reason:
             return (
@@ -322,11 +322,6 @@ class ExtractionComponent:
         """
         # 주문 목록이 비어 있지 않다면 첫 유효 기준일을 문서 메타데이터로 끌어올린다.
         # 다건 merge에서도 문서별 base_date를 따로 추적할 수 있게 하기 위함이다.
-        base_date = next((order.base_date for order in extraction_result.orders if order.base_date), None)
-        status, reason = self._classify_document_status(
-            task_payload=task_payload,
-            extraction_result=extraction_result,
-        )
         prompt_name = resolve_counterparty_prompt_name(
             task_payload.source_path,
             document_text=task_payload.markdown_text,
@@ -336,6 +331,11 @@ class ExtractionComponent:
             prompt_name=prompt_name,
         )
         order_payloads = dedupe_serialized_order_payloads(order_payloads)
+        base_date = next((order.get("base_date") for order in order_payloads if order.get("base_date")), None)
+        status, reason = self._classify_document_status(
+            task_payload=task_payload,
+            has_orders=bool(order_payloads),
+        )
         return {
             "file_name": task_payload.file_name,
             "source_path": task_payload.source_path,

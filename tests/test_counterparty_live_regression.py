@@ -43,6 +43,12 @@ DONGYANG_ANSWER_DIR = ANSWER_SET_DIR / "동양생명"
 DONGYANG_20260318_BASELINE_PATH = DONGYANG_ANSWER_DIR / "동양생명_20260318.json"
 DONGYANG_20260413_PATH = DOCUMENT_DIR / "동양생명_20260413.html"
 DONGYANG_20260413_BASELINE_PATH = DONGYANG_ANSWER_DIR / "동양생명_20260413.json"
+HANHWA_20250826_PATH = DOCUMENT_DIR / "hanhwa_20250826.html"
+HANHWA_ANSWER_DIR = ANSWER_SET_DIR / "한화생명"
+HANHWA_20250826_BASELINE_PATH = HANHWA_ANSWER_DIR / "hanhwa_20250826.json"
+SHINHAN_20260116_PATH = DOCUMENT_DIR / "신한라이프_251127_20260116_212233.pdf"
+SHINHAN_ANSWER_DIR = ANSWER_SET_DIR / "신한라이프"
+SHINHAN_20260116_BASELINE_PATH = SHINHAN_ANSWER_DIR / "신한라이프_251127_20260116_212233.json"
 KYOBO_MHT_PATH = DOCUMENT_DIR / "자금운용_해지_5440_20260316.mht"
 KYOBO_ANSWER_DIR = ANSWER_SET_DIR / "교보생명"
 KYOBO_MHT_BASELINE_PATH = KYOBO_ANSWER_DIR / "자금운용_해지_5440_20260316.json"
@@ -363,6 +369,20 @@ print(
         metrics_payload = self._load_single_metrics_sidecar(Path(result["debug_root"]))
         self.assertEqual(metrics_payload.get("llm_batches_started", {}).get("t_day", 0), 0)
         self.assertEqual(metrics_payload.get("llm_batches_started", {}).get("transfer_amount", 0), 0)
+
+    def test_hanhwa_counterparty_prompt_extracts_expected_html_payload(self) -> None:
+        self._assert_payload_matches_baseline(
+            HANHWA_20250826_PATH,
+            HANHWA_20250826_BASELINE_PATH,
+            only_pending=False,
+        )
+
+    def test_shinhan_counterparty_prompt_extracts_expected_pdf_payload(self) -> None:
+        self._assert_payload_matches_baseline(
+            SHINHAN_20260116_PATH,
+            SHINHAN_20260116_BASELINE_PATH,
+            only_pending=False,
+        )
 
     def test_kyobo_mht_counterparty_prompt_ignores_total_row_and_matches_baseline(self) -> None:
         result = self._assert_payload_matches_baseline(
@@ -712,10 +732,19 @@ print(
                     "BBCA00",
                     "AI 글로벌자산배분형",
                     SettleClass.CONFIRMED,
+                    OrderType.SUB,
+                    "2026-04-08",
+                    0,
+                    "35,595,984",
+                ),
+                (
+                    "BBCA00",
+                    "AI 글로벌자산배분형",
+                    SettleClass.CONFIRMED,
                     OrderType.RED,
                     "2026-04-08",
                     0,
-                    "-54,788,126",
+                    "-90,384,110",
                 ),
                 (
                     "BBCA00",
@@ -738,7 +767,7 @@ print(
             ],
         )
 
-    def test_ibk_counterparty_prompt_only_pending_contract_outputs_single_pending_row(self) -> None:
+    def test_ibk_counterparty_prompt_only_pending_contract_outputs_same_day_split_rows(self) -> None:
         payload = self._extract_document_payload_via_subprocess(
             IBK_DOCUMENT_PATH,
             only_pending=True,
@@ -754,10 +783,19 @@ print(
                     "fund_code": "BBCA00",
                     "fund_name": "AI 글로벌자산배분형",
                     "settle_class": "1",
+                    "order_type": "3",
+                    "base_date": "2026-04-08",
+                    "t_day": "01",
+                    "transfer_amount": "35,595,984",
+                },
+                {
+                    "fund_code": "BBCA00",
+                    "fund_name": "AI 글로벌자산배분형",
+                    "settle_class": "1",
                     "order_type": "1",
                     "base_date": "2026-04-08",
                     "t_day": "01",
-                    "transfer_amount": "54,788,126",
+                    "transfer_amount": "90,384,110",
                 }
             ],
         )

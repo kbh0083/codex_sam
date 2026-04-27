@@ -13,7 +13,9 @@ from pydantic import ValidationError
 import yaml
 
 import app.extractor as extractor_module
-from app.document_loader import DocumentLoadTaskPayload, TargetFundScope
+from app.config import get_settings
+from app.document_loader import DocumentLoadTaskPayload, DocumentLoader, TargetFundScope
+from app.extraction import load_counterparty_guidance
 from app.extractor import (
     FundAmountItem,
     FundAmountResult,
@@ -5050,6 +5052,68 @@ class ExtractorLogicTests(unittest.TestCase):
         self.assertIn("Use future bucket wording for settle_class only when visible.", prompt)
         self.assertNotIn("This counterparty-specific guidance is especially important for this stage.", prompt)
 
+    def test_build_user_prompt_renders_counterparty_fixed_column_policy_from_meta_block(self) -> None:
+        extractor = object.__new__(FundOrderExtractor)
+        extractor.prompt_bundle = _load_prompt_bundle()
+        stage = extractor.prompt_bundle.stages["t_day"]
+
+        prompt = extractor._build_user_prompt(
+            prompt_bundle=extractor.prompt_bundle,
+            stage=stage,
+            document_text="sample document",
+            input_items=None,
+            counterparty_guidance="\n".join(
+                [
+                    "[[COUNTERPARTY_PROMPT_META]]",
+                    "fixed_stage_columns:",
+                    "  t_day:",
+                    "    include:",
+                    "      - 설정액",
+                    "      - 해지액",
+                    "    exclude:",
+                    "      - 정산액",
+                    "[[/COUNTERPARTY_PROMPT_META]]",
+                    "",
+                    "Ignore same-day 정산액 for this counterparty.",
+                ]
+            ),
+        )
+
+        self.assertIn("Ignore same-day 정산액 for this counterparty.", prompt)
+        self.assertIn("This stage has a counterparty-fixed amount-column policy.", prompt)
+        self.assertIn('"설정액"', prompt)
+        self.assertIn('"해지액"', prompt)
+        self.assertIn('"정산액"', prompt)
+        self.assertNotIn("[[COUNTERPARTY_PROMPT_META]]", prompt)
+
+    def test_counterparty_stage_column_policy_falls_back_to_active_metadata_for_visible_guidance(self) -> None:
+        guidance = "\n".join(
+            [
+                "[[COUNTERPARTY_PROMPT_META]]",
+                "fixed_stage_columns:",
+                "  t_day:",
+                "    include:",
+                "      - 설정액",
+                "      - 해지액",
+                "    exclude:",
+                "      - 정산액",
+                "[[/COUNTERPARTY_PROMPT_META]]",
+                "",
+                "Ignore same-day 정산액 for this counterparty.",
+            ]
+        )
+
+        with self.extractor._activate_counterparty_prompt_metadata(guidance):
+            rendered = self.extractor._render_counterparty_stage_column_policy_for_stage(
+                stage_name="t_day",
+                counterparty_guidance="Ignore same-day 정산액 for this counterparty.",
+            )
+
+        self.assertIn("This stage has a counterparty-fixed amount-column policy.", rendered)
+        self.assertIn('"설정액"', rendered)
+        self.assertIn('"해지액"', rendered)
+        self.assertIn('"정산액"', rendered)
+
     def test_build_retry_user_prompt_includes_previous_output_and_target_issues(self) -> None:
         extractor = object.__new__(FundOrderExtractor)
         extractor.prompt_bundle = _load_prompt_bundle()
@@ -5788,6 +5852,152 @@ class ExtractorLogicTests(unittest.TestCase):
         self.assertEqual(
             [(item.slot_id, item.order_type) for item in replaced],
             [("T0_NET", "RED"), ("T1_SUB", "SUB")],
+        )
+
+    def test_build_deterministic_t_day_items_respects_dongyang_fixed_column_policy(self) -> None:
+        document_text = "\n".join(
+            [
+                "## HTML 동양생명_20260318.html",
+                "```text",
+                "2026년 3월 18일",
+                "정산내역",
+                "```",
+                "| 펀드코드 | 펀드명 | 설정액 | 해지액 | 정산액 |",
+                "| --- | --- | --- | --- | --- |",
+                "| BALI00 | 퇴연주식형 | 8,592,243 | 0 | 8,592,243 |",
+                "```text",
+                "예상내역",
+                "```",
+                "| 펀드코드 | 펀드명 | 설정금액 / 3월19일 | 설정금액 / 3월20일 | 해지금액 / 3월19일 | 해지금액 / 3월20일 |",
+                "| --- | --- | --- | --- | --- | --- |",
+                "| BALI00 | 퇴연주식형 | 0 | 0 | 0 | 1,656,769 |",
+            ]
+        )
+        guidance = "\n".join(
+            [
+                "[[COUNTERPARTY_PROMPT_META]]",
+                "fixed_stage_columns:",
+                "  t_day:",
+                "    include:",
+                "      - 설정액",
+                "      - 해지액",
+                "      - 설정금액",
+                "      - 해지금액",
+                "    exclude:",
+                "      - 정산액",
+                "[[/COUNTERPARTY_PROMPT_META]]",
+            ]
+        )
+
+        with self.extractor._activate_counterparty_prompt_metadata(guidance):
+            result = self.extractor._build_deterministic_t_day_items(
+                document_text=document_text,
+                input_items=[
+                    {
+                        "fund_code": "BALI00",
+                        "fund_name": "퇴연주식형",
+                        "base_date": "2026-03-18",
+                    }
+                ],
+            )
+
+        self.assertEqual(
+            [(item.fund_code, item.t_day, item.slot_id, item.evidence_label) for item in result],
+            [
+                ("BALI00", 0, "T0_SUB", "설정액"),
+                ("BALI00", 2, "T2_RED", "해지금액 / 3월20일"),
+            ],
+        )
+
+    def test_build_deterministic_markdown_table_orders_respects_ibk_fixed_column_policy(self) -> None:
+        fixture_path = Path(__file__).resolve().parents[1] / "document" / "IBK연금보험_0408_삼성자산운용설정해지지시서.eml"
+        if not fixture_path.exists():
+            self.skipTest(f"missing IBK fixture: {fixture_path}")
+        loader = DocumentLoader()
+        settings = get_settings()
+        payload = loader.build_task_payload(fixture_path, chunk_size_chars=settings.llm_chunk_size_chars)
+        guidance = "\n".join(
+            [
+                "[[COUNTERPARTY_PROMPT_META]]",
+                "fixed_stage_columns:",
+                "  t_day:",
+                "    include:",
+                "      - 설정액",
+                "      - 해지액",
+                "      - 예정 정산액 기준일+1",
+                "      - 예정 정산액 기준일+2",
+                "      - 예정 정산액 기준일+3",
+                "    exclude:",
+                "      - 정산액",
+                "[[/COUNTERPARTY_PROMPT_META]]",
+            ]
+        )
+
+        with self.extractor._activate_counterparty_prompt_metadata(guidance):
+            orders = self.extractor._build_deterministic_markdown_table_orders(
+                markdown_text=payload.markdown_text,
+                raw_text=payload.raw_text,
+                target_fund_scope=None,
+            )
+
+        self.assertEqual(
+            [
+                (order.fund_code, order.t_day, order.settle_class, order.order_type, order.transfer_amount)
+                for order in orders
+            ],
+            [
+                ("BBCA00", 0, SettleClass.CONFIRMED, OrderType.SUB, "35,595,984"),
+                ("BBCA00", 0, SettleClass.CONFIRMED, OrderType.RED, "-90,384,110"),
+                ("BBCA00", 1, SettleClass.PENDING, OrderType.RED, "-95,003,244"),
+                ("BBCA00", 2, SettleClass.PENDING, OrderType.SUB, "2,794,977"),
+            ],
+        )
+
+    def test_counterparty_adjusted_expected_order_count_uses_fixed_column_policy(self) -> None:
+        fixture_path = Path(__file__).resolve().parents[1] / "document" / "IBK연금보험_0408_삼성자산운용설정해지지시서.eml"
+        if not fixture_path.exists():
+            self.skipTest(f"missing IBK fixture: {fixture_path}")
+        loader = DocumentLoader()
+        settings = get_settings()
+        task_payload = loader.build_task_payload(fixture_path, chunk_size_chars=settings.llm_chunk_size_chars)
+        guidance = load_counterparty_guidance(
+            fixture_path,
+            use_counterparty_prompt=True,
+            document_text=task_payload.markdown_text,
+        )
+
+        adjusted_count = self.extractor._counterparty_adjusted_expected_order_count(
+            task_payload=task_payload,
+            counterparty_guidance=guidance,
+        )
+
+        self.assertEqual(task_payload.expected_order_count, 1)
+        self.assertEqual(adjusted_count, 4)
+
+    def test_build_deterministic_markdown_table_orders_keeps_net_column_preference_without_counterparty_policy(self) -> None:
+        fixture_path = Path(__file__).resolve().parents[1] / "document" / "IBK연금보험_0408_삼성자산운용설정해지지시서.eml"
+        if not fixture_path.exists():
+            self.skipTest(f"missing IBK fixture: {fixture_path}")
+        loader = DocumentLoader()
+        settings = get_settings()
+        payload = loader.build_task_payload(fixture_path, chunk_size_chars=settings.llm_chunk_size_chars)
+
+        orders = self.extractor._build_deterministic_markdown_table_orders(
+            markdown_text=payload.markdown_text,
+            raw_text=payload.raw_text,
+            target_fund_scope=None,
+        )
+
+        self.assertEqual(
+            [
+                (order.fund_code, order.t_day, order.settle_class, order.order_type, order.transfer_amount)
+                for order in orders
+            ],
+            [
+                ("BBCA00", 0, SettleClass.CONFIRMED, OrderType.RED, "-54,788,126"),
+                ("BBCA00", 1, SettleClass.PENDING, OrderType.RED, "-95,003,244"),
+                ("BBCA00", 2, SettleClass.PENDING, OrderType.SUB, "2,794,977"),
+            ],
         )
 
     def test_build_deterministic_resolved_items_from_settle_items(self) -> None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .counterparty import parse_counterparty_guidance
+
 _PAGE_SHAPE_MARKERS = ("## Page ", "[PAGE ")
 _SHEET_SHAPE_MARKERS = ("## Sheet ", "[SHEET ")
 
@@ -29,7 +31,7 @@ def detect_counterparty_guidance_non_instruction_reason(
     prompt 본문에 적힌 duplicate-copy reason과 loader shape marker만 본다.
     """
 
-    guidance = (counterparty_guidance or "").strip()
+    guidance = parse_counterparty_guidance(counterparty_guidance).visible_guidance
     if not guidance:
         return None
 

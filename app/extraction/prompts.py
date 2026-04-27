@@ -19,7 +19,7 @@ REQUIRED_USER_PROMPT_FIELDS = {
     "input_items_json",
     "document_text",
 }
-OPTIONAL_USER_PROMPT_FIELDS = {"counterparty_guidance"}
+OPTIONAL_USER_PROMPT_FIELDS = {"counterparty_guidance", "counterparty_stage_column_policy"}
 REQUIRED_RETRY_USER_PROMPT_FIELDS = {
     "stage_number",
     "total_stage_count",
@@ -38,6 +38,7 @@ REQUIRED_RETRY_USER_PROMPT_FIELDS = {
 }
 OPTIONAL_RETRY_USER_PROMPT_FIELDS = {
     "counterparty_guidance",
+    "counterparty_stage_column_policy",
     "previous_reason_summary_text",
 }
 SENSITIVE_COUNTERPARTY_GUIDANCE_STAGES = frozenset(

@@ -12,6 +12,7 @@ from app.document_loader import DocumentLoadTaskPayload, TargetFundScope
 from app.extraction import (
     detect_counterparty_guidance_non_instruction_reason,
     load_counterparty_guidance,
+    parse_counterparty_guidance,
     resolve_counterparty_prompt_name,
 )
 from app.extractor import (
@@ -290,6 +291,37 @@ class ServiceGuardTests(unittest.TestCase):
 
         self.assertIsNone(guidance)
 
+    def test_parse_counterparty_guidance_extracts_fixed_stage_columns_from_meta_block(self) -> None:
+        guidance = "\n".join(
+            [
+                "[[COUNTERPARTY_PROMPT_META]]",
+                "fixed_stage_columns:",
+                "  t_day:",
+                "    include:",
+                '      - 설정액',
+                '      - 해지액',
+                "    exclude:",
+                '      - 정산액',
+                "[[/COUNTERPARTY_PROMPT_META]]",
+                "",
+                "Visible guidance text.",
+            ]
+        )
+
+        parsed = parse_counterparty_guidance(guidance)
+
+        self.assertEqual(parsed.visible_guidance, "Visible guidance text.")
+        assert parsed.fixed_stage_columns is not None
+        policy = parsed.fixed_stage_columns["t_day"]
+        self.assertEqual(policy.include, ("설정액", "해지액"))
+        self.assertEqual(policy.exclude, ("정산액",))
+
+    def test_parse_counterparty_guidance_preserves_plain_prompt_without_meta_block(self) -> None:
+        parsed = parse_counterparty_guidance("Plain prompt only")
+
+        self.assertEqual(parsed.visible_guidance, "Plain prompt only")
+        self.assertEqual(parsed.fixed_stage_columns, {})
+
     def test_resolve_counterparty_prompt_name_avoids_unrelated_substring_match(self) -> None:
         self.assertEqual(resolve_counterparty_prompt_name("/tmp/ABL_250826.xlsx"), "ABL")
         self.assertEqual(resolve_counterparty_prompt_name("/tmp/DB_250826.xlsx"), "DB")
@@ -366,6 +398,7 @@ class ServiceGuardTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(guidance)
+        self.assertIn("[[COUNTERPARTY_PROMPT_META]]", guidance or "")
         self.assertIn("기준일자", guidance or "")
         self.assertIn("정산액", guidance or "")
         self.assertIn("예정 정산액 기준일+1", guidance or "")
@@ -1760,6 +1793,117 @@ class ServiceGuardTests(unittest.TestCase):
         self.assertEqual(result_payload["status"], "COMPLETED")
         self.assertEqual(result_payload["orders"][0]["fund_code"], "-")
         self.assertEqual(result_payload["orders"][0]["fund_name"], "MyFund VUL 혼합성장형")
+
+    def test_extract_file_path_to_payload_filters_counterparty_t_day_02_rows(self) -> None:
+        service = ExtractionService()
+
+        with TemporaryDirectory() as tmp_dir:
+            sample_path = Path(tmp_dir) / "hanhwa_20250826.html"
+            sample_path.write_text("dummy", encoding="utf-8")
+            task_payload = DocumentLoadTaskPayload(
+                source_path=str(sample_path),
+                file_name=sample_path.name,
+                pdf_password=None,
+                content_type="text/html",
+                raw_text="raw",
+                markdown_text="markdown",
+                chunks=("chunk-1",),
+                non_instruction_reason=None,
+                allow_empty_result=False,
+                scope_excludes_all_funds=False,
+                expected_order_count=3,
+                target_fund_scope=TargetFundScope(manager_column_present=False),
+            )
+            service._extract_file_path_internal = lambda *args, **kwargs: (  # type: ignore[method-assign]
+                ExtractionResult(
+                    orders=[
+                        OrderExtraction(
+                            fund_code="F001",
+                            fund_name="Alpha",
+                            settle_class=SettleClass.PENDING,
+                            order_type=OrderType.SUB,
+                            base_date="2026-04-15",
+                            t_day=0,
+                            transfer_amount="100",
+                        ),
+                        OrderExtraction(
+                            fund_code="F002",
+                            fund_name="Beta",
+                            settle_class=SettleClass.PENDING,
+                            order_type=OrderType.SUB,
+                            base_date="2026-04-16",
+                            t_day=1,
+                            transfer_amount="200",
+                        ),
+                        OrderExtraction(
+                            fund_code="F003",
+                            fund_name="Gamma",
+                            settle_class=SettleClass.PENDING,
+                            order_type=OrderType.SUB,
+                            base_date="2026-04-17",
+                            t_day=2,
+                            transfer_amount="300",
+                        ),
+                    ],
+                    issues=[],
+                ),
+                task_payload,
+                sample_path,
+            )
+
+            result_payload = service.extract_file_path_to_payload(sample_path)
+
+        self.assertEqual(result_payload["status"], "COMPLETED")
+        self.assertEqual(result_payload["base_date"], "2026-04-15")
+        self.assertEqual([order["fund_code"] for order in result_payload["orders"]], ["F001", "F003"])
+        self.assertEqual([order["t_day"] for order in result_payload["orders"]], ["01", "03"])
+
+    def test_extract_file_path_to_payload_marks_counterparty_filtered_zero_rows_as_skipped(self) -> None:
+        service = ExtractionService()
+
+        with TemporaryDirectory() as tmp_dir:
+            sample_path = Path(tmp_dir) / "신한라이프_251127_20260116_212233.pdf"
+            sample_path.write_text("dummy", encoding="utf-8")
+            task_payload = DocumentLoadTaskPayload(
+                source_path=str(sample_path),
+                file_name=sample_path.name,
+                pdf_password=None,
+                content_type="application/pdf",
+                raw_text="raw",
+                markdown_text="markdown",
+                chunks=("chunk-1",),
+                non_instruction_reason=None,
+                allow_empty_result=False,
+                scope_excludes_all_funds=False,
+                expected_order_count=1,
+                target_fund_scope=TargetFundScope(manager_column_present=False),
+            )
+            service._extract_file_path_internal = lambda *args, **kwargs: (  # type: ignore[method-assign]
+                ExtractionResult(
+                    orders=[
+                        OrderExtraction(
+                            fund_code="F002",
+                            fund_name="Beta",
+                            settle_class=SettleClass.PENDING,
+                            order_type=OrderType.SUB,
+                            base_date="2026-04-16",
+                            t_day=1,
+                            transfer_amount="200",
+                        )
+                    ],
+                    issues=["ORDER_COVERAGE_ESTIMATE_MISMATCH"],
+                ),
+                task_payload,
+                sample_path,
+            )
+
+            result_payload = service.extract_file_path_to_payload(sample_path)
+
+        self.assertEqual(result_payload["status"], "SKIPPED")
+        self.assertIsNone(result_payload["base_date"])
+        self.assertEqual(result_payload["orders"], [])
+        self.assertEqual(result_payload["reason"], "추출된 주문 데이터 없음")
+        self.assertEqual(result_payload["issues"], ["ORDER_COVERAGE_ESTIMATE_MISMATCH"])
 
     def test_extract_file_path_to_payload_sorts_heungkuk_final_orders(self) -> None:
         service = ExtractionService()

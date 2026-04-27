@@ -32,6 +32,9 @@ user_prompt_template: |-
   Counterparty-specific guidance:
   {counterparty_guidance}
 
+  Counterparty fixed-column policy for this stage:
+  {counterparty_stage_column_policy}
+
   Stage instructions:
   {stage_instructions}
 
@@ -63,6 +66,9 @@ retry_user_prompt_template: |-
 
   Counterparty-specific guidance:
   {counterparty_guidance}
+
+  Counterparty fixed-column policy for this stage:
+  {counterparty_stage_column_policy}
 
   Stage instructions:
   {stage_instructions}
@@ -168,6 +174,8 @@ stages:
       - If input items already contain reason_code from the previous stage, use it only as a hint and replace it when stronger document evidence conflicts.
       - For each input fund, enumerate every transaction slot that has a non-empty and non-zero monetary cell.
       - A slot is one settlement bucket per fund and per 결제일(base_date or t_day).
+      - If the counterparty fixed-column policy for this stage lists eligible columns, use only those listed columns as amount-bearing transaction evidence for this stage.
+      - If the counterparty fixed-column policy for this stage lists ignored columns, do not emit slots from those ignored columns even when they appear in the same row or bucket as eligible columns.
       - If the same fund and same bucket has a settlement/net column such as 결제금액, 순유입금액, 순투입금액, 정산액, 당일이체금액, 실행금액, or 이체예정금액, emit one slot for that bucket.
       - If the same fund and same bucket has only separate inflow/outflow columns such as 설정금액/해지금액, 입금액/출금액, 투입금액/인출금액, or Buy/Sell and there is no settlement/net column for that bucket, emit separate SUB and RED slots for that bucket.
       - If a document has one same-day settlement/net section and a separate future schedule section for the same fund, keep both sections. Emit one T0_NET slot from the settlement/net section and also emit each non-zero future-direction slot from the future schedule section.
@@ -196,6 +204,7 @@ stages:
       - Re-check only the funds or slot families named in the retry target issues.
       - Keep previously correct slots unchanged.
       - If Retry focus items JSON lists exact slot_id/evidence_label pairs, repair only those exact slots.
+      - Keep the same counterparty fixed-column policy as the original stage call. Do not reintroduce ignored columns during retry.
       - Preserve already-correct same-day settlement/net slots while repairing missing future schedule slots, and preserve already-correct future schedule slots while repairing same-day settlement/net slots.
       - Emit at most one slot per fund + visible date column + direction column.
       - If only one explicit direction column has a non-zero amount, emit only that surviving slot and do not add T_DAY_MISSING for the zero side.
@@ -211,6 +220,8 @@ stages:
       - Return a top-level reason_summary that states whether this stage mainly used net columns, explicit direction columns, or schedule buckets.
       - If input items already contain reason_code from the previous stage, use it only as a hint and replace it when stronger document evidence conflicts.
       - For each input slot, use evidence_label to locate the correct monetary cells for that settlement bucket.
+      - If the counterparty fixed-column policy for this stage lists eligible columns, use only those listed columns as transfer_amount evidence for this stage.
+      - If the counterparty fixed-column policy for this stage lists ignored columns, do not use those ignored columns as transfer_amount evidence even when they appear in the same row or bucket as eligible columns.
       - If the bucket has 결제금액, 순유입금액, 순투입금액, 정산액, 당일이체금액, 실행금액, or 이체예정금액, use that settlement amount as transfer_amount.
       - If the slot comes from an explicit inflow column such as 설정금액, 입금액, 투입금액, Buy, or Subscription, use that exact column amount as a positive transfer_amount.
       - If the slot comes from an explicit outflow column such as 해지금액, 출금액, 인출금액, Sell, or Redemption, use that exact column amount as a negative transfer_amount.
@@ -228,6 +239,7 @@ stages:
       - Re-check only the slots named in the retry target issues or focus items.
       - Keep previously verified amounts unchanged.
       - If Retry focus items JSON lists exact slot_id/evidence_label pairs, resolve only those exact slots.
+      - Keep the same counterparty fixed-column policy as the original stage call. Do not fall back to ignored columns during retry.
       - Do not let a same-day settlement/net amount overwrite a future schedule slot, and do not let a future schedule amount overwrite a same-day settlement/net slot.
       - Do not invent fallback amounts or replace missing values with 0.
       - If the previous response used the wrong section or wrong bucket, correct it using the exact evidence_label and schedule bucket from the document.

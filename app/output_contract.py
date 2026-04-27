@@ -18,6 +18,18 @@ ORDER_TYPE_OUTPUT_CODES = {
     "SUB": "3",
 }
 
+COUNTERPARTY_OUTPUT_POLICY_REGISTRY: dict[str, dict[str, frozenset[str]]] = {
+    "동양생명": {
+        "drop_t_days": frozenset({"02"}),
+    },
+    "한화생명": {
+        "drop_t_days": frozenset({"02"}),
+    },
+    "신한라이프": {
+        "drop_t_days": frozenset({"02"}),
+    },
+}
+
 
 def format_output_transfer_amount(order_type: str | None, transfer_amount: str | None) -> str | None:
     """내부 signed amount를 최종 출력 계약 문자열로 바꾼다.
@@ -179,18 +191,42 @@ def normalize_counterparty_output_order_payloads(
         prompt_name=prompt_name,
         company_name=company_name,
     )
+    policy_applied_payloads = _apply_counterparty_output_policy(
+        payloads,
+        company_name=normalized_company_name,
+    )
     normalized_payloads = [
         normalize_counterparty_output_order_payload(
             payload,
             prompt_name=prompt_name,
             company_name=normalized_company_name,
         )
-        for payload in payloads
+        for payload in policy_applied_payloads
     ]
     if normalized_company_name == "흥국생명-heungkuklife":
         normalized_payloads.sort(key=_heungkuk_output_order_sort_key)
     elif normalized_company_name == "카디프":
         normalized_payloads.sort(key=_cardif_output_order_sort_key)
+    return normalized_payloads
+
+
+def _apply_counterparty_output_policy(
+    payloads: list[dict[str, Any]],
+    *,
+    company_name: str,
+) -> list[dict[str, Any]]:
+    """거래처별 외부 출력 계약을 직렬화 이후 마지막 단계에서만 적용한다."""
+    policy = COUNTERPARTY_OUTPUT_POLICY_REGISTRY.get(company_name)
+    if not policy:
+        return [dict(payload) for payload in payloads]
+
+    drop_t_days = policy.get("drop_t_days", frozenset())
+    normalized_payloads: list[dict[str, Any]] = []
+    for payload in payloads:
+        normalized_payload = dict(payload)
+        if _identity_text(normalized_payload.get("t_day")) in drop_t_days:
+            continue
+        normalized_payloads.append(normalized_payload)
     return normalized_payloads
 
 
