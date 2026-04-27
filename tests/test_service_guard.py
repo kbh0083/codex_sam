@@ -1794,7 +1794,7 @@ class ServiceGuardTests(unittest.TestCase):
         self.assertEqual(result_payload["orders"][0]["fund_code"], "-")
         self.assertEqual(result_payload["orders"][0]["fund_name"], "MyFund VUL 혼합성장형")
 
-    def test_extract_file_path_to_payload_filters_counterparty_t_day_02_rows(self) -> None:
+    def test_extract_file_path_to_payload_keeps_only_pending_t_day_03_rows(self) -> None:
         service = ExtractionService()
 
         with TemporaryDirectory() as tmp_dir:
@@ -1820,7 +1820,7 @@ class ServiceGuardTests(unittest.TestCase):
                         OrderExtraction(
                             fund_code="F001",
                             fund_name="Alpha",
-                            settle_class=SettleClass.PENDING,
+                            settle_class=SettleClass.CONFIRMED,
                             order_type=OrderType.SUB,
                             base_date="2026-04-15",
                             t_day=0,
@@ -1856,6 +1856,7 @@ class ServiceGuardTests(unittest.TestCase):
         self.assertEqual(result_payload["status"], "COMPLETED")
         self.assertEqual(result_payload["base_date"], "2026-04-15")
         self.assertEqual([order["fund_code"] for order in result_payload["orders"]], ["F001", "F003"])
+        self.assertEqual([order["settle_class"] for order in result_payload["orders"]], ["2", "1"])
         self.assertEqual([order["t_day"] for order in result_payload["orders"]], ["01", "03"])
 
     def test_extract_file_path_to_payload_marks_counterparty_filtered_zero_rows_as_skipped(self) -> None:

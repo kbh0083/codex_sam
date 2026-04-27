@@ -210,8 +210,8 @@ class _FakeOnlyPendingEmptyAfterFilterExtractor:
         )
 
 
-class _FakeCounterpartyTDayFilterExtractor:
-    """거래처별 외부계약에서 serialized t_day=02 row를 제거하는지 검증한다."""
+class _FakeCounterpartyPendingTDayKeepExtractor:
+    """거래처별 외부계약에서 pending `t_day=03`만 남기는지 검증한다."""
 
     def extract_from_task_payload(
         self,
@@ -226,7 +226,7 @@ class _FakeCounterpartyTDayFilterExtractor:
                     OrderExtraction(
                         fund_code="F001",
                         fund_name="Alpha",
-                        settle_class=SettleClass.PENDING,
+                        settle_class=SettleClass.CONFIRMED,
                         order_type=OrderType.SUB,
                         base_date="2026-03-16",
                         t_day=0,
@@ -256,7 +256,7 @@ class _FakeCounterpartyTDayFilterExtractor:
         )
 
 
-class _FakeCounterpartyTDayFilterEmptyExtractor:
+class _FakeCounterpartyPendingTDayKeepEmptyExtractor:
     """거래처별 output policy 적용 후 최종 row가 0건이 되는 경로를 검증한다."""
 
     def extract_from_task_payload(
@@ -534,14 +534,14 @@ class ExtractionComponentTests(unittest.TestCase):
         self.assertEqual(payload["reason"], "추출된 주문 데이터 없음")
         self.assertEqual(payload["issues"], ["ORDER_COVERAGE_ESTIMATE_MISMATCH"])
 
-    def test_extract_document_payload_filters_counterparty_t_day_02_rows_in_final_output(self) -> None:
+    def test_extract_document_payload_keeps_only_pending_t_day_03_rows_in_final_output(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             temp_root = Path(tmp_dir)
             (temp_root / "동양생명_20260318.html").write_text("dummy", encoding="utf-8")
             component = ExtractionComponent(
                 settings=replace(get_settings(), document_input_dir=temp_root),
                 document_loader=_FakeDocumentLoader(),
-                extractor=_FakeCounterpartyTDayFilterExtractor(),
+                extractor=_FakeCounterpartyPendingTDayKeepExtractor(),
             )
 
             payload = component.extract_document_payload(
@@ -552,6 +552,7 @@ class ExtractionComponentTests(unittest.TestCase):
         self.assertEqual(payload["status"], "COMPLETED")
         self.assertEqual(payload["base_date"], "2026-03-16")
         self.assertEqual([order["fund_code"] for order in payload["orders"]], ["F001", "F003"])
+        self.assertEqual([order["settle_class"] for order in payload["orders"]], ["2", "1"])
         self.assertEqual([order["t_day"] for order in payload["orders"]], ["01", "03"])
 
     def test_extract_document_payload_marks_counterparty_filtered_zero_rows_as_skipped(self) -> None:
@@ -561,7 +562,7 @@ class ExtractionComponentTests(unittest.TestCase):
             component = ExtractionComponent(
                 settings=replace(get_settings(), document_input_dir=temp_root),
                 document_loader=_FakeDocumentLoader(),
-                extractor=_FakeCounterpartyTDayFilterEmptyExtractor(),
+                extractor=_FakeCounterpartyPendingTDayKeepEmptyExtractor(),
             )
 
             payload = component.extract_document_payload(

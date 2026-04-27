@@ -4,10 +4,15 @@
 - 이 문서는 WAS 병합 계획서와 결과보고서의 단일 작성 기준이다.
 - `03_테스트_실행_가이드.md`가 테스트 산출물/검수 보고서를 다루고, 이 문서는 병합 자체의 계획/결과 기록을 다룬다.
 - 새 병합 문서와 기존 legacy 병합 문서 정리는 반드시 이 규칙을 따른다.
-- 최신 active handoff는 [handoff_26042701.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042701.md)다.
-- 2026-04-24 현재 canonical migration은 적용 완료 상태다.
-  - 최신 병합 결과 예시: [mr2024.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260424/mr2024.md)
-  - 최신 full test 예시: [tt2050.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2050.md)
+- 최신 active handoff는 [handoff_26042702.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md)다.
+- 과거 active handoff 통합 archive는 [handoff_archive_260427.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_260427.md)다.
+- 2026-04-24 canonical migration은 적용 완료 상태다.
+  - canonical 병합 결과 예시: [mr2024.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260424/mr2024.md)
+  - canonical full test 예시: [tt2050.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2050.md)
+- 2026-04-27 output_contract follow-up은 post-canonical focused selective merge example이다.
+  - focused 계획서 예시: [mp1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260427/mp1925.md)
+  - focused 결과 예시: [mr1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260427/mr1925.md)
+  - focused test 예시: [tt1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260427/tt1925.md)
 
 ## 핵심 규칙
 - 병합당 Markdown 문서는 `계획서 1건 + 결과보고서 1건`만 유지한다.
@@ -15,7 +20,7 @@
 - 병합 결과보고서는 `merge_report/YYYYMMDD/mrHHMM.md`에 저장한다.
 - 파일명 길이 제한은 `.md` 확장자 제외 `20자 이내`다.
 - 실제 시각이 없는 historical/legacy 병합은 `HHMM=00NN`을 사용한다.
-  - 예: 1회차 `mp0001.md`, `mr0001.md`, 최신 예시는 `mp2024.md`, `mr2024.md`
+  - 예: 1회차 `mp0001.md`, `mr0001.md`, canonical 예시는 `mp2024.md`, `mr2024.md`, focused follow-up 예시는 `mp1925.md`, `mr1925.md`
 - 병합당 상세 부록은 새로 만들지 않는다.
 - 같은 병합의 `merge_plan_*`, `merge_report_*`, `merge_result_report_*`, `*_detailed.md`는 canonical 계획서 또는 결과보고서로 흡수한다.
 - 병합 검증 성격 문서는 `merge_report`에 두지 않는다.

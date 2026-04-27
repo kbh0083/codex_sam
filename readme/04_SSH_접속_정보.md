@@ -2,7 +2,7 @@
 
 > 민감 정보가 포함된 운영 문서다. 외부 공유를 금지한다.
 > last updated: 2026-04-27
-> 최신 실행 인계는 [handoff_26042701.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042701.md), 전체 시작 문서는 [00_시작_안내.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/00_시작_안내.md)를 우선 본다.
+> 최신 실행 인계는 [handoff_26042702.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md), historical handoff archive는 [handoff_archive_260427.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_260427.md), 전체 시작 문서는 [00_시작_안내.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/00_시작_안내.md)를 우선 본다.
 
 ## LLM 터널 정보
 - 로컬 : ssh -L 3910:localhost:3950 minisoft@1.241.20.229 -p 2194

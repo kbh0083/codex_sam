@@ -18,15 +18,21 @@ ORDER_TYPE_OUTPUT_CODES = {
     "SUB": "3",
 }
 
-COUNTERPARTY_OUTPUT_POLICY_REGISTRY: dict[str, dict[str, frozenset[str]]] = {
+COUNTERPARTY_OUTPUT_POLICY_REGISTRY: dict[str, dict[str, dict[str, frozenset[str]]]] = {
     "동양생명": {
-        "drop_t_days": frozenset({"02"}),
+        "keep_t_days_by_settle_class": {
+            "1": frozenset({"03"}),
+        },
     },
     "한화생명": {
-        "drop_t_days": frozenset({"02"}),
+        "keep_t_days_by_settle_class": {
+            "1": frozenset({"03"}),
+        },
     },
     "신한라이프": {
-        "drop_t_days": frozenset({"02"}),
+        "keep_t_days_by_settle_class": {
+            "1": frozenset({"03"}),
+        },
     },
 }
 
@@ -220,11 +226,13 @@ def _apply_counterparty_output_policy(
     if not policy:
         return [dict(payload) for payload in payloads]
 
-    drop_t_days = policy.get("drop_t_days", frozenset())
+    keep_t_days_by_settle_class = policy.get("keep_t_days_by_settle_class", {})
     normalized_payloads: list[dict[str, Any]] = []
     for payload in payloads:
         normalized_payload = dict(payload)
-        if _identity_text(normalized_payload.get("t_day")) in drop_t_days:
+        settle_class = _identity_text(normalized_payload.get("settle_class"))
+        keep_t_days = keep_t_days_by_settle_class.get(settle_class)
+        if keep_t_days is not None and _identity_text(normalized_payload.get("t_day")) not in keep_t_days:
             continue
         normalized_payloads.append(normalized_payload)
     return normalized_payloads

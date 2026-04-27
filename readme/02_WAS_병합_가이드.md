@@ -4,11 +4,13 @@
 `ExtractionService`를 그대로 붙이는 방식이 아니라 **queue + task handler 구조**로 옮기는 방법을 설명한다.
 
 > 2026-04-27 기준 인계 보강.
-> 최신 active handoff는 [handoff_26042701.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042701.md)다.
+> 최신 active handoff는 [handoff_26042702.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md)다.
+> 과거 active handoff 통합 archive는 [handoff_archive_260427.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_260427.md)다.
 > 공통 최신 상태와 테스트 보고 원칙은 [00_시작_안내.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/00_시작_안내.md)를 출처로 둔다.
 > 이 문서는 WAS 포팅/병합 전용 규칙만 유지한다.
 > 병합 계획서/결과보고서의 파일명, 저장 경로, canonical 정리 방식은 [06_WAS_병합_보고서_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/06_WAS_병합_보고서_가이드.md)를 따른다.
-> 최신 selective merge acceptance와 retained full review 기준은 [mr2024.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260424/mr2024.md), [tt2050.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2050.md)를 따른다.
+> canonical selective merge acceptance와 retained full review 기준은 [mr2024.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260424/mr2024.md), [tt2050.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2050.md)를 따른다.
+> 최신 focused follow-up 예시는 [mp1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260427/mp1925.md), [mr1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260427/mr1925.md), [tt1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260427/tt1925.md)다.
 > 본문의 `2026-04-14`, `2026-04-16` 표기는 과거 stable 기준선 설명이다.
 
 먼저 범위를 분명히 하면:
@@ -83,7 +85,27 @@
 - handler B: `DocumentLoadTaskPayload.read_json()` -> `FundOrderExtractor.extract_from_task_payload()`
 - 현재 로컬 기준 duplicate/legacy copy enforcement는 service/component 경계에서, WAS 병합 기준 enforcement는 handler B 직전 task/pipeline 경계에서 `counterparty_guidance`와 loader shape를 함께 읽는 helper로 처리하고, extractor core 안에는 다시 넣지 않는다.
 
-## 최신 selective merge 상태 (2026-04-24)
+## 최신 focused follow-up 상태 (2026-04-27)
+
+- 범위는 `output_contract` pending `t_day` 후처리 계약 교체 1건이다.
+  - 대상 거래처: `동양생명`, `한화생명`, `신한라이프`
+  - 현재 계약: serialized pending row(`settle_class=="1"`)에서 `t_day=="03"`만 유지
+  - confirmed row(`settle_class=="2"`)는 유지
+- 반영 파일:
+  - runtime: [/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/src/app/services/variable_annuity/extract/output_contract.py](/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/src/app/services/variable_annuity/extract/output_contract.py)
+  - regression test: [/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/tests/test_variable_annuity_output_contract.py](/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/tests/test_variable_annuity_output_contract.py)
+- 산출물:
+  - 계획서: [mp1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260427/mp1925.md)
+  - 결과보고서: [mr1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260427/mr1925.md)
+  - focused validation: [tt1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260427/tt1925.md)
+- 검증 결과:
+  - `pytest tests/test_variable_annuity_output_contract.py -q`: `9 passed`
+  - affected exact compare: `PASS 8 / FAIL 0 / BLOCKED 0`
+  - answer update 없음
+  - source review는 수행하지 않았고, retained baseline exact compare 중심의 축소 검증이다.
+- validation summary에는 worker stderr의 async DB close cleanup noise가 남아 있지만, verdict에는 영향 없었다.
+
+## Canonical selective merge 상태 (2026-04-24)
 
 - 이번 세션 병합 범위는 아래 네 묶음이다.
   - 거래처 prompt structured marker 기반 fixed-column contract

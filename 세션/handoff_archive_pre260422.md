@@ -11,12 +11,13 @@
   - `handoff_26041601.md`
   - `handoff_26042001.md`
 - 기존 `handoff_consolidated_26042001.md`의 역할을 이 archive가 대체한다.
-- 현재 active handoff는 [handoff_26042701.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042701.md)다.
-- [handoff_26042201.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042201.md)는 직전 active snapshot으로 남겨 둔다.
+- 현재 active handoff는 [handoff_26042702.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md)다.
+- `26042201`~`26042701` historical active handoff 묶음은 [handoff_archive_260427.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_260427.md)로 본다.
+- [handoff_26042201.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042201.md)는 historical snapshot으로 남겨 둔다.
 - 이 문서는 pre-260422 장기 기록과 운영 제약을 보관용으로 압축한 archive다.
 
 ## Superseded Note
-- 현재 authoritative 실행 인계 기준은 [handoff_26042701.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042701.md)와 최신 `readme` 문서들이다.
+- 현재 authoritative 실행 인계 기준은 [handoff_26042702.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md)와 최신 `readme` 문서들이다.
 - 이 archive 안의 duplicate-copy precheck, extractor-core guard, 과거 clean/dirty 상태 설명은 **역사 기록**으로만 본다.
 - 특히 과거 duplicate-copy 설명은 현재 규칙을 대체하지 않는다. 현재 기준은 “extractor core 하드코딩 금지 + 상위 실행 경로 guidance enforcement”다.
 
@@ -495,7 +496,7 @@
 - 새 세션에서 로컬 작업을 이어갈 때는 이 변경을 임의로 revert하지 말고 현재 diff와 2026-04-22 handoff를 함께 본다.
 
 ## 다음 세션 시작 순서
-1. `/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042701.md`를 먼저 읽는다.
+1. `/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md`를 먼저 읽는다.
 2. 필요하면 `/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042201.md`를 직전 active snapshot으로 읽는다.
 3. 이 통합 handoff를 읽는다.
 4. 필요한 경우 원본 handoff는 세부 이력 확인용으로만 연다.

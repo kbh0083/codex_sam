@@ -6,7 +6,7 @@ from app.output_contract import dedupe_serialized_order_payloads, normalize_coun
 
 
 class OutputContractTest(unittest.TestCase):
-    def test_targeted_counterparty_output_policy_drops_only_t_day_02_rows(self) -> None:
+    def test_targeted_counterparty_output_policy_keeps_only_pending_t_day_03_rows(self) -> None:
         payloads = [
             {
                 "fund_code": "F001",
@@ -35,6 +35,42 @@ class OutputContractTest(unittest.TestCase):
                 "t_day": "03",
                 "transfer_amount": "30,000",
             },
+            {
+                "fund_code": "F004",
+                "fund_name": "Delta",
+                "settle_class": "1",
+                "order_type": "1",
+                "base_date": "2026-04-14",
+                "t_day": "04",
+                "transfer_amount": "40,000",
+            },
+            {
+                "fund_code": "F005",
+                "fund_name": "Epsilon",
+                "settle_class": "1",
+                "order_type": "3",
+                "base_date": "2026-04-14",
+                "t_day": "05",
+                "transfer_amount": "50,000",
+            },
+            {
+                "fund_code": "F101",
+                "fund_name": "Confirmed-02",
+                "settle_class": "2",
+                "order_type": "3",
+                "base_date": "2026-04-14",
+                "t_day": "02",
+                "transfer_amount": "60,000",
+            },
+            {
+                "fund_code": "F102",
+                "fund_name": "Confirmed-04",
+                "settle_class": "2",
+                "order_type": "1",
+                "base_date": "2026-04-14",
+                "t_day": "04",
+                "transfer_amount": "70,000",
+            },
         ]
 
         for prompt_name in ("동양생명", "한화생명", "신한라이프"):
@@ -43,8 +79,9 @@ class OutputContractTest(unittest.TestCase):
                     payloads,
                     prompt_name=prompt_name,
                 )
-                self.assertEqual([row["fund_code"] for row in normalized], ["F001", "F003"])
-                self.assertEqual([row["t_day"] for row in normalized], ["01", "03"])
+                self.assertEqual([row["fund_code"] for row in normalized], ["F003", "F101", "F102"])
+                self.assertEqual([row["settle_class"] for row in normalized], ["1", "2", "2"])
+                self.assertEqual([row["t_day"] for row in normalized], ["03", "02", "04"])
 
     def test_non_target_counterparty_output_policy_keeps_t_day_02_rows(self) -> None:
         payloads = [
@@ -66,6 +103,15 @@ class OutputContractTest(unittest.TestCase):
                 "t_day": "02",
                 "transfer_amount": "20,000",
             },
+            {
+                "fund_code": "F003",
+                "fund_name": "Gamma",
+                "settle_class": "2",
+                "order_type": "1",
+                "base_date": "2026-04-14",
+                "t_day": "04",
+                "transfer_amount": "30,000",
+            },
         ]
 
         normalized = normalize_counterparty_output_order_payloads(
@@ -73,8 +119,8 @@ class OutputContractTest(unittest.TestCase):
             prompt_name="KDB",
         )
 
-        self.assertEqual([row["fund_code"] for row in normalized], ["F001", "F002"])
-        self.assertEqual([row["t_day"] for row in normalized], ["01", "02"])
+        self.assertEqual([row["fund_code"] for row in normalized], ["F001", "F002", "F003"])
+        self.assertEqual([row["t_day"] for row in normalized], ["01", "02", "04"])
 
     def test_metlife_normalization_still_works_with_prompt_name(self) -> None:
         payloads = [
