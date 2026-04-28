@@ -4,11 +4,12 @@
 - 이 문서는 WAS 병합 계획서와 결과보고서의 단일 작성 기준이다.
 - `03_테스트_실행_가이드.md`가 테스트 산출물/검수 보고서를 다루고, 이 문서는 병합 자체의 계획/결과 기록을 다룬다.
 - 새 병합 문서와 기존 legacy 병합 문서 정리는 반드시 이 규칙을 따른다.
-- 최신 active handoff는 [handoff_26042702.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md)다.
+- 최신 active handoff는 [handoff_26042802.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042802.md)다.
 - 과거 active handoff 통합 archive는 [handoff_archive_260427.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_260427.md)다.
 - 2026-04-24 canonical migration은 적용 완료 상태다.
   - canonical 병합 결과 예시: [mr2024.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260424/mr2024.md)
   - canonical full test 예시: [tt2050.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2050.md)
+  - latest retained WAS full review example: [tt1430.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260428/tt1430.md)
 - 2026-04-27 output_contract follow-up은 post-canonical focused selective merge example이다.
   - focused 계획서 예시: [mp1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260427/mp1925.md)
   - focused 결과 예시: [mr1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260427/mr1925.md)

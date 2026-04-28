@@ -46,6 +46,33 @@ class ExtractorLogicTests(unittest.TestCase):
         """LLM 의존 없이 helper 메서드만 호출할 수 있는 extractor 골격을 만든다."""
         self.extractor = object.__new__(FundOrderExtractor)
 
+    @staticmethod
+    def _kdb_future_bucket_document_text() -> str:
+        return "\n".join(
+            [
+                "| 펀드명 | 운용사 | 수탁코드 | 구분 | 내용 | 금액 | D+1(예상금액) |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
+                "| 액티브배당성장70혼합형 | 삼성자산운용 | 492007 | 출금 | 기타 | 14,483,055 | - |",
+                "| 액티브배당성장70혼합형 | 삼성자산운용 | 492007 | 입금 | 보험료입금 | - | 6,587,078 |",
+                "| 글로벌 자산배분안정형 | 삼성자산운용 | F00432 | 입금 | 기타 | 1,166,711 | 12,673,412 |",
+                "| 글로벌 자산배분적극형 | 삼성자산운용 | 822337 | 입금 | 기타 | 13,350,190 | 5,934,685 |",
+                "| 미국고배당포커스주식형 | 삼성자산운용 | 004434 | 출금 | 기타 | 7,492,608 | - |",
+                "| 미국고배당포커스주식형 | 삼성자산운용 | 004434 | 입금 | 보험료입금 | - | 13,984,034 |",
+                "| 인덱스플러스알파 70 혼합형 | 삼성자산운용 | 4013 | 출금 | 기타 | 13,951,275 | 17,883,174 |",
+                "| 인덱스혼합형 2 (주식 4) | 삼성자산운용 | 91414 | 출금 | 기타 | 111,494,218 | 2,300,135,515 |",
+            ]
+        )
+
+    @classmethod
+    def _kdb_future_bucket_raw_text(cls) -> str:
+        return "\n".join(
+            [
+                "운용지시서",
+                "2026-04-27",
+                cls._kdb_future_bucket_document_text(),
+            ]
+        )
+
     def _write_prompt_yaml(
         self,
         path: Path,
@@ -4044,6 +4071,172 @@ class ExtractorLogicTests(unittest.TestCase):
 
         self.assertEqual(result.issues, [])
 
+    def test_row_context_amount_priority_treats_unsigned_future_schedule_columns_as_contextual(self) -> None:
+        self.assertEqual(self.extractor._row_context_amount_priority_for_deterministic("D+1(예상금액)"), 10)
+        self.assertEqual(self.extractor._row_context_amount_priority_for_deterministic("2026-04-28"), 10)
+        self.assertIsNone(self.extractor._row_context_amount_priority_for_deterministic("해지예정금액"))
+
+    def test_build_result_uses_row_context_hint_for_unsigned_future_schedule_rows(self) -> None:
+        document_text = self._kdb_future_bucket_document_text()
+        items = [
+            FundResolvedItem(
+                fund_code="492007",
+                fund_name="액티브배당성장70혼합형",
+                base_date="2026-04-27",
+                t_day=0,
+                slot_id="492007_T0",
+                evidence_label="금액",
+                transfer_amount="14,483,055",
+                settle_class="CONFIRMED",
+                order_type="SUB",
+            ),
+            FundResolvedItem(
+                fund_code="492007",
+                fund_name="액티브배당성장70혼합형",
+                base_date="2026-04-27",
+                t_day=1,
+                slot_id="492007_T1",
+                evidence_label="D+1(예상금액)",
+                transfer_amount="6,587,078",
+                settle_class="PENDING",
+                order_type="SUB",
+            ),
+            FundResolvedItem(
+                fund_code="F00432",
+                fund_name="글로벌 자산배분안정형",
+                base_date="2026-04-27",
+                t_day=0,
+                slot_id="F00432_T0",
+                evidence_label="금액",
+                transfer_amount="1,166,711",
+                settle_class="CONFIRMED",
+                order_type="SUB",
+            ),
+            FundResolvedItem(
+                fund_code="F00432",
+                fund_name="글로벌 자산배분안정형",
+                base_date="2026-04-27",
+                t_day=1,
+                slot_id="F00432_T1",
+                evidence_label="D+1(예상금액)",
+                transfer_amount="12,673,412",
+                settle_class="PENDING",
+                order_type="SUB",
+            ),
+            FundResolvedItem(
+                fund_code="822337",
+                fund_name="글로벌 자산배분적극형",
+                base_date="2026-04-27",
+                t_day=0,
+                slot_id="822337_T0",
+                evidence_label="금액",
+                transfer_amount="13,350,190",
+                settle_class="CONFIRMED",
+                order_type="SUB",
+            ),
+            FundResolvedItem(
+                fund_code="822337",
+                fund_name="글로벌 자산배분적극형",
+                base_date="2026-04-27",
+                t_day=1,
+                slot_id="822337_T1",
+                evidence_label="D+1(예상금액)",
+                transfer_amount="5,934,685",
+                settle_class="PENDING",
+                order_type="SUB",
+            ),
+            FundResolvedItem(
+                fund_code="004434",
+                fund_name="미국고배당포커스주식형",
+                base_date="2026-04-27",
+                t_day=0,
+                slot_id="004434_T0",
+                evidence_label="금액",
+                transfer_amount="7,492,608",
+                settle_class="CONFIRMED",
+                order_type="SUB",
+            ),
+            FundResolvedItem(
+                fund_code="004434",
+                fund_name="미국고배당포커스주식형",
+                base_date="2026-04-27",
+                t_day=1,
+                slot_id="004434_T1",
+                evidence_label="D+1(예상금액)",
+                transfer_amount="13,984,034",
+                settle_class="PENDING",
+                order_type="SUB",
+            ),
+            FundResolvedItem(
+                fund_code="4013",
+                fund_name="인덱스플러스알파 70 혼합형",
+                base_date="2026-04-27",
+                t_day=0,
+                slot_id="4013_T0",
+                evidence_label="금액",
+                transfer_amount="13,951,275",
+                settle_class="CONFIRMED",
+                order_type="SUB",
+            ),
+            FundResolvedItem(
+                fund_code="4013",
+                fund_name="인덱스플러스알파 70 혼합형",
+                base_date="2026-04-27",
+                t_day=1,
+                slot_id="4013_T1",
+                evidence_label="D+1(예상금액)",
+                transfer_amount="17,883,174",
+                settle_class="PENDING",
+                order_type="SUB",
+            ),
+            FundResolvedItem(
+                fund_code="91414",
+                fund_name="인덱스혼합형 2 (주식 4)",
+                base_date="2026-04-27",
+                t_day=0,
+                slot_id="91414_T0",
+                evidence_label="금액",
+                transfer_amount="111,494,218",
+                settle_class="CONFIRMED",
+                order_type="SUB",
+            ),
+            FundResolvedItem(
+                fund_code="91414",
+                fund_name="인덱스혼합형 2 (주식 4)",
+                base_date="2026-04-27",
+                t_day=1,
+                slot_id="91414_T1",
+                evidence_label="D+1(예상금액)",
+                transfer_amount="2,300,135,515",
+                settle_class="PENDING",
+                order_type="SUB",
+            ),
+        ]
+
+        result = self.extractor._build_result(items, [], document_text=document_text)
+
+        self.assertEqual(result.issues, [])
+        self.assertEqual(
+            sorted(
+                (order.fund_code, order.t_day, order.settle_class.value, order.order_type.value, order.transfer_amount)
+                for order in result.orders
+            ),
+            [
+                ("004434", 0, "CONFIRMED", "RED", "-7,492,608"),
+                ("004434", 1, "PENDING", "SUB", "13,984,034"),
+                ("4013", 0, "CONFIRMED", "RED", "-13,951,275"),
+                ("4013", 1, "PENDING", "RED", "-17,883,174"),
+                ("492007", 0, "CONFIRMED", "RED", "-14,483,055"),
+                ("492007", 1, "PENDING", "SUB", "6,587,078"),
+                ("822337", 0, "CONFIRMED", "SUB", "13,350,190"),
+                ("822337", 1, "PENDING", "SUB", "5,934,685"),
+                ("91414", 0, "CONFIRMED", "RED", "-111,494,218"),
+                ("91414", 1, "PENDING", "RED", "-2,300,135,515"),
+                ("F00432", 0, "CONFIRMED", "SUB", "1,166,711"),
+                ("F00432", 1, "PENDING", "SUB", "12,673,412"),
+            ],
+        )
+
     def test_markdown_fund_code_index_detects_prefixed_custodian_code_header(self) -> None:
         header = [
             "운용지시서 / 2025-11-28 / 펀드명",
@@ -6031,6 +6224,155 @@ class ExtractorLogicTests(unittest.TestCase):
         self.assertEqual(
             [(item.slot_id, item.order_type) for item in resolved],
             [("T0_NET", "RED"), ("T1_SUB", "SUB")],
+        )
+
+    def test_build_deterministic_resolved_items_uses_row_context_for_unsigned_future_schedule_rows(self) -> None:
+        resolved = self.extractor._build_deterministic_resolved_items_from_settle_items(
+            [
+                FundSettleItem(
+                    fund_code="492007",
+                    fund_name="액티브배당성장70혼합형",
+                    base_date="2026-04-27",
+                    t_day=0,
+                    slot_id="492007_T0",
+                    evidence_label="금액",
+                    transfer_amount="14,483,055",
+                    settle_class="CONFIRMED",
+                ),
+                FundSettleItem(
+                    fund_code="492007",
+                    fund_name="액티브배당성장70혼합형",
+                    base_date="2026-04-27",
+                    t_day=1,
+                    slot_id="492007_T1",
+                    evidence_label="D+1(예상금액)",
+                    transfer_amount="6,587,078",
+                    settle_class="PENDING",
+                ),
+                FundSettleItem(
+                    fund_code="F00432",
+                    fund_name="글로벌 자산배분안정형",
+                    base_date="2026-04-27",
+                    t_day=0,
+                    slot_id="F00432_T0",
+                    evidence_label="금액",
+                    transfer_amount="1,166,711",
+                    settle_class="CONFIRMED",
+                ),
+                FundSettleItem(
+                    fund_code="F00432",
+                    fund_name="글로벌 자산배분안정형",
+                    base_date="2026-04-27",
+                    t_day=1,
+                    slot_id="F00432_T1",
+                    evidence_label="D+1(예상금액)",
+                    transfer_amount="12,673,412",
+                    settle_class="PENDING",
+                ),
+                FundSettleItem(
+                    fund_code="822337",
+                    fund_name="글로벌 자산배분적극형",
+                    base_date="2026-04-27",
+                    t_day=0,
+                    slot_id="822337_T0",
+                    evidence_label="금액",
+                    transfer_amount="13,350,190",
+                    settle_class="CONFIRMED",
+                ),
+                FundSettleItem(
+                    fund_code="822337",
+                    fund_name="글로벌 자산배분적극형",
+                    base_date="2026-04-27",
+                    t_day=1,
+                    slot_id="822337_T1",
+                    evidence_label="D+1(예상금액)",
+                    transfer_amount="5,934,685",
+                    settle_class="PENDING",
+                ),
+                FundSettleItem(
+                    fund_code="004434",
+                    fund_name="미국고배당포커스주식형",
+                    base_date="2026-04-27",
+                    t_day=0,
+                    slot_id="004434_T0",
+                    evidence_label="금액",
+                    transfer_amount="7,492,608",
+                    settle_class="CONFIRMED",
+                ),
+                FundSettleItem(
+                    fund_code="004434",
+                    fund_name="미국고배당포커스주식형",
+                    base_date="2026-04-27",
+                    t_day=1,
+                    slot_id="004434_T1",
+                    evidence_label="D+1(예상금액)",
+                    transfer_amount="13,984,034",
+                    settle_class="PENDING",
+                ),
+                FundSettleItem(
+                    fund_code="4013",
+                    fund_name="인덱스플러스알파 70 혼합형",
+                    base_date="2026-04-27",
+                    t_day=0,
+                    slot_id="4013_T0",
+                    evidence_label="금액",
+                    transfer_amount="13,951,275",
+                    settle_class="CONFIRMED",
+                ),
+                FundSettleItem(
+                    fund_code="4013",
+                    fund_name="인덱스플러스알파 70 혼합형",
+                    base_date="2026-04-27",
+                    t_day=1,
+                    slot_id="4013_T1",
+                    evidence_label="D+1(예상금액)",
+                    transfer_amount="17,883,174",
+                    settle_class="PENDING",
+                ),
+                FundSettleItem(
+                    fund_code="91414",
+                    fund_name="인덱스혼합형 2 (주식 4)",
+                    base_date="2026-04-27",
+                    t_day=0,
+                    slot_id="91414_T0",
+                    evidence_label="금액",
+                    transfer_amount="111,494,218",
+                    settle_class="CONFIRMED",
+                ),
+                FundSettleItem(
+                    fund_code="91414",
+                    fund_name="인덱스혼합형 2 (주식 4)",
+                    base_date="2026-04-27",
+                    t_day=1,
+                    slot_id="91414_T1",
+                    evidence_label="D+1(예상금액)",
+                    transfer_amount="2,300,135,515",
+                    settle_class="PENDING",
+                ),
+            ],
+            document_text=self._kdb_future_bucket_document_text(),
+            raw_text=self._kdb_future_bucket_raw_text(),
+            target_fund_scope=None,
+        )
+
+        self.assertIsNotNone(resolved)
+        assert resolved is not None
+        self.assertEqual(
+            sorted((item.slot_id, item.order_type) for item in resolved),
+            [
+                ("004434_T0", "RED"),
+                ("004434_T1", "SUB"),
+                ("4013_T0", "RED"),
+                ("4013_T1", "RED"),
+                ("492007_T0", "RED"),
+                ("492007_T1", "SUB"),
+                ("822337_T0", "SUB"),
+                ("822337_T1", "SUB"),
+                ("91414_T0", "RED"),
+                ("91414_T1", "RED"),
+                ("F00432_T0", "SUB"),
+                ("F00432_T1", "SUB"),
+            ],
         )
 
     def test_build_deterministic_settle_items_from_amount_items(self) -> None:

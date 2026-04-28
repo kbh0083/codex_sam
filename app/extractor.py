@@ -3688,9 +3688,11 @@ class FundOrderExtractor:
                             t_day = pending_t_day
                         slot_order_type = explicit_order_type
                         if uses_row_context_order_type:
-                            slot_order_type = self._row_context_order_type_from_markdown_row(
+                            slot_order_type, _ = self._resolve_row_context_order_type_for_markdown_amount(
                                 header=header,
                                 row=row,
+                                column_index=column_index,
+                                amount_decimal=Decimal(amount.replace(",", "")),
                             )
                         slot_kind = self._expected_t_day_slot_kind(slot_order_type, uses_signed_amount)
                         if slot_kind is None:
@@ -3795,9 +3797,11 @@ class FundOrderExtractor:
                             t_day = pending_t_day
                         slot_order_type = explicit_order_type
                         if uses_row_context_order_type:
-                            slot_order_type = self._row_context_order_type_from_markdown_row(
+                            slot_order_type, _ = self._resolve_row_context_order_type_for_markdown_amount(
                                 header=header,
                                 row=row,
+                                column_index=column_index,
+                                amount_decimal=Decimal(amount.replace(",", "")),
                             )
                         slot_kind = self._expected_t_day_slot_kind(slot_order_type, uses_signed_amount)
                         if slot_kind is None:
@@ -4713,16 +4717,22 @@ class FundOrderExtractor:
 
                 for column_index, explicit_order_type in explicit_columns.items():
                     order_type = explicit_order_type
+                    amount = None if column_index >= len(row) else self._canonicalize_amount_text(row[column_index])
+                    if amount is None or self._is_effectively_zero_amount(amount):
+                        continue
                     if (
                         order_type is None
                         and row_context_order_type is not None
                         and row_context_priorities.get(column_index) == preferred_row_context_priority
                     ):
-                        order_type = row_context_order_type
-                    if order_type is None or column_index >= len(row):
-                        continue
-                    amount = self._canonicalize_amount_text(row[column_index])
-                    if amount is None or self._is_effectively_zero_amount(amount):
+                        if self._amount_text_has_explicit_sign_for_deterministic(row[column_index]):
+                            try:
+                                order_type = self._order_type_from_signed_amount(Decimal(amount.replace(",", "")))
+                            except InvalidOperation:
+                                order_type = None
+                        else:
+                            order_type = row_context_order_type
+                    if order_type is None:
                         continue
                     key = (fund_code, amount.lstrip("+-"))
                     if key not in targets:
@@ -5018,7 +5028,12 @@ class FundOrderExtractor:
             segment = raw_segment.strip()
             if not segment:
                 continue
-            if ("금액" not in segment and "amount" not in segment) and not FundOrderExtractor._is_plain_generic_amount_segment(segment):
+            schedule_like_segment = FundOrderExtractor._is_unsigned_future_schedule_segment_for_row_context(segment)
+            if (
+                ("금액" not in segment and "amount" not in segment)
+                and not FundOrderExtractor._is_plain_generic_amount_segment(segment)
+                and not schedule_like_segment
+            ):
                 continue
 
             has_sub = any(token in segment for token in ("설정", "입금", "투입", "납입", "매입", "buy", "subscription"))
@@ -5036,7 +5051,7 @@ class FundOrderExtractor:
                     priority = 3
                 else:
                     priority = 4
-            elif FundOrderExtractor._is_plain_generic_amount_segment(segment):
+            elif FundOrderExtractor._is_plain_generic_amount_segment(segment) or schedule_like_segment:
                 priority = 10
 
             if priority is None:
@@ -5056,6 +5071,23 @@ class FundOrderExtractor:
         normalized = FundOrderExtractor._plain_generic_amount_segment(segment)
         return normalized in {"금액", "금액원", "amount", "amountkrw", "amountwon"}
 
+    @staticmethod
+    def _is_unsigned_future_schedule_segment_for_row_context(segment: str) -> bool:
+        """row-context header가 있을 때 행 방향을 상속해야 하는 unsigned future bucket 열인지 본다."""
+        semantic_segment = FundOrderExtractor._semantic_header_label_for_deterministic(segment).lower()
+        if not FundOrderExtractor._evidence_implies_schedule(semantic_segment):
+            return False
+        return FundOrderExtractor._order_type_hint_from_header_label(semantic_segment) is None
+
+    @staticmethod
+    def _amount_text_has_explicit_sign_for_deterministic(value: str | None) -> bool:
+        """표 셀 금액이 부호로 방향을 이미 드러내는지 본다."""
+        normalized_token = DocumentLoader._normalize_document_amount_token(value)
+        if normalized_token is None:
+            return False
+        normalized = normalized_token.replace(",", "")
+        return normalized.startswith("-") or normalized.startswith("+")
+
     def _row_context_order_type_from_markdown_row(
         self,
         *,
@@ -5072,6 +5104,19 @@ class FundOrderExtractor:
             if order_type is not None:
                 return order_type
         return None
+
+    def _resolve_row_context_order_type_for_markdown_amount(
+        self,
+        *,
+        header: list[str],
+        row: list[str],
+        column_index: int,
+        amount_decimal: Decimal,
+    ) -> tuple[OrderType | None, bool]:
+        """row-context column에서도 signed amount가 있으면 부호를 우선한다."""
+        if self._amount_text_has_explicit_sign_for_deterministic(row[column_index]):
+            return self._order_type_from_signed_amount(amount_decimal), True
+        return self._row_context_order_type_from_markdown_row(header=header, row=row), False
 
     @staticmethod
     def _remarks_column_index_for_deterministic(header: list[str]) -> int | None:
@@ -5259,16 +5304,21 @@ class FundOrderExtractor:
                         amount_decimal = Decimal(amount.replace(",", ""))
                         order_type = explicit_order_type
                         if uses_row_context_order_type:
-                            order_type = self._row_context_order_type_from_markdown_row(
+                            order_type, uses_signed_row_amount = self._resolve_row_context_order_type_for_markdown_amount(
                                 header=semantic_header,
                                 row=row,
+                                column_index=column_index,
+                                amount_decimal=amount_decimal,
                             )
                             if order_type is None:
                                 continue
-                            signed_amount = abs(amount_decimal)
-                            if order_type is OrderType.RED:
-                                signed_amount = -signed_amount
-                            transfer_amount = self._format_decimal_amount(signed_amount)
+                            if uses_signed_row_amount:
+                                transfer_amount = self._format_decimal_amount(amount_decimal)
+                            else:
+                                signed_amount = abs(amount_decimal)
+                                if order_type is OrderType.RED:
+                                    signed_amount = -signed_amount
+                                transfer_amount = self._format_decimal_amount(signed_amount)
                         elif uses_signed_amount:
                             order_type = self._order_type_from_signed_amount(amount_decimal)
                             if order_type is None:
@@ -5628,16 +5678,21 @@ class FundOrderExtractor:
                         amount_decimal = Decimal(amount.replace(",", ""))
                         order_type = explicit_order_type
                         if uses_row_context_order_type:
-                            order_type = self._row_context_order_type_from_markdown_row(
+                            order_type, uses_signed_row_amount = self._resolve_row_context_order_type_for_markdown_amount(
                                 header=semantic_header,
                                 row=row,
+                                column_index=column_index,
+                                amount_decimal=amount_decimal,
                             )
                             if order_type is None:
                                 continue
-                            signed_amount = abs(amount_decimal)
-                            if order_type is OrderType.RED:
-                                signed_amount = -signed_amount
-                            transfer_amount = self._format_decimal_amount(signed_amount)
+                            if uses_signed_row_amount:
+                                transfer_amount = self._format_decimal_amount(amount_decimal)
+                            else:
+                                signed_amount = abs(amount_decimal)
+                                if order_type is OrderType.RED:
+                                    signed_amount = -signed_amount
+                                transfer_amount = self._format_decimal_amount(signed_amount)
                         elif uses_signed_amount:
                             order_type = self._order_type_from_signed_amount(amount_decimal)
                             if order_type is None:

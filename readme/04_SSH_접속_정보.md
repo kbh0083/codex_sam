@@ -1,8 +1,8 @@
 # SSH 접속 정보
 
 > 민감 정보가 포함된 운영 문서다. 외부 공유를 금지한다.
-> last updated: 2026-04-27
-> 최신 실행 인계는 [handoff_26042702.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md), historical handoff archive는 [handoff_archive_260427.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_260427.md), 전체 시작 문서는 [00_시작_안내.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/00_시작_안내.md)를 우선 본다.
+> last updated: 2026-04-28
+> 최신 실행 인계는 [handoff_26042802.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042802.md), historical handoff archive는 [handoff_archive_260427.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_260427.md), 전체 시작 문서는 [00_시작_안내.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/00_시작_안내.md)를 우선 본다.
 
 ## LLM 터널 정보
 - 로컬 : ssh -L 3910:localhost:3950 minisoft@1.241.20.229 -p 2194
@@ -10,10 +10,13 @@
 - 암호 (로컬/was 동일) : Mini1234!
 - 현재 extractor 실효 `base_url`은 로컬 `3910`, WAS `3900`이다.
 - 현재 extractor 실효 `max_tokens`는 로컬/WAS 모두 `16384`이다.
+- WAS `3900` 장시간 실행 복구는 `SSH_ASKPASS + nohup ssh -f -N -L 3900:localhost:3950 ...` 방식이 현재 유효 절차다.
 - 연결 확인은 아래 순서로 수행한다.
   1. `lsof -nP -iTCP:3910 -sTCP:LISTEN`
-  2. 인증 포함 `curl http://localhost:3910/v1/models`
-  3. 필요 시 위 SSH 터널을 다시 연다.
+  2. `lsof -nP -iTCP:3900 -sTCP:LISTEN`
+  3. 인증 포함 `curl http://localhost:3910/v1/models`
+  4. 인증 포함 `curl http://localhost:3900/v1/models`
+  5. 필요 시 위 SSH 터널을 다시 연다.
 
 ## DB/Redis 터널 정보
 {

@@ -4,7 +4,7 @@
 
 ## 목적
 - 이 문서는 `handoff_26042201.md`, `handoff_26042401.md`, `handoff_26042701.md` 세 문서를 한곳에 모아 보는 historical archive다.
-- 현재 active handoff는 [handoff_26042702.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md)다.
+- 현재 active handoff는 [handoff_26042802.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042802.md)다.
 - 이 archive는 **현재 상태를 다시 쓰는 문서가 아니라**, 과거 active handoff들의 역할과 당시 판단을 보관하는 문서다.
 - `26042201` 이전 장기 history는 계속 [handoff_archive_pre260422.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_pre260422.md)를 본다.
 
@@ -75,7 +75,7 @@
 ### 시점과 역할
 - `2026-04-27`에 작성된 첫 통합 active handoff였다.
 - `2026-04-24` canonical baseline과 그 직후 로컬/WAS 후속 작업을 한 문서에 함께 실어 둔 snapshot이다.
-- 현재는 [handoff_26042702.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md)로 active 역할이 넘어갔다.
+- 현재는 [handoff_26042802.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042802.md)로 active 역할이 넘어갔다.
 
 ### 당시 핵심 변경/검증/판단
 - 로컬 source of truth 측 변경:
@@ -84,8 +84,8 @@
   - 당시 기준 final serialized `t_day=="02"` 제거 계약
   - prompt marker stripping bug fix와 regression test 추가
 - 검증:
-  - latest retained local full review [tt1921.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt1921.md) `38 PASS / 0 FAIL / 0 BLOCKED`
-  - latest retained WAS full review [tt2050.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2050.md) `38 PASS / 0 FAIL / 0 BLOCKED`
+  - 당시 retained local full review [tt1921.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt1921.md) `38 PASS / 0 FAIL / 0 BLOCKED`
+  - 당시 retained WAS full review [tt2050.md](/Users/bhkim/Documents/codex_prj_sam_asset/test_report/20260424/tt2050.md) `38 PASS / 0 FAIL / 0 BLOCKED`
   - post-merge targeted regression `27 passed`
   - focused regression `7 passed`
 - WAS 후속 수정:
@@ -104,6 +104,6 @@
 - gitignored 산출물은 report/history의 일부이지만, 새 clone이나 다른 머신에서는 직접 복사하거나 재생성해야 한다.
 
 ## 현재 문서 사용 순서
-1. 현재 세션/최신 상태는 [handoff_26042702.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md)를 먼저 읽는다.
+1. 현재 세션/최신 상태는 [handoff_26042802.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042802.md)를 먼저 읽는다.
 2. 이 archive는 “왜 이런 기준선이 생겼는지”가 필요할 때만 참고한다.
 3. `26042201` 이전 장기 history가 필요하면 [handoff_archive_pre260422.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_pre260422.md)를 이어서 본다.
