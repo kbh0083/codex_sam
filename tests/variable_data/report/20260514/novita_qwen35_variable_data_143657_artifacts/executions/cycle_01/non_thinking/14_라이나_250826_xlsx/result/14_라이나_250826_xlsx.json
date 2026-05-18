@@ -1,0 +1,101 @@
+{
+  "file_name": "라이나_250826.xlsx",
+  "source_path": "/Users/bhkim/Documents/codex_prj_sam_asset/document/라이나_250826.xlsx",
+  "model_name": "qwen/qwen3.5-397b-a17b",
+  "base_date": "2025-08-26",
+  "status": "COMPLETED",
+  "reason": null,
+  "issues": [],
+  "orders": [
+    {
+      "fund_code": "6104",
+      "fund_name": "채권형",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-08-26",
+      "t_day": "01",
+      "transfer_amount": "1,243,750"
+    },
+    {
+      "fund_code": "6104",
+      "fund_name": "채권형",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-08-26",
+      "t_day": "01",
+      "transfer_amount": "39,961,885"
+    },
+    {
+      "fund_code": "6108",
+      "fund_name": "유럽주식형",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-08-26",
+      "t_day": "01",
+      "transfer_amount": "19,500"
+    },
+    {
+      "fund_code": "6108",
+      "fund_name": "유럽주식형",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-08-26",
+      "t_day": "01",
+      "transfer_amount": "66,132,056"
+    },
+    {
+      "fund_code": "6114",
+      "fund_name": "인덱스주식형",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-08-26",
+      "t_day": "01",
+      "transfer_amount": "1,106,000"
+    },
+    {
+      "fund_code": "6114",
+      "fund_name": "인덱스주식형",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-08-26",
+      "t_day": "01",
+      "transfer_amount": "52,671"
+    },
+    {
+      "fund_code": "6115",
+      "fund_name": "삼성그룹주형",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-08-26",
+      "t_day": "01",
+      "transfer_amount": "146,250"
+    },
+    {
+      "fund_code": "6115",
+      "fund_name": "삼성그룹주형",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-08-26",
+      "t_day": "01",
+      "transfer_amount": "4,485"
+    },
+    {
+      "fund_code": "6101",
+      "fund_name": "혼합성장형",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-08-26",
+      "t_day": "01",
+      "transfer_amount": "25,915,800"
+    },
+    {
+      "fund_code": "6101",
+      "fund_name": "혼합성장형",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-08-26",
+      "t_day": "01",
+      "transfer_amount": "5,653,417"
+    }
+  ]
+}

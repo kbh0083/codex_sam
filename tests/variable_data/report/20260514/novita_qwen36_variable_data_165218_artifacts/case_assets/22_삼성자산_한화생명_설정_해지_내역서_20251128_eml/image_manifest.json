@@ -1,0 +1,11 @@
+{
+  "renderer": "html_table_pil",
+  "source_path": "/Users/bhkim/Documents/codex_prj_sam_asset/document/삼성자산_한화생명_설정_해지_내역서_20251128.eml",
+  "image_path": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_165218_artifacts/case_assets/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/input_image/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml_table.png",
+  "html_table_count": 1,
+  "html_row_count": 24,
+  "html_column_count": 14,
+  "image_width": 4832,
+  "image_height": 2972,
+  "image_sha256": "bed74829fd2a8df6efaf942352d78f07996211b70b99794917f8c0ab90aa2a6f"
+}

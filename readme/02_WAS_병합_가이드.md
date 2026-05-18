@@ -3,8 +3,8 @@
 이 문서는 **현재 구현된 데이터 추출 기능을 개발 WAS 서버로 포팅할 때**,  
 `ExtractionService`를 그대로 붙이는 방식이 아니라 **queue + task handler 구조**로 옮기는 방법을 설명한다.
 
-> 2026-04-28 기준 인계 보강.
-> 최신 active handoff는 [handoff_26042802.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042802.md)다.
+> 2026-05-11 기준 인계 보강.
+> 최신 active handoff는 [handoff_26051801.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26051801.md)다.
 > 과거 active handoff 통합 archive는 [handoff_archive_260427.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_260427.md)다.
 > 공통 최신 상태와 테스트 보고 원칙은 [00_시작_안내.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/00_시작_안내.md)를 출처로 둔다.
 > 이 문서는 WAS 포팅/병합 전용 규칙만 유지한다.
@@ -18,8 +18,7 @@
 먼저 범위를 분명히 하면:
 
 - 이 문서는 **현재 구현 기준 포팅 가이드**다.
-- 거래처 프로필, `document_family`, 형식별 profile/prompt override 같은 **장기 설계안**은
-  [90_설계_거래처_프로필_프리징.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/90_설계_거래처_프로필_프리징.md)를 따른다.
+- 거래처 프로필, `document_family`, 형식별 profile/prompt override 같은 **장기 설계안**은 최신 active handoff의 남은 과제와 Qwen migration prototype 결과를 함께 보고 재정리한다.
 - 즉 현재 WAS 반영은 이 문서를 기준으로 하고, 이후 구조 개편 일정이 잡히면 설계 문서를 기준으로 별도 구현한다.
 
 특히 아래 전제를 기준으로 작성했다.
@@ -95,7 +94,7 @@
   - confirmed row(`settle_class=="2"`)는 유지
 - 반영 파일:
   - runtime: [/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/src/app/services/variable_annuity/extract/output_contract.py](/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/src/app/services/variable_annuity/extract/output_contract.py)
-  - regression test: [/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/tests/test_variable_annuity_output_contract.py](/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/tests/test_variable_annuity_output_contract.py)
+  - regression test: `/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/tests/test_variable_annuity_output_contract.py` (현재 로컬 checkout에 없을 수 있는 WAS repo 기준 경로)
 - 산출물:
   - 계획서: [mp1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260427/mp1925.md)
   - 결과보고서: [mr1925.md](/Users/bhkim/Documents/codex_prj_sam_asset/merge_report/20260427/mr1925.md)
@@ -121,7 +120,7 @@
   - updated rows `0`
 - full review runner는 아래 경로를 기준으로 본다.
   - local orchestrator: [was_full_document_authoritative_review.py](/Users/bhkim/Documents/codex_prj_sam_asset/scripts/was_full_document_authoritative_review.py)
-  - WAS child runner: [/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/scripts/va_extract_case_runner.py](/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/scripts/va_extract_case_runner.py)
+  - WAS child runner: `/Users/bhkim/10_project/01_samsung_asset/samsung_ai_portal_backend/scripts/va_extract_case_runner.py` (현재 로컬 checkout에 없을 수 있는 WAS repo 기준 경로)
 - 문서-only 전수 검수에서 WAS source of truth DB row는 `db_company` exact match로 조회한다.
   - 이메일 제목/도메인 재매칭보다 manifest의 `db_company`를 우선한다.
   - `answer_company`와 `db_company`는 `case_manifest.json`, `validation_summary.json`, canonical 보고서에 함께 남긴다.

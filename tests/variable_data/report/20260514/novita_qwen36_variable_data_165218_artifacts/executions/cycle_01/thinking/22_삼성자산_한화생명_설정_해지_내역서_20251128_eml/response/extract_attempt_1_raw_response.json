@@ -1,0 +1,70 @@
+{
+  "request": {
+    "url": "https://api.novita.ai/openai/v1/chat/completions",
+    "model": "qwen/qwen3.6-27b",
+    "message_count": 1,
+    "content_parts": [
+      "text",
+      "image_url"
+    ],
+    "attempt": 1,
+    "max_attempts": 4,
+    "enable_thinking": true,
+    "separate_reasoning": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 0.0,
+    "repetition_penalty": 1.0,
+    "max_tokens": 32768,
+    "stream": false,
+    "response_format": {
+      "type": "json_object"
+    }
+  },
+  "http_status": 200,
+  "elapsed_seconds": 33.966,
+  "response_json": {
+    "id": "70e0dbfa5a7747755b29a82b9506589d",
+    "object": "chat.completion",
+    "created": 1778745242,
+    "model": "qwen/qwen3.6-27b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"file_name\": \"삼성자산_한화생명_설정_해지_내역서_20251128.eml\",\n  \"source_path\": \"/Users/bhkim/Documents/codex_prj_sam_asset/document/삼성자산_한화생명_설정_해지_내역서_20251128.eml\",\n  \"model_name\": \"qwen/qwen3.6-27b\",\n  \"base_date\": \"2025-11-28\",\n  \"status\": \"COMPLETED\",\n  \"reason\": null,\n  \"issues\": [],\n  \"orders\": [\n    {\n      \"fund_code\": \"32451\",\n      \"fund_name\": \"퇴직연금연금자산배분형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2025-11-28\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"500,063\"\n    },\n    {\n      \"fund_code\": \"V63053\",\n      \"fund_name\": \"보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-11-28\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"85,848,214\"\n    },\n    {\n      \"fund_code\": \"V63053\",\n      \"fund_name\": \"보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-11-28\",\n      \"t_day\": \"03\",\n      \"transfer_amount\": \"508,615,208\"\n    }\n  ]\n}",
+          "reasoning_content": "user wants me to extract order data from the provided image of a \"Hanwha Life Setup/Cancellation Statement\" (한화생명 설정/해지 내역서).\n\n**1. Analyze the Request:**\n*   **Input:** An image of a financial statement table.\n*   **Task:** Extract order data (fund code, fund name, amounts, types) into a specific JSON format.\n*   **Base Date:** 2025-11-28.\n*   **Rules:**\n    *   `fund_code` and `fund_name` must be exact.\n    *   Ignore total rows and zero/blank rows.\n    *   Group rows by fund code/name.\n    *   **Settled Amount (확정분):** Use `펀드계` (Fund Account) column under `설정(예탁) 및 해지금액` (Setup/Deposit & Cancellation Amount).\n        *   Positive `펀드계` -> `order_type=\"3\"` (Setup), `settle_class=\"2\"`, `t_day=\"01\"`.\n        *   Negative `펀드계` -> Absolute value, `order_type=\"1\"` (Redemption), `settle_class=\"2\"`, `t_day=\"01\"`.\n    *   **Claim Amount (청구분):** Use `익익영업일 이체예상금액` (T+2 Business Day Transfer Expected Amount).\n        *   **Crucial Rule:** Do NOT use `익영업일 이체예상금액` (T+1). Only use `익익영업일`.\n        *   Positive `익익영업일` -> `order_type=\"3\"`, `settle_class=\"1\"`, `t_day=\"03\"`.\n        *   Negative `익익영업일` -> Absolute value, `order_type=\"1\"`, `settle_class=\"1\"`, `t_day=\"03\"`.\n    *   If both `펀드계` and `익익영업일` are non-zero for the same fund, create two separate orders.\n    *   `transfer_amount` must be a positive string with commas (e.g., \"1,000\").\n    *   Specific check: Ensure 32451 settled, V63053 settled, and V63053 claim orders are present.\n\n**2. Analyze the Image:**\n*   **Header:**\n    *   Columns: 펀드코드, 펀드명, 설정(예탁) 및 해지금액 (split into 투자일임/수익증권, 펀드계), 보수출금, 예탁금 이용료, 수탁은행 수령금액 (한화<->은행), 익영업일 이체예상금액, 익익영업일 이체예상금액, 감사인보수 회계처리, 초기자금, 당일 보험계정 발생, 수탁은행 환매사.\n*   **Row 1 (Total):** Ignore.\n*   **Row 2 (Fund 32451):**\n    *   Code: 32451\n    *   Name: 퇴직연금연금자산배분형\n    *   `펀드계`: 500,063 (Positive) -> Settled Setup.\n    *   `익익영업일`: 0 (Blank/Zero).\n    *   Action: Create Settled Order.\n*   **Row 3 (Fund V430252):**\n    *   Code: V430252\n    *   Name: 변액CI 혼합형(삼성단기채권)\n    *   `펀드계`: 0\n    *   `익익영업일`: 0\n    *   Action: Ignore.\n*   **Row 4 (Fund V530115):**\n    *   Code: V530115\n    *   Name: 변액연금II 혼합형II(삼성단기채권)\n    *   `펀드계`: 0\n    *   `익익영업일`: 0\n    *   Action: Ignore.\n*   **Row 5 (Fund V530246):**\n    *   Code: V530246\n    *   Name: 변액연금II 가치주혼합형II(삼성단기채권)\n    *   `펀드계`: 0\n    *   `익익영업일`: 0\n    *   Action: Ignore.\n*   **Row 6 (Fund V63053):**\n    *   Code: V63053\n    *   Name: 보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\n    *   `펀드계`: -85,848,214 (Negative) -> Settled Redemption.\n    *   `익익영업일`: -508,615,208 (Negative) -> Claim Redemption.\n    *   Action: Create Settled Order AND Claim Order.\n*   **Row 7 (Fund V910119):**\n    *   Code: V910119\n    *   Name: 플러스 UP 변액연금 V 파생혼합형(삼성크레딧채권)\n    *   `펀드계`: 0\n    *   `익익영업일`: 0\n    *   Action: Ignore.\n*   **Row 8 (Fund V9101R):**\n    *   Code: V9101R\n    *   Name: 플러스 UP 변액연금 V 파생혼합형(삼성단기채권)\n    *   `펀드계`: 0\n    *   `익익영업일`: 0\n    *   Action: Ignore.\n\n**3. Constructing the Orders:**\n\n*   **Order 1 (Fund 32451):**\n    *   `fund_code`: \"32451\"\n    *   `fund_name`: \"퇴직연금연금자산배분형\"\n    *   `settle_class`: \"2\" (Settled)\n    *   `order_type`: \"3\" (Setup, because `펀드계` is positive 500,063)\n    *   `base_date`: \"2025-11-28\"\n    *   `t_day`: \"01\"\n    *   `transfer_amount`: \"500,063\"\n\n*   **Order 2 (Fund V63053 - Settled):**\n    *   `fund_code`: \"V63053\"\n    *   `fund_name`: \"보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\"\n    *   `settle_class`: \"2\" (Settled)\n    *   `order_type`: \"1\" (Redemption, because `펀드계` is negative -85,848,214)\n    *   `base_date`: \"2025-11-28\"\n    *   `t_day`: \"01\"\n    *   `transfer_amount`: \"85,848,214\" (Absolute value)\n\n*   **Order 3 (Fund V63053 - Claim):**\n    *   `fund_code`: \"V63053\"\n    *   `fund_name`: \"보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\"\n    *   `settle_class`: \"1\" (Claim)\n    *   `order_type`: \"1\" (Redemption, because `익익영업일` is negative -508,615,208)\n    *   `base_date`: \"2025-11-28\"\n    *   `t_day`: \"03\"\n    *   `transfer_amount`: \"508,615,208\" (Absolute value)\n\n**4. Final Verification:**\n*   Check against specific instructions:\n    *   32451 settled order? Yes.\n    *   V63053 settled order? Yes.\n    *   V63053 claim order? Yes.\n    *   Did I use `익영업일` (T+1)? No, I used `익익영업일` (T+2).\n        *   Wait, let me double check the column headers in the image.\n        *   Header: `익영업일 이체예상금액` (T+1) | `익익영업일 이체예상금액` (T+2)\n        *   Row V63053:\n            *   `익영업일`: -458,400,000\n            *   `익익영업일`: -508,615,208\n        *   The rule says: \"청구분 금액은 반드시 `익익영업일 이체예상금액` 컬럼 금액만 추출합니다.\" and \"t_day=\"03\"은 오직 `익익영업일 이체예상금액` 값에서만 만듭니다.\"\n        *   So for V63053 claim, I must use -508,615,208. Correct.\n    *   Did I use `펀드계` for settled? Yes.\n        *   Row V63053 `펀드계`: -85,848,214. Correct.\n\n**5. Formatting:**\n*   JSON structure as requested.\n*   `file_name`: \"삼성자산_한화생명_설정_해지_내역서_20251128.eml\" (from prompt example, though image doesn't explicitly show filename, prompt implies it or I should use a generic one if not provided, but prompt says \"이미지에 있는...\". Wait, the prompt provides a template `file_name`: \"삼성자산_한화생명_설정_해지_내역서_20251128.eml\". I will use that).\n*   `source_path`: Same as above.\n*   `model_name`: \"qwen/qwen3.6-27b\" (from prompt).\n\nLet's refine the fund names from the image text carefully.\n*   32451: 퇴직연금연금자산배분형\n*   V63053: 보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\n\nLooks good.\n\nOne detail: `transfer_amount` format. \"comma 포함 양수 문자열\".\n*   500,063\n*   85,848,214\n*   508,615,208\n\nFinal check on V63053 name: \"보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\" - The text wraps. \"보장성변액 글로벌멀티에셋안정배분형III(삼성혼합 )\" - there might be a space at the end. I'll trim it.\n\nLet's assemble the JSON."
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3696,
+      "completion_tokens": 2970,
+      "total_tokens": 6666,
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "text_tokens": 1198,
+        "image_tokens": 2498,
+        "video_tokens": 0
+      },
+      "completion_tokens_details": {
+        "audio_tokens": 0,
+        "reasoning_tokens": 2434,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0,
+        "text_tokens": 536,
+        "image_tokens": 0,
+        "video_tokens": 0
+      }
+    },
+    "system_fingerprint": ""
+  },
+  "response_text": null
+}

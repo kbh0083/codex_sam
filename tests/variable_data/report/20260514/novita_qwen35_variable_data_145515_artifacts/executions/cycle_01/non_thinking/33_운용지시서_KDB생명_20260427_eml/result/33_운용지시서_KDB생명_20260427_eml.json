@@ -1,0 +1,119 @@
+{
+  "file_name": "운용지시서(KDB생명)_20260427.eml",
+  "source_path": "/Users/bhkim/Documents/codex_prj_sam_asset/document/운용지시서(KDB생명)_20260427.eml",
+  "model_name": "qwen/qwen3.5-397b-a17b",
+  "base_date": "2026-04-27",
+  "status": "COMPLETED",
+  "reason": null,
+  "issues": [],
+  "orders": [
+    {
+      "fund_code": "492007",
+      "fund_name": "액티브배당성장70혼합형",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2026-04-27",
+      "t_day": "02",
+      "transfer_amount": "6,587,078"
+    },
+    {
+      "fund_code": "492007",
+      "fund_name": "액티브배당성장70혼합형",
+      "settle_class": "2",
+      "order_type": "1",
+      "base_date": "2026-04-27",
+      "t_day": "01",
+      "transfer_amount": "14,483,055"
+    },
+    {
+      "fund_code": "F00432",
+      "fund_name": "글로벌 자산배분안정형",
+      "settle_class": "2",
+      "order_type": "3",
+      "base_date": "2026-04-27",
+      "t_day": "01",
+      "transfer_amount": "1,166,711"
+    },
+    {
+      "fund_code": "F00432",
+      "fund_name": "글로벌 자산배분안정형",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2026-04-27",
+      "t_day": "02",
+      "transfer_amount": "12,673,412"
+    },
+    {
+      "fund_code": "822337",
+      "fund_name": "글로벌 자산배분적극형",
+      "settle_class": "2",
+      "order_type": "3",
+      "base_date": "2026-04-27",
+      "t_day": "01",
+      "transfer_amount": "13,350,190"
+    },
+    {
+      "fund_code": "822337",
+      "fund_name": "글로벌 자산배분적극형",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2026-04-27",
+      "t_day": "02",
+      "transfer_amount": "5,934,685"
+    },
+    {
+      "fund_code": "004434",
+      "fund_name": "미국고배당포커스주식형",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2026-04-27",
+      "t_day": "02",
+      "transfer_amount": "13,984,034"
+    },
+    {
+      "fund_code": "004434",
+      "fund_name": "미국고배당포커스주식형",
+      "settle_class": "2",
+      "order_type": "1",
+      "base_date": "2026-04-27",
+      "t_day": "01",
+      "transfer_amount": "7,492,608"
+    },
+    {
+      "fund_code": "4013",
+      "fund_name": "인덱스플러스알파 70 혼합형",
+      "settle_class": "2",
+      "order_type": "1",
+      "base_date": "2026-04-27",
+      "t_day": "01",
+      "transfer_amount": "13,951,275"
+    },
+    {
+      "fund_code": "4013",
+      "fund_name": "인덱스플러스알파 70 혼합형",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2026-04-27",
+      "t_day": "02",
+      "transfer_amount": "17,883,174"
+    },
+    {
+      "fund_code": "91414",
+      "fund_name": "인덱스혼합형 2 (주식 4)",
+      "settle_class": "2",
+      "order_type": "1",
+      "base_date": "2026-04-27",
+      "t_day": "01",
+      "transfer_amount": "111,494,218"
+    },
+    {
+      "fund_code": "91414",
+      "fund_name": "인덱스혼합형 2 (주식 4)",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2026-04-27",
+      "t_day": "02",
+      "transfer_amount": "2,300,135,515"
+    }
+  ]
+}

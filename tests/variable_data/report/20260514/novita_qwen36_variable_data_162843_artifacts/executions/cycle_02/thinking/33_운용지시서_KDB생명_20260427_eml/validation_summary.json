@@ -1,0 +1,20 @@
+{
+  "case_id": "33_운용지시서_KDB생명_20260427_eml",
+  "verdict": "PASS",
+  "checks": {
+    "status_completed": true,
+    "base_date_expected": true,
+    "orders_expected": true,
+    "issues_empty": true,
+    "json_core_exact": true,
+    "csv_canonical_exact": true
+  },
+  "status": "COMPLETED",
+  "base_date": "2026-04-27",
+  "orders": 12,
+  "expected_orders": 12,
+  "diff": {
+    "missing_from_result": [],
+    "extra_in_result": []
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "case_id": "12_동양생명_20260318_html",
+  "company": "동양생명",
+  "cycle": 2,
+  "profile": "thinking",
+  "verdict": "FAIL",
+  "failure_reason": "settlement JSON parse failed",
+  "status": null,
+  "base_date": null,
+  "orders": 0,
+  "expected_orders": 40,
+  "json_core_exact": false,
+  "csv_canonical_exact": false,
+  "llm_call_count": 1,
+  "elapsed_seconds": 29.751,
+  "usage": {
+    "prompt_tokens": 2745,
+    "completion_tokens": 3655,
+    "total_tokens": 6400,
+    "by_call": {
+      "settlement": {
+        "prompt_tokens": 2745,
+        "completion_tokens": 3655,
+        "total_tokens": 6400,
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "text_tokens": 412,
+          "image_tokens": 2333,
+          "video_tokens": 0
+        },
+        "completion_tokens_details": {
+          "audio_tokens": 0,
+          "reasoning_tokens": 3655,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "text_tokens": 0,
+          "image_tokens": 0,
+          "video_tokens": 0
+        }
+      }
+    }
+  },
+  "finish_reasons": {
+    "settlement": null
+  },
+  "reasoning_content_present": true,
+  "paths": {
+    "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_152808_artifacts/executions/cycle_02/thinking/12_동양생명_20260318_html",
+    "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_152808_artifacts/executions/cycle_02/thinking/12_동양생명_20260318_html/validation_summary.json"
+  }
+}

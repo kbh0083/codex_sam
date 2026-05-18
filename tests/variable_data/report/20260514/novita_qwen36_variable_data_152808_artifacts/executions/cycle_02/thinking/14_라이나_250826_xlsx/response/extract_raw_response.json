@@ -1,0 +1,68 @@
+{
+  "request": {
+    "url": "https://api.novita.ai/openai/v1/chat/completions",
+    "model": "qwen/qwen3.6-27b",
+    "message_count": 1,
+    "content_parts": [
+      "text",
+      "image_url"
+    ],
+    "enable_thinking": true,
+    "separate_reasoning": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 0.0,
+    "repetition_penalty": 1.0,
+    "max_tokens": 32768,
+    "stream": false,
+    "response_format": {
+      "type": "json_object"
+    }
+  },
+  "http_status": 200,
+  "elapsed_seconds": 35.822,
+  "response_json": {
+    "id": "3db279697404dd6379a090ee0215a3ce",
+    "object": "chat.completion",
+    "created": 1778740535,
+    "model": "qwen/qwen3.6-27b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"file_name\": \"라이나_250826.xlsx\",\n  \"source_path\": \"/Users/bhkim/Documents/codex_prj_sam_asset/document/라이나_250826.xlsx\",\n  \"model_name\": \"qwen/qwen3.6-27b\",\n  \"base_date\": \"2025-08-26\",\n  \"status\": \"COMPLETED\",\n  \"reason\": null,\n  \"issues\": [],\n  \"orders\": [\n    {\n      \"fund_code\": \"6104\",\n      \"fund_name\": \"채권형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2025-08-26\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"1,243,750\"\n    },\n    {\n      \"fund_code\": \"6104\",\n      \"fund_name\": \"채권형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-08-26\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"39,961,885\"\n    },\n    {\n      \"fund_code\": \"6108\",\n      \"fund_name\": \"유럽주식형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2025-08-26\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"19,500\"\n    },\n    {\n      \"fund_code\": \"6108\",\n      \"fund_name\": \"유럽주식형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-08-26\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"66,132,056\"\n    },\n    {\n      \"fund_code\": \"6114\",\n      \"fund_name\": \"인덱스주식형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2025-08-26\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"1,106,000\"\n    },\n    {\n      \"fund_code\": \"6114\",\n      \"fund_name\": \"인덱스주식형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-08-26\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"52,671\"\n    },\n    {\n      \"fund_code\": \"6115\",\n      \"fund_name\": \"삼성그룹주형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2025-08-26\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"146,250\"\n    },\n    {\n      \"fund_code\": \"6115\",\n      \"fund_name\": \"삼성그룹주형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-08-26\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"4,485\"\n    },\n    {\n      \"fund_code\": \"6101\",\n      \"fund_name\": \"혼합성장형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2025-08-26\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"25,915,800\"\n    },\n    {\n      \"fund_code\": \"6101\",\n      \"fund_name\": \"혼합성장형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-08-26\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"5,653,417\"\n    }\n  ]\n}",
+          "reasoning_content": "user wants to extract specific order information from the provided image of a spreadsheet.\n\n**1. Analyze the Request:**\n*   **Source:** Image of a spreadsheet named \"라이나_250826.xlsx\" (inferred from filename in prompt).\n*   **Sheet:** \"당일\" (Current Day).\n*   **Range:** A1:N12.\n*   **Base Date:** 2025-08-26 (Settlement Date).\n*   **Target Asset Managers:** \"삼성자산\" (Samsung Asset) or \"삼성자산,한투\" (Samsung Asset, Hanwha).\n*   **Exclusion:** \"신한BNP\", \"한국투신\" and subsequent rows.\n*   **Exclusion:** Subtotal/Total rows (Fund Code contains \"합계\").\n*   **Order Logic:**\n    *   If `설정금액` (Subscription Amount) > 0 -> `order_type` = \"3\" (Subscription).\n    *   If `해지금액` (Redemption Amount) > 0 -> `order_type` = \"1\" (Redemption).\n    *   Wait, the prompt says \"설정금액이 0보다 크면 order_type=\"3\" 주문을 만듭니다. 해지금액이 0보다 크면 order_type=\"1\" 주문을 만듭니다.\" This implies if both are > 0, I might need to create two orders or check the context. Looking at the data, usually, it's one or the other per row, or I need to handle both. Let's look at the rows.\n    *   Row 1 (6104): 설정금액 1,243,750 (>0), 해지금액 39,961,885 (>0). Both are present. The prompt implies creating orders for each condition. So, one order for type 3 and one for type 1? Or is it a netting? The prompt says \"설정금액이 0보다 크면... 해지금액이 0보다 크면...\". This suggests separate orders if both exist. Let's re-read carefully. \"설정/해지 운용지시 주문만 추출하세요\". It lists conditions. I will create an order for each non-zero amount.\n    *   Wait, usually in these systems, a row represents a fund. If there is both subscription and redemption, it might be a netting or separate orders. Let's look at the example output structure. It's a list of orders. I will generate separate orders for subscription and redemption if both amounts are non-zero.\n    *   Actually, looking at the data:\n        *   6104: Sub 1,243,750, Red 39,961,885.\n        *   6108: Sub 19,500, Red 66,132,056.\n        *   6114: Sub 1,106,000, Red 52,671.\n        *   6115: Sub 146,250, Red 4,485.\n        *   6101: Sub 25,915,800, Red 5,653,417.\n    *   It seems every row has both. I will create two orders per row (one type 3, one type 1).\n\n*   **Fields:**\n    *   `fund_code`: From column B.\n    *   `fund_name`: From column C.\n    *   `settle_class`: \"1\".\n    *   `order_type`: \"3\" (Sub) or \"1\" (Red).\n    *   `base_date`: \"2025-08-26\".\n    *   `t_day`: \"01\".\n    *   `transfer_amount`: The string value from the amount column (with commas).\n\n**2. Data Extraction:**\n\n*   **Header Row:** Row 6 (approx). \"운용사명\", \"펀드코드\", \"펀드명\", ... \"설정금액\", \"해지금액\".\n*   **Row 1 (Samsung Asset):**\n    *   Fund Code: 6104\n    *   Fund Name: 채권형\n    *   Sub Amount: 1,243,750\n    *   Red Amount: 39,961,885\n*   **Row 2 (Samsung Asset):**\n    *   Fund Code: 6108\n    *   Fund Name: 유럽주식형\n    *   Sub Amount: 19,500\n    *   Red Amount: 66,132,056\n*   **Row 3 (Samsung Asset):**\n    *   Fund Code: 6114\n    *   Fund Name: 인덱스주식형\n    *   Sub Amount: 1,106,000\n    *   Red Amount: 52,671\n*   **Row 4 (Samsung Asset):**\n    *   Fund Code: 6115\n    *   Fund Name: 삼성그룹주형\n    *   Sub Amount: 146,250\n    *   Red Amount: 4,485\n*   **Row 5 (Samsung Asset - Total):**\n    *   Fund Code: 삼성자산_합계 -> **SKIP** (Contains \"합계\").\n*   **Row 6 (Samsung Asset, Hanwha):**\n    *   Fund Code: 6101\n    *   Fund Name: 혼합성장형\n    *   Sub Amount: 25,915,800\n    *   Red Amount: 5,653,417\n\n**3. Constructing Orders:**\n\n*   **Fund 6104:**\n    *   Order 1: Type 3, Amount \"1,243,750\"\n    *   Order 2: Type 1, Amount \"39,961,885\"\n*   **Fund 6108:**\n    *   Order 3: Type 3, Amount \"19,500\"\n    *   Order 4: Type 1, Amount \"66,132,056\"\n*   **Fund 6114:**\n    *   Order 5: Type 3, Amount \"1,106,000\"\n    *   Order 6: Type 1, Amount \"52,671\"\n*   **Fund 6115:**\n    *   Order 7: Type 3, Amount \"146,250\"\n    *   Order 8: Type 1, Amount \"4,485\"\n*   **Fund 6101:**\n    *   Order 9: Type 3, Amount \"25,915,800\"\n    *   Order 10: Type 1, Amount \"5,653,417\"\n\n**4. Final Verification:**\n*   Base date: 2025-08-26.\n*   Asset managers: \"삼성자산\" and \"삼성자산,한투\" included.\n*   Total row skipped.\n*   JSON format correct.\n\nLet's double check the row \"삼성자산,한투\". The prompt says \"운용사명은 `삼성자산` 또는 `삼성자산,한투` 영역만 추출합니다.\" So yes, include it.\n\nLet's assemble the JSON."
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3062,
+      "completion_tokens": 2756,
+      "total_tokens": 5818,
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "text_tokens": 540,
+        "image_tokens": 2522,
+        "video_tokens": 0
+      },
+      "completion_tokens_details": {
+        "audio_tokens": 0,
+        "reasoning_tokens": 1316,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0,
+        "text_tokens": 1440,
+        "image_tokens": 0,
+        "video_tokens": 0
+      }
+    },
+    "system_fingerprint": ""
+  },
+  "response_text": null
+}

@@ -1,0 +1,21 @@
+{
+  "renderer": "pymupdf_page_render",
+  "source_path": "/Users/bhkim/Documents/codex_prj_sam_asset/document/카디프_251127.pdf",
+  "page_count": 2,
+  "pages": [
+    {
+      "page_index": 1,
+      "image_path": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_165218_artifacts/case_assets/37_카디프_251127_pdf/input_image/카디프_251127_page_1.png",
+      "image_width": 1489,
+      "image_height": 2105,
+      "image_sha256": "89999963e6b7233ae4cc3c6caed5aff6966636ee37aca88c55a97755822663cd"
+    },
+    {
+      "page_index": 2,
+      "image_path": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_165218_artifacts/case_assets/37_카디프_251127_pdf/input_image/카디프_251127_page_2.png",
+      "image_width": 1489,
+      "image_height": 2105,
+      "image_sha256": "01f608695f4785e7466a8b62ad23e682ee06ca644f71cfad5fa46ae5982fafe3"
+    }
+  ]
+}

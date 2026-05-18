@@ -1,0 +1,30 @@
+{
+  "case_id": "22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+  "verdict": "FAIL",
+  "checks": {
+    "status_completed": true,
+    "base_date_expected": true,
+    "orders_expected": false,
+    "issues_empty": true,
+    "json_core_exact": false,
+    "csv_canonical_exact": false
+  },
+  "status": "COMPLETED",
+  "base_date": "2025-11-28",
+  "orders": 2,
+  "expected_orders": 3,
+  "diff": {
+    "missing_from_result": [
+      {
+        "base_date": "2025-11-28",
+        "fund_code": "V63053",
+        "fund_name": "보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "508615208"
+      }
+    ],
+    "extra_in_result": []
+  }
+}

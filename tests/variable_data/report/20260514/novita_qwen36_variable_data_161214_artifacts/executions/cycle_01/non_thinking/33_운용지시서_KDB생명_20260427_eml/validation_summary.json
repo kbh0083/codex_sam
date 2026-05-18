@@ -1,0 +1,30 @@
+{
+  "case_id": "33_운용지시서_KDB생명_20260427_eml",
+  "verdict": "FAIL",
+  "checks": {
+    "status_completed": true,
+    "base_date_expected": true,
+    "orders_expected": false,
+    "issues_empty": true,
+    "json_core_exact": false,
+    "csv_canonical_exact": false
+  },
+  "status": "COMPLETED",
+  "base_date": "2026-04-27",
+  "orders": 11,
+  "expected_orders": 12,
+  "diff": {
+    "missing_from_result": [
+      {
+        "base_date": "2026-04-27",
+        "fund_code": "492007",
+        "fund_name": "액티브배당성장70혼합형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "02",
+        "transfer_amount": "6587078"
+      }
+    ],
+    "extra_in_result": []
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "case_id": "12_동양생명_20260318_html",
+  "verdict": "FAIL",
+  "checks": {
+    "status_completed": false,
+    "base_date_expected": true,
+    "orders_expected": true,
+    "issues_empty": false,
+    "json_core_exact": false,
+    "csv_canonical_exact": false
+  },
+  "status": "FAILED",
+  "base_date": "2026-03-18",
+  "orders": 40,
+  "expected_orders": 40,
+  "diff": {
+    "missing_from_result": [
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BALX00",
+        "fund_name": "(디폴트옵션전용)글로벌에셋밸런스형",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "11537247"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BALX00",
+        "fund_name": "(디폴트옵션전용)글로벌에셋밸런스형",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "8554421"
+      }
+    ],
+    "extra_in_result": [
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BALX00",
+        "fund_name": "(디프트옵션전용)글로벌에셋밸런스형",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "11537247"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BALX00",
+        "fund_name": "(디프트옵션전용)글로벌에셋밸런스형",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "8554421"
+      }
+    ]
+  }
+}

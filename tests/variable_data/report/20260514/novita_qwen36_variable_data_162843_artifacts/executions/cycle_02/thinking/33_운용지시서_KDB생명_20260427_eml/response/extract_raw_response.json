@@ -1,0 +1,70 @@
+{
+  "request": {
+    "url": "https://api.novita.ai/openai/v1/chat/completions",
+    "model": "qwen/qwen3.6-27b",
+    "message_count": 1,
+    "content_parts": [
+      "text",
+      "image_url"
+    ],
+    "attempt": 1,
+    "max_attempts": 4,
+    "enable_thinking": true,
+    "separate_reasoning": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 0.0,
+    "repetition_penalty": 1.0,
+    "max_tokens": 32768,
+    "stream": false,
+    "response_format": {
+      "type": "json_object"
+    }
+  },
+  "http_status": 200,
+  "elapsed_seconds": 61.022,
+  "response_json": {
+    "id": "91ffce8d4fde5457484de9cd20e9f96d",
+    "object": "chat.completion",
+    "created": 1778744209,
+    "model": "qwen/qwen3.6-27b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"file_name\": \"운용지시서(KDB생명)_20260427.eml\",\n  \"source_path\": \"/Users/bhkim/Documents/codex_prj_sam_asset/document/운용지시서(KDB생명)_20260427.eml\",\n  \"model_name\": \"qwen/qwen3.6-27b\",\n  \"base_date\": \"2026-04-27\",\n  \"status\": \"COMPLETED\",\n  \"reason\": null,\n  \"issues\": [],\n  \"orders\": [\n    {\n      \"fund_code\": \"492007\",\n      \"fund_name\": \"액티브배당성장70혼합형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"6,587,078\"\n    },\n    {\n      \"fund_code\": \"492007\",\n      \"fund_name\": \"액티브배당성장70혼합형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"14,483,055\"\n    },\n    {\n      \"fund_code\": \"F00432\",\n      \"fund_name\": \"글로벌 자산배분안정형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"1,166,711\"\n    },\n    {\n      \"fund_code\": \"F00432\",\n      \"fund_name\": \"글로벌 자산배분안정형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"12,673,412\"\n    },\n    {\n      \"fund_code\": \"822337\",\n      \"fund_name\": \"글로벌 자산배분적극형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"13,350,190\"\n    },\n    {\n      \"fund_code\": \"822337\",\n      \"fund_name\": \"글로벌 자산배분적극형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"5,934,685\"\n    },\n    {\n      \"fund_code\": \"004434\",\n      \"fund_name\": \"미국고배당포커스주식형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"13,984,034\"\n    },\n    {\n      \"fund_code\": \"004434\",\n      \"fund_name\": \"미국고배당포커스주식형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"7,492,608\"\n    },\n    {\n      \"fund_code\": \"4013\",\n      \"fund_name\": \"인덱스플러스알파 70 혼합형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"13,951,275\"\n    },\n    {\n      \"fund_code\": \"4013\",\n      \"fund_name\": \"인덱스플러스알파 70 혼합형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"17,883,174\"\n    },\n    {\n      \"fund_code\": \"91414\",\n      \"fund_name\": \"인덱스혼합형 2 (주식 4)\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"111,494,218\"\n    },\n    {\n      \"fund_code\": \"91414\",\n      \"fund_name\": \"인덱스혼합형 2 (주식 4)\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"2,300,135,515\"\n    }\n  ]\n}",
+          "reasoning_content": "user wants me to extract order data from the provided image of a \"KDB Life Management Instruction\" document.\n\n**1. Analyze the Image:**\n*   **Header:** \"운용지시서\" (Management Instruction), Date: \"2026-04-27\".\n*   **Table Columns:** 펀드명 (Fund Name), 운용사 (Fund Manager), 수탁코드 (Custodian Code), 구분 (Type: Deposit/Withdrawal), 내용 (Content), 금액 (Amount), D+1(예상금액) (D+1 Expected Amount), 당일좌수 (Same Day Shares).\n*   **Data Rows:** I need to iterate through the rows, identifying the fund identity (Fund Name, Manager, Code) which spans multiple rows.\n\n**2. Extract Data Row by Row:**\n\n*   **Fund 1:**\n    *   Name: 혼합성장형 (변액종신 보장형) (주4)\n    *   Manager: 삼성액티브 자산운용\n    *   Code: 492006\n    *   Rows:\n        *   입금/보험료입금: Amount -, D+1 -\n        *   입금/기타: Amount -, D+1 -\n        *   입금/입금소계: Amount -, D+1 -\n        *   출금/특별계정운용보수: Amount -, D+1 -\n        *   출금/기타: Amount -, D+1 -\n        *   출금/출금소계: Amount -, D+1 -\n    *   *Result:* No orders (all amounts are \"-\").\n\n*   **Fund 2:**\n    *   Name: 액티브배당성장70혼합형\n    *   Manager: 삼성액티브 자산운용\n    *   Code: 492007\n    *   Rows:\n        *   입금/보험료입금: Amount -, D+1 6,587,078.\n            *   D+1 > 0 -> Order: Type 3 (Deposit), Settle 1, T-day 02, Amount 6,587,078.\n        *   입금/기타: Amount -, D+1 -\n        *   입금/입금소계: Amount -, D+1 6,587,078 (Subtotal, ignore).\n        *   출금/특별계정운용보수: Amount -, D+1 -\n        *   출금/기타: Amount 14,483,055, D+1 -\n            *   Amount > 0 -> Order: Type 1 (Withdrawal), Settle 2, T-day 01, Amount 14,483,055.\n        *   출금/출금소계: Amount 14,483,055, D+1 - (Subtotal, ignore).\n    *   *Result:* Two orders. One D+1 Deposit, one Cash Withdrawal.\n\n*   **Fund 3:**\n    *   Name: 글로벌 자산배분안정형\n    *   Manager: 삼성자산운용\n    *   Code: F00432\n    *   Rows:\n        *   입금/보험료입금: Amount 1,166,711, D+1 12,673,412.\n            *   Amount > 0 -> Order: Type 3, Settle 2, T-day 01, Amount 1,166,711.\n            *   D+1 > 0 -> Order: Type 3, Settle 1, T-day 02, Amount 12,673,412.\n        *   입금/기타: Amount -, D+1 -\n        *   입금/입금소계: Amount 1,166,711, D+1 12,673,412 (Subtotal, ignore).\n        *   출금/특별계정운용보수: Amount -, D+1 -\n        *   출금/기타: Amount -, D+1 -\n        *   출금/출금소계: Amount -, D+1 -\n    *   *Result:* Two orders.\n\n*   **Fund 4:**\n    *   Name: 글로벌 자산배분적극형\n    *   Manager: 삼성자산운용\n    *   Code: 822337\n    *   Rows:\n        *   입금/보험료입금: Amount 13,350,190, D+1 5,934,685.\n            *   Amount > 0 -> Order: Type 3, Settle 2, T-day 01, Amount 13,350,190.\n            *   D+1 > 0 -> Order: Type 3, Settle 1, T-day 02, Amount 5,934,685.\n        *   입금/기타: Amount -, D+1 -\n        *   입금/입금소계: Amount 13,350,190, D+1 5,934,685 (Subtotal, ignore).\n        *   출금/특별계정운용보수: Amount -, D+1 -\n        *   출금/기타: Amount -, D+1 -\n        *   출금/출금소계: Amount -, D+1 -\n    *   *Result:* Two orders.\n\n*   **Fund 5:**\n    *   Name: 미국고배당포커스주식형\n    *   Manager: 삼성자산운용\n    *   Code: 004434\n    *   Rows:\n        *   입금/보험료입금: Amount -, D+1 13,984,034.\n            *   D+1 > 0 -> Order: Type 3, Settle 1, T-day 02, Amount 13,984,034.\n        *   입금/기타: Amount -, D+1 -\n        *   입금/입금소계: Amount -, D+1 13,984,034 (Subtotal, ignore).\n        *   출금/특별계정운용보수: Amount -, D+1 -\n        *   출금/기타: Amount 7,492,608, D+1 -\n            *   Amount > 0 -> Order: Type 1, Settle 2, T-day 01, Amount 7,492,608.\n        *   출금/출금소계: Amount 7,492,608, D+1 - (Subtotal, ignore).\n    *   *Result:* Two orders.\n\n*   **Fund 6:**\n    *   Name: 인덱스플러스알파 70 혼합형\n    *   Manager: 삼성자산운용\n    *   Code: 4013\n    *   Rows:\n        *   입금/보험료입금: Amount -, D+1 -\n        *   입금/기타: Amount -, D+1 -\n        *   입금/입금소계: Amount -, D+1 -\n        *   출금/특별계정운용보수: Amount -, D+1 -\n        *   출금/기타: Amount 13,951,275, D+1 17,883,174.\n            *   Amount > 0 -> Order: Type 1, Settle 2, T-day 01, Amount 13,951,275.\n            *   D+1 > 0 -> Order: Type 1, Settle 1, T-day 02, Amount 17,883,174.\n        *   출금/출금소계: Amount 13,951,275, D+1 17,883,174 (Subtotal, ignore).\n    *   *Result:* Two orders.\n\n*   **Fund 7:**\n    *   Name: 인덱스혼합형 2 (주식 4)\n    *   Manager: 삼성자산운용\n    *   Code: 91414\n    *   Rows:\n        *   입금/보험료입금: Amount -, D+1 -\n        *   입금/기타: Amount -, D+1 -\n        *   입금/입금소계: Amount -, D+1 -\n        *   출금/운용수수료: Amount -, D+1 -\n        *   출금/기타: Amount 111,494,218, D+1 2,300,135,515.\n            *   Amount > 0 -> Order: Type 1, Settle 2, T-day 01, Amount 111,494,218.\n            *   D+1 > 0 -> Order: Type 1, Settle 1, T-day 02, Amount 2,300,135,515.\n        *   출금/출금소계: Amount 111,494,218, D+1 2,300,135,515 (Subtotal, ignore).\n    *   *Result:* Two orders.\n\n**3. Special Check for Fund 492007:**\n*   The prompt specifically asks to check `492007` / `액티브배당성장70혼합형`.\n*   Row \"입금/보험료입금\": Amount is \"-\", D+1 is \"6,587,078\".\n*   This creates a Deposit (Type 3) order with Settle Class 1, T-day 02.\n*   Row \"출금/기타\": Amount is \"14,483,055\", D+1 is \"-\".\n*   This creates a Withdrawal (Type 1) order with Settle Class 2, T-day 01.\n*   So, there are indeed two orders for this fund. One withdrawal, one D+1 deposit.\n\n**4. Final JSON Construction:**\n*   `base_date`: \"2026-04-27\"\n*   `orders`: List of extracted orders.\n\nLet's list them out:\n1.  Fund: 492007, Name: 액티브배당성장70혼합형, Type: 3 (Deposit), Settle: 1, T-day: 02, Amount: 6,587,078\n2.  Fund: 492007, Name: 액티브배당성장70혼합형, Type: 1 (Withdrawal), Settle: 2, T-day: 01, Amount: 14,483,055\n3.  Fund: F00432, Name: 글로벌 자산배분안정형, Type: 3 (Deposit), Settle: 2, T-day: 01, Amount: 1,166,711\n4.  Fund: F00432, Name: 글로벌 자산배분안정형, Type: 3 (Deposit), Settle: 1, T-day: 02, Amount: 12,673,412\n5.  Fund: 822337, Name: 글로벌 자산배분적극형, Type: 3 (Deposit), Settle: 2, T-day: 01, Amount: 13,350,190\n6.  Fund: 822337, Name: 글로벌 자산배분적극형, Type: 3 (Deposit), Settle: 1, T-day: 02, Amount: 5,934,685\n7.  Fund: 004434, Name: 미국고배당포커스주식형, Type: 3 (Deposit), Settle: 1, T-day: 02, Amount: 13,984,034\n8.  Fund: 004434, Name: 미국고배당포커스주식형, Type: 1 (Withdrawal), Settle: 2, T-day: 01, Amount: 7,492,608\n9.  Fund: 4013, Name: 인덱스플러스알파 70 혼합형, Type: 1 (Withdrawal), Settle: 2, T-day: 01, Amount: 13,951,275\n10. Fund: 4013, Name: 인덱스플러스알파 70 혼합형, Type: 1 (Withdrawal), Settle: 1, T-day: 02, Amount: 17,883,174\n11. Fund: 91414, Name: 인덱스혼합형 2 (주식 4), Type: 1 (Withdrawal), Settle: 2, T-day: 01, Amount: 111,494,218\n12. Fund: 91414, Name: 인덱스혼합형 2 (주식 4), Type: 1 (Withdrawal), Settle: 1, T-day: 02, Amount: 2,300,135,515\n\nWait, let's re-verify the \"Order Type\" logic.\n- 구분=입금 (Deposit) -> order_type=\"3\"\n- 구분=출금 (Withdrawal) -> order_type=\"1\"\n\nLet's check the rows again carefully.\n- Fund 492007:\n    - Row \"입금/보험료입금\": D+1 is 6,587,078. Type is Deposit (3). Correct.\n    - Row \"출금/기타\": Amount is 14,483,055. Type is Withdrawal (1). Correct.\n- Fund F00432:\n    - Row \"입금/보험료입금\": Amount 1,166,711 (Type 3), D+1 12,673,412 (Type 3). Correct.\n- Fund 822337:\n    - Row \"입금/보험료입금\": Amount 13,350,190 (Type 3), D+1 5,934,685 (Type 3). Correct.\n- Fund 004434:\n    - Row \"입금/보험료입금\": D+1 13,984,034 (Type 3). Correct.\n    - Row \"출금/기타\": Amount 7,492,608 (Type 1). Correct.\n- Fund 4013:\n    - Row \"출금/기타\": Amount 13,951,275 (Type 1), D+1 17,883,174 (Type 1). Correct.\n- Fund 91414:\n    - Row \"출금/기타\": Amount 111,494,218 (Type 1), D+1 2,300,135,515 (Type 1). Correct.\n\nOkay, the logic holds up. I will construct the JSON now."
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3361,
+      "completion_tokens": 4942,
+      "total_tokens": 8303,
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "text_tokens": 839,
+        "image_tokens": 2522,
+        "video_tokens": 0
+      },
+      "completion_tokens_details": {
+        "audio_tokens": 0,
+        "reasoning_tokens": 3415,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0,
+        "text_tokens": 1527,
+        "image_tokens": 0,
+        "video_tokens": 0
+      }
+    },
+    "system_fingerprint": ""
+  },
+  "response_text": null
+}

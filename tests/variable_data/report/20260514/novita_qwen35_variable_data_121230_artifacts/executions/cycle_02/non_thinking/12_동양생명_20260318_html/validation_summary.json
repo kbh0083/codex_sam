@@ -1,0 +1,310 @@
+{
+  "case_id": "12_동양생명_20260318_html",
+  "verdict": "FAIL",
+  "checks": {
+    "status_completed": true,
+    "base_date_expected": true,
+    "orders_expected": true,
+    "issues_empty": true,
+    "json_core_exact": false,
+    "csv_canonical_exact": false
+  },
+  "status": "COMPLETED",
+  "base_date": "2026-03-18",
+  "orders": 40,
+  "expected_orders": 40,
+  "diff": {
+    "missing_from_result": [
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "15579386"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "36487222"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "17716295"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "21068647"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "54952749"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "59780678"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "108889122"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "68261693"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금Ⅱ주식혼합1형(ETF_삼성)",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "24301178"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금Ⅱ주식혼합1형(ETF_삼성)",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "291056"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금Ⅱ주식혼합1형(ETF_삼성)",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "14190753"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금Ⅱ주식혼합1형(ETF_삼성)",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "293528"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금Ⅱ주식혼합2형(ETF_삼성)",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "10576371"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금Ⅱ주식혼합2형(ETF_삼성)",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "10579537"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금Ⅱ주식혼합2형(ETF_삼성)",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "13715113"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금Ⅱ주식혼합2형(ETF_삼성)",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "25464526"
+      }
+    ],
+    "extra_in_result": [
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜증권-채권형",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "15579386"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜증권-채권형",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "36487222"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜증권-채권형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "17716295"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜증권-채권형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "21068647"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜증권-채권형II(채권_삼성)",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "54952749"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜증권-채권형II(채권_삼성)",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "59780678"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜증권-채권형II(채권_삼성)",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "108889122"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜증권-채권형II(채권_삼성)",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "68261693"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금II주식혼합1형(ETF_삼성)",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "24301178"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금II주식혼합1형(ETF_삼성)",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "291056"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금II주식혼합1형(ETF_삼성)",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "14190753"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금II주식혼합1형(ETF_삼성)",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "293528"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금II주식혼합2형(ETF_삼성)",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "10576371"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금II주식혼합2형(ETF_삼성)",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "10579537"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금II주식혼합2형(ETF_삼성)",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "13715113"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금II주식혼합2형(ETF_삼성)",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "25464526"
+      }
+    ]
+  }
+}

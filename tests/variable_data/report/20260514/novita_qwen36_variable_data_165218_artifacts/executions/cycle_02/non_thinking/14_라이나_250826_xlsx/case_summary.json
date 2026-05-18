@@ -1,0 +1,57 @@
+{
+  "case_id": "14_라이나_250826_xlsx",
+  "company": "라이나생명",
+  "cycle": 2,
+  "profile": "non_thinking",
+  "verdict": "PASS",
+  "status": "COMPLETED",
+  "base_date": "2025-08-26",
+  "orders": 10,
+  "expected_orders": 10,
+  "json_core_exact": true,
+  "csv_canonical_exact": true,
+  "llm_call_count": 1,
+  "elapsed_seconds": 13.546,
+  "usage": {
+    "prompt_tokens": 3066,
+    "completion_tokens": 1058,
+    "total_tokens": 4124,
+    "by_call": {
+      "extract_attempt_1": {
+        "prompt_tokens": 3066,
+        "completion_tokens": 1058,
+        "total_tokens": 4124,
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "text_tokens": 544,
+          "image_tokens": 2522,
+          "video_tokens": 0
+        },
+        "completion_tokens_details": {
+          "audio_tokens": 0,
+          "reasoning_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "text_tokens": 1058,
+          "image_tokens": 0,
+          "video_tokens": 0
+        }
+      }
+    }
+  },
+  "finish_reasons": {
+    "extract_attempt_1": "stop"
+  },
+  "reasoning_content_present": false,
+  "paths": {
+    "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_165218_artifacts/executions/cycle_02/non_thinking/14_라이나_250826_xlsx",
+    "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_165218_artifacts/executions/cycle_02/non_thinking/14_라이나_250826_xlsx/result/14_라이나_250826_xlsx.json",
+    "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_165218_artifacts/executions/cycle_02/non_thinking/14_라이나_250826_xlsx/result/14_라이나_250826_xlsx.csv",
+    "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_165218_artifacts/executions/cycle_02/non_thinking/14_라이나_250826_xlsx/validation_summary.json",
+    "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/라이나생명/라이나_250826.json",
+    "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/라이나생명/라이나_250826.csv"
+  }
+}

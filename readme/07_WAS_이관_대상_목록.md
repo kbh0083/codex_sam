@@ -44,13 +44,14 @@
 - [04_SSH_접속_정보.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/04_SSH_접속_정보.md)
 - [06_WAS_병합_보고서_가이드.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/06_WAS_병합_보고서_가이드.md)
 
-### 5. 세션 handoff 8종
+### 5. 세션 handoff 9종
 - [handoff_26042201.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042201.md)
 - [handoff_26042401.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042401.md)
 - [handoff_26042701.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042701.md)
 - [handoff_26042702.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042702.md)
 - [handoff_26042801.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042801.md)
 - [handoff_26042802.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26042802.md)
+- [handoff_26051101.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_26051101.md)
 - [handoff_archive_260427.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_260427.md)
 - [handoff_archive_pre260422.md](/Users/bhkim/Documents/codex_prj_sam_asset/세션/handoff_archive_pre260422.md)
 
@@ -84,7 +85,7 @@
 
 ## 권장 추가 대상
 - [05_리팩토링_계획_extractor_document_loader.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/05_리팩토링_계획_extractor_document_loader.md)
-- [90_설계_거래처_프로필_프리징.md](/Users/bhkim/Documents/codex_prj_sam_asset/readme/90_설계_거래처_프로필_프리징.md)
+- 거래처 프로필/문서군 장기 설계는 최신 active handoff의 남은 과제와 Qwen migration prototype 결과를 기준으로 다시 문서화한다.
 
 ## 이번 목록에서 제외
 - `/Users/bhkim/Documents/codex_prj_sam_asset/document/.DS_Store`

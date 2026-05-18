@@ -1,0 +1,31 @@
+{
+  "label": "extract",
+  "finish_reason": "stop",
+  "elapsed_seconds": 8.632,
+  "usage": {
+    "prompt_tokens": 3168,
+    "completion_tokens": 370,
+    "total_tokens": 3538,
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "text_tokens": 670,
+      "image_tokens": 2498,
+      "video_tokens": 0
+    },
+    "completion_tokens_details": {
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": 370,
+      "image_tokens": 0,
+      "video_tokens": 0
+    }
+  },
+  "reasoning_content_present": false,
+  "reasoning_content": null,
+  "content": "{\n  \"file_name\": \"삼성자산_한화생명_설정_해지_내역서_20251128.eml\",\n  \"source_path\": \"/Users/bhkim/Documents/codex_prj_sam_asset/document/삼성자산_한화생명_설정_해지_내역서_20251128.eml\",\n  \"model_name\": \"qwen/qwen3.5-397b-a17b\",\n  \"base_date\": \"2025-11-28\",\n  \"status\": \"COMPLETED\",\n  \"reason\": null,\n  \"issues\": [],\n  \"orders\": [\n    {\n      \"fund_code\": \"32451\",\n      \"fund_name\": \"퇴직연금연금자산배분형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2025-11-28\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"500,063\"\n    },\n    {\n      \"fund_code\": \"V63053\",\n      \"fund_name\": \"보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-11-28\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"85,848,214\"\n    }\n  ]\n}"
+}

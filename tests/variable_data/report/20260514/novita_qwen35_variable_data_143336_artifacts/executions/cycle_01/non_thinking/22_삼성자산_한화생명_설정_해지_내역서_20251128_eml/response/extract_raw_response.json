@@ -1,0 +1,67 @@
+{
+  "request": {
+    "url": "https://api.novita.ai/openai/v1/chat/completions",
+    "model": "qwen/qwen3.5-397b-a17b",
+    "message_count": 1,
+    "content_parts": [
+      "text",
+      "image_url"
+    ],
+    "enable_thinking": false,
+    "separate_reasoning": true,
+    "temperature": 0,
+    "top_p": 1.0,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 0.0,
+    "repetition_penalty": 1.0,
+    "max_tokens": 16384,
+    "stream": false,
+    "response_format": {
+      "type": "json_object"
+    }
+  },
+  "http_status": 200,
+  "elapsed_seconds": 10.224,
+  "response_json": {
+    "id": "a949939728041afd0d96377f8cd485e7",
+    "object": "chat.completion",
+    "created": 1778736846,
+    "model": "qwen/qwen3.5-397b-a17b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"file_name\": \"삼성자산_한화생명_설정_해지_내역서_20251128.eml\",\n  \"source_path\": \"/Users/bhkim/Documents/codex_prj_sam_asset/document/삼성자산_한화생명_설정_해지_내역서_20251128.eml\",\n  \"model_name\": \"qwen/qwen3.5-397b-a17b\",\n  \"base_date\": \"2025-11-28\",\n  \"status\": \"COMPLETED\",\n  \"reason\": null,\n  \"issues\": [],\n  \"orders\": [\n    {\n      \"fund_code\": \"32451\",\n      \"fund_name\": \"퇴직연금연금자산배분형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2025-11-28\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"500,063\"\n    },\n    {\n      \"fund_code\": \"V63053\",\n      \"fund_name\": \"보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-11-28\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"85,848,214\"\n    },\n    {\n      \"fund_code\": \"V63053\",\n      \"fund_name\": \"보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-11-28\",\n      \"t_day\": \"03\",\n      \"transfer_amount\": \"508,615,208\"\n    }\n  ]\n}"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3436,
+      "completion_tokens": 484,
+      "total_tokens": 3920,
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "text_tokens": 938,
+        "image_tokens": 2498,
+        "video_tokens": 0
+      },
+      "completion_tokens_details": {
+        "audio_tokens": 0,
+        "reasoning_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0,
+        "text_tokens": 484,
+        "image_tokens": 0,
+        "video_tokens": 0
+      }
+    },
+    "system_fingerprint": ""
+  },
+  "response_text": null
+}

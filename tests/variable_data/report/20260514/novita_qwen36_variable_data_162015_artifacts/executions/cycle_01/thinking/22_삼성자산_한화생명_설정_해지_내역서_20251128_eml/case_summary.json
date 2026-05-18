@@ -1,0 +1,81 @@
+{
+  "case_id": "22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+  "company": "한화생명",
+  "cycle": 1,
+  "profile": "thinking",
+  "verdict": "PASS",
+  "status": "COMPLETED",
+  "base_date": "2025-11-28",
+  "orders": 3,
+  "expected_orders": 3,
+  "json_core_exact": true,
+  "csv_canonical_exact": true,
+  "llm_call_count": 2,
+  "elapsed_seconds": 60.568,
+  "usage": {
+    "prompt_tokens": 7392,
+    "completion_tokens": 6534,
+    "total_tokens": 13926,
+    "by_call": {
+      "extract_attempt_1": {
+        "prompt_tokens": 3696,
+        "completion_tokens": 3828,
+        "total_tokens": 7524,
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "text_tokens": 1198,
+          "image_tokens": 2498,
+          "video_tokens": 0
+        },
+        "completion_tokens_details": {
+          "audio_tokens": 0,
+          "reasoning_tokens": 3828,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "text_tokens": 0,
+          "image_tokens": 0,
+          "video_tokens": 0
+        }
+      },
+      "extract_attempt_2": {
+        "prompt_tokens": 3696,
+        "completion_tokens": 2706,
+        "total_tokens": 6402,
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "text_tokens": 1198,
+          "image_tokens": 2498,
+          "video_tokens": 0
+        },
+        "completion_tokens_details": {
+          "audio_tokens": 0,
+          "reasoning_tokens": 2183,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "text_tokens": 523,
+          "image_tokens": 0,
+          "video_tokens": 0
+        }
+      }
+    }
+  },
+  "finish_reasons": {
+    "extract_attempt_1": null,
+    "extract_attempt_2": "stop"
+  },
+  "reasoning_content_present": true,
+  "paths": {
+    "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162015_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+    "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162015_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.json",
+    "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162015_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.csv",
+    "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162015_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/validation_summary.json",
+    "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.json",
+    "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.csv"
+  }
+}

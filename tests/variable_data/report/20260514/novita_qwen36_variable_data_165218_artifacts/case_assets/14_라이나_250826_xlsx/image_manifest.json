@@ -1,0 +1,10 @@
+{
+  "renderer": "xlsx_openpyxl_pil",
+  "source_path": "/Users/bhkim/Documents/codex_prj_sam_asset/document/라이나_250826.xlsx",
+  "sheet_name": "당일",
+  "range": "A1:N12",
+  "image_path": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_165218_artifacts/case_assets/14_라이나_250826_xlsx/input_image/라이나_250826_당일_1_12.png",
+  "image_width": 4318,
+  "image_height": 1336,
+  "image_sha256": "1be056e6db2072f321af5329a24ec21c26f9bb4c7b00de58f85655df078dc3e3"
+}

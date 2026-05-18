@@ -1,0 +1,18 @@
+{
+  "case_id": "12_동양생명_20260318_html",
+  "verdict": "FAIL",
+  "reason": "forecast JSON parse failed",
+  "parse_info": {
+    "parse_ok": false,
+    "error": "parsed content is not JSON object",
+    "mode": "raw"
+  },
+  "checks": {
+    "status_completed": false,
+    "base_date_expected": false,
+    "orders_expected": false,
+    "issues_empty": false,
+    "json_core_exact": false,
+    "csv_canonical_exact": false
+  }
+}

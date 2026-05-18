@@ -1,0 +1,26 @@
+{
+  "renderer": "weasyprint_wide_page_section_render",
+  "source_path": "/Users/bhkim/Documents/codex_prj_sam_asset/document/동양생명_20260318.html",
+  "settlement_table": {
+    "rows": 17,
+    "data_rows": 15,
+    "max_columns": 5,
+    "image_path": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_143336_artifacts/case_assets/12_동양생명_20260318_html/input_image/settlement_table.png",
+    "pdf_path": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_143336_artifacts/case_assets/12_동양생명_20260318_html/input_image/settlement_table.pdf",
+    "page_count": 1,
+    "image_width": 2025,
+    "image_height": 1182,
+    "image_sha256": "7cbd1e24aaef5f53b4b156cbaa0c282a89525b458c85054ebfe880117755604c"
+  },
+  "forecast_table": {
+    "rows": 16,
+    "data_rows": 13,
+    "max_columns": 6,
+    "image_path": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_143336_artifacts/case_assets/12_동양생명_20260318_html/input_image/forecast_table.png",
+    "pdf_path": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_143336_artifacts/case_assets/12_동양생명_20260318_html/input_image/forecast_table.pdf",
+    "page_count": 1,
+    "image_width": 2363,
+    "image_height": 1182,
+    "image_sha256": "3088253b2229ab2c947ac41d508f732b038ada9a94368325d8c2afc21312d3ad"
+  }
+}

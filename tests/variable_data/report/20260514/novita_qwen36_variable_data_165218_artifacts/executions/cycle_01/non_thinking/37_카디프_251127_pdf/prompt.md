@@ -1,0 +1,37 @@
+이미지에 있는 카디프생명 PDF 지시서의 펀드별 설정/해지 주문을 모두 추출하세요.
+
+규칙:
+- 기준일(base_date)은 2025-11-27입니다.
+- fund_code와 fund_name은 표에 보이는 값을 그대로 사용합니다.
+- 설정/Subscription/매수 금액이 0보다 크면 order_type="3" 주문입니다.
+- 해지/Redemption/매도 금액이 0보다 크면 order_type="1" 주문입니다.
+- 모든 주문의 settle_class는 "1", t_day는 "01"입니다.
+- transfer_amount는 표의 금액을 comma 포함 문자열로 출력하고 음수 기호는 제거합니다.
+- 합계/total row와 금액이 0이거나 빈 값인 방향은 주문으로 만들지 않습니다.
+- PDF 1페이지와 2페이지를 모두 사용하고 누락 없이 추출합니다.
+
+반드시 JSON 객체 하나만 출력하세요. 최상위 값은 `{...}` 객체여야 하며, `orders`는 그 객체 내부의 배열이어야 합니다.
+최상위 배열(`[...]`), 주문 배열만 단독 출력, 일부 row만 예시 출력, markdown, 코드블록, 설명 문장, XML, <think> 태그를 출력하지 마세요.
+thinking/reasoning을 하더라도 최종 답변 content에는 `file_name`, `source_path`, `model_name`, `base_date`, `status`, `reason`, `issues`, `orders`를 포함한 전체 JSON wrapper를 생략하지 말고 출력하세요.
+
+출력 형식:
+{
+  "file_name": "카디프_251127.pdf",
+  "source_path": "/Users/bhkim/Documents/codex_prj_sam_asset/document/카디프_251127.pdf",
+  "model_name": "qwen/qwen3.6-27b",
+  "base_date": "YYYY-MM-DD",
+  "status": "COMPLETED",
+  "reason": null,
+  "issues": [],
+  "orders": [
+    {
+      "fund_code": "string",
+      "fund_name": "string",
+      "settle_class": "1 or 2",
+      "order_type": "3 or 1",
+      "base_date": "YYYY-MM-DD",
+      "t_day": "01",
+      "transfer_amount": "string"
+    }
+  ]
+}

@@ -1,0 +1,840 @@
+{
+  "orders": [
+    {
+      "source": "settlement.setting_amount",
+      "row": {
+        "row_index": 1,
+        "fund_code": "BALI00",
+        "fund_name": "퇴연주식형",
+        "setting_amount": "8,592,243",
+        "redemption_amount": "0",
+        "settlement_amount": "8,592,243"
+      },
+      "order": {
+        "fund_code": "BALI00",
+        "fund_name": "퇴연주식형",
+        "settle_class": "2",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "8,592,243"
+      }
+    },
+    {
+      "source": "settlement.setting_amount",
+      "row": {
+        "row_index": 2,
+        "fund_code": "BALX00",
+        "fund_name": "(디폴트옵션전용) 글로벌에셋밸런스형",
+        "setting_amount": "11,537,247",
+        "redemption_amount": "-8,554,421",
+        "settlement_amount": "2,982,826"
+      },
+      "order": {
+        "fund_code": "BALX00",
+        "fund_name": "(디폴트옵션전용) 글로벌에셋밸런스형",
+        "settle_class": "2",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "11,537,247"
+      }
+    },
+    {
+      "source": "settlement.redemption_amount",
+      "row": {
+        "row_index": 2,
+        "fund_code": "BALX00",
+        "fund_name": "(디폴트옵션전용) 글로벌에셋밸런스형",
+        "setting_amount": "11,537,247",
+        "redemption_amount": "-8,554,421",
+        "settlement_amount": "2,982,826"
+      },
+      "order": {
+        "fund_code": "BALX00",
+        "fund_name": "(디폴트옵션전용) 글로벌에셋밸런스형",
+        "settle_class": "2",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "8,554,421"
+      }
+    },
+    {
+      "source": "settlement.setting_amount",
+      "row": {
+        "row_index": 3,
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버설종신-채권형",
+        "setting_amount": "15,579,386",
+        "redemption_amount": "-36,487,222",
+        "settlement_amount": "-20,907,836"
+      },
+      "order": {
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "settle_class": "2",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "15,579,386"
+      }
+    },
+    {
+      "source": "settlement.redemption_amount",
+      "row": {
+        "row_index": 3,
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버설종신-채권형",
+        "setting_amount": "15,579,386",
+        "redemption_amount": "-36,487,222",
+        "settlement_amount": "-20,907,836"
+      },
+      "order": {
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "settle_class": "2",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "36,487,222"
+      }
+    },
+    {
+      "source": "settlement.setting_amount",
+      "row": {
+        "row_index": 4,
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버설종신-채권형 Ⅱ (채권_삼성)",
+        "setting_amount": "54,952,749",
+        "redemption_amount": "-59,780,678",
+        "settlement_amount": "-4,827,929"
+      },
+      "order": {
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "settle_class": "2",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "54,952,749"
+      }
+    },
+    {
+      "source": "settlement.redemption_amount",
+      "row": {
+        "row_index": 4,
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버설종신-채권형 Ⅱ (채권_삼성)",
+        "setting_amount": "54,952,749",
+        "redemption_amount": "-59,780,678",
+        "settlement_amount": "-4,827,929"
+      },
+      "order": {
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "settle_class": "2",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "59,780,678"
+      }
+    },
+    {
+      "source": "settlement.setting_amount",
+      "row": {
+        "row_index": 5,
+        "fund_code": "BBIQ00",
+        "fund_name": "배당주형",
+        "setting_amount": "101,111,528",
+        "redemption_amount": "-46,646,530",
+        "settlement_amount": "54,464,998"
+      },
+      "order": {
+        "fund_code": "BBIQ00",
+        "fund_name": "배당주형",
+        "settle_class": "2",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "101,111,528"
+      }
+    },
+    {
+      "source": "settlement.redemption_amount",
+      "row": {
+        "row_index": 5,
+        "fund_code": "BBIQ00",
+        "fund_name": "배당주형",
+        "setting_amount": "101,111,528",
+        "redemption_amount": "-46,646,530",
+        "settlement_amount": "54,464,998"
+      },
+      "order": {
+        "fund_code": "BBIQ00",
+        "fund_name": "배당주형",
+        "settle_class": "2",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "46,646,530"
+      }
+    },
+    {
+      "source": "settlement.setting_amount",
+      "row": {
+        "row_index": 6,
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금 Ⅱ 주식혼합1형(ETF_삼성)",
+        "setting_amount": "24,301,178",
+        "redemption_amount": "-291,056",
+        "settlement_amount": "24,010,122"
+      },
+      "order": {
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금Ⅱ 주식혼합1형(ETF_삼성)",
+        "settle_class": "2",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "24,301,178"
+      }
+    },
+    {
+      "source": "settlement.redemption_amount",
+      "row": {
+        "row_index": 6,
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금 Ⅱ 주식혼합1형(ETF_삼성)",
+        "setting_amount": "24,301,178",
+        "redemption_amount": "-291,056",
+        "settlement_amount": "24,010,122"
+      },
+      "order": {
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금Ⅱ 주식혼합1형(ETF_삼성)",
+        "settle_class": "2",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "291,056"
+      }
+    },
+    {
+      "source": "settlement.setting_amount",
+      "row": {
+        "row_index": 8,
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금 Ⅱ 주식혼합2형(ETF_삼성)",
+        "setting_amount": "10,579,537",
+        "redemption_amount": "-10,576,371",
+        "settlement_amount": "3,166"
+      },
+      "order": {
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금Ⅱ 주식혼합2형(ETF_삼성)",
+        "settle_class": "2",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "10,579,537"
+      }
+    },
+    {
+      "source": "settlement.redemption_amount",
+      "row": {
+        "row_index": 8,
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금 Ⅱ 주식혼합2형(ETF_삼성)",
+        "setting_amount": "10,579,537",
+        "redemption_amount": "-10,576,371",
+        "settlement_amount": "3,166"
+      },
+      "order": {
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금Ⅱ 주식혼합2형(ETF_삼성)",
+        "settle_class": "2",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "10,576,371"
+      }
+    },
+    {
+      "source": "settlement.setting_amount",
+      "row": {
+        "row_index": 9,
+        "fund_code": "BBJAG0",
+        "fund_name": "성장가치주혼합형(ETF_삼성)",
+        "setting_amount": "89,756,656",
+        "redemption_amount": "-341,048,082",
+        "settlement_amount": "-251,291,426"
+      },
+      "order": {
+        "fund_code": "BBJAG0",
+        "fund_name": "성장가치주혼합형(ETF_삼성)",
+        "settle_class": "2",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "89,756,656"
+      }
+    },
+    {
+      "source": "settlement.redemption_amount",
+      "row": {
+        "row_index": 9,
+        "fund_code": "BBJAG0",
+        "fund_name": "성장가치주혼합형(ETF_삼성)",
+        "setting_amount": "89,756,656",
+        "redemption_amount": "-341,048,082",
+        "settlement_amount": "-251,291,426"
+      },
+      "order": {
+        "fund_code": "BBJAG0",
+        "fund_name": "성장가치주혼합형(ETF_삼성)",
+        "settle_class": "2",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "341,048,082"
+      }
+    },
+    {
+      "source": "settlement.setting_amount",
+      "row": {
+        "row_index": 10,
+        "fund_code": "BBJC00",
+        "fund_name": "ACTIVE주식혼합형",
+        "setting_amount": "2,468,027",
+        "redemption_amount": "-1,938,371",
+        "settlement_amount": "529,656"
+      },
+      "order": {
+        "fund_code": "BBJC00",
+        "fund_name": "ACTIVE주식혼합형",
+        "settle_class": "2",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "2,468,027"
+      }
+    },
+    {
+      "source": "settlement.redemption_amount",
+      "row": {
+        "row_index": 10,
+        "fund_code": "BBJC00",
+        "fund_name": "ACTIVE주식혼합형",
+        "setting_amount": "2,468,027",
+        "redemption_amount": "-1,938,371",
+        "settlement_amount": "529,656"
+      },
+      "order": {
+        "fund_code": "BBJC00",
+        "fund_name": "ACTIVE주식혼합형",
+        "settle_class": "2",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "1,938,371"
+      }
+    },
+    {
+      "source": "settlement.setting_amount",
+      "row": {
+        "row_index": 11,
+        "fund_code": "BBJIA0",
+        "fund_name": "르네상스주식형(ETF_삼성)",
+        "setting_amount": "92,229,774",
+        "redemption_amount": "-47,435,622",
+        "settlement_amount": "44,794,152"
+      },
+      "order": {
+        "fund_code": "BBJIA0",
+        "fund_name": "르네상스주식형(ETF_삼성)",
+        "settle_class": "2",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "92,229,774"
+      }
+    },
+    {
+      "source": "settlement.redemption_amount",
+      "row": {
+        "row_index": 11,
+        "fund_code": "BBJIA0",
+        "fund_name": "르네상스주식형(ETF_삼성)",
+        "setting_amount": "92,229,774",
+        "redemption_amount": "-47,435,622",
+        "settlement_amount": "44,794,152"
+      },
+      "order": {
+        "fund_code": "BBJIA0",
+        "fund_name": "르네상스주식형(ETF_삼성)",
+        "settle_class": "2",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "47,435,622"
+      }
+    },
+    {
+      "source": "settlement.setting_amount",
+      "row": {
+        "row_index": 12,
+        "fund_code": "BBJU00",
+        "fund_name": "글로벌멀티에셋형",
+        "setting_amount": "14,324",
+        "redemption_amount": "-586",
+        "settlement_amount": "13,738"
+      },
+      "order": {
+        "fund_code": "BBJU00",
+        "fund_name": "글로벌멀티에셋형",
+        "settle_class": "2",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "14,324"
+      }
+    },
+    {
+      "source": "settlement.redemption_amount",
+      "row": {
+        "row_index": 12,
+        "fund_code": "BBJU00",
+        "fund_name": "글로벌멀티에셋형",
+        "setting_amount": "14,324",
+        "redemption_amount": "-586",
+        "settlement_amount": "13,738"
+      },
+      "order": {
+        "fund_code": "BBJU00",
+        "fund_name": "글로벌멀티에셋형",
+        "settle_class": "2",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "01",
+        "transfer_amount": "586"
+      }
+    },
+    {
+      "source": "forecast.date2_redemption",
+      "row": {
+        "row_index": 1,
+        "fund_code": "BALI00",
+        "fund_name": "퇴연주식형",
+        "date1_setting": "0",
+        "date2_setting": "0",
+        "date1_redemption": "0",
+        "date2_redemption": "1,656,769"
+      },
+      "order": {
+        "fund_code": "BALI00",
+        "fund_name": "퇴연주식형",
+        "settle_class": "1",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "1,656,769"
+      }
+    },
+    {
+      "source": "forecast.date2_setting",
+      "row": {
+        "row_index": 3,
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버설종신-채권형",
+        "date1_setting": "13,178,460",
+        "date2_setting": "21,068,647",
+        "date1_redemption": "26,354,176",
+        "date2_redemption": "17,716,295"
+      },
+      "order": {
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "settle_class": "1",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "21,068,647"
+      }
+    },
+    {
+      "source": "forecast.date2_redemption",
+      "row": {
+        "row_index": 3,
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버설종신-채권형",
+        "date1_setting": "13,178,460",
+        "date2_setting": "21,068,647",
+        "date1_redemption": "26,354,176",
+        "date2_redemption": "17,716,295"
+      },
+      "order": {
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "settle_class": "1",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "17,716,295"
+      }
+    },
+    {
+      "source": "forecast.date2_setting",
+      "row": {
+        "row_index": 4,
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버설종신-채권형 Ⅱ (채권_삼성)",
+        "date1_setting": "57,478,270",
+        "date2_setting": "68,261,693",
+        "date1_redemption": "123,789,168",
+        "date2_redemption": "108,889,122"
+      },
+      "order": {
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "settle_class": "1",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "68,261,693"
+      }
+    },
+    {
+      "source": "forecast.date2_redemption",
+      "row": {
+        "row_index": 4,
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버설종신-채권형 Ⅱ (채권_삼성)",
+        "date1_setting": "57,478,270",
+        "date2_setting": "68,261,693",
+        "date1_redemption": "123,789,168",
+        "date2_redemption": "108,889,122"
+      },
+      "order": {
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "settle_class": "1",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "108,889,122"
+      }
+    },
+    {
+      "source": "forecast.date2_setting",
+      "row": {
+        "row_index": 5,
+        "fund_code": "BBIQ00",
+        "fund_name": "배당주형",
+        "date1_setting": "1,792,883",
+        "date2_setting": "17,167,074",
+        "date1_redemption": "12,033,449",
+        "date2_redemption": "27,624,062"
+      },
+      "order": {
+        "fund_code": "BBIQ00",
+        "fund_name": "배당주형",
+        "settle_class": "1",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "17,167,074"
+      }
+    },
+    {
+      "source": "forecast.date2_redemption",
+      "row": {
+        "row_index": 5,
+        "fund_code": "BBIQ00",
+        "fund_name": "배당주형",
+        "date1_setting": "1,792,883",
+        "date2_setting": "17,167,074",
+        "date1_redemption": "12,033,449",
+        "date2_redemption": "27,624,062"
+      },
+      "order": {
+        "fund_code": "BBIQ00",
+        "fund_name": "배당주형",
+        "settle_class": "1",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "27,624,062"
+      }
+    },
+    {
+      "source": "forecast.date2_setting",
+      "row": {
+        "row_index": 6,
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금 Ⅱ 주식혼합1형(ETF_삼성)",
+        "date1_setting": "1,671,769",
+        "date2_setting": "293,528",
+        "date1_redemption": "22,277,215",
+        "date2_redemption": "14,190,753"
+      },
+      "order": {
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금Ⅱ 주식혼합1형(ETF_삼성)",
+        "settle_class": "1",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "293,528"
+      }
+    },
+    {
+      "source": "forecast.date2_redemption",
+      "row": {
+        "row_index": 6,
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금 Ⅱ 주식혼합1형(ETF_삼성)",
+        "date1_setting": "1,671,769",
+        "date2_setting": "293,528",
+        "date1_redemption": "22,277,215",
+        "date2_redemption": "14,190,753"
+      },
+      "order": {
+        "fund_code": "BBJ650",
+        "fund_name": "변액연금Ⅱ 주식혼합1형(ETF_삼성)",
+        "settle_class": "1",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "14,190,753"
+      }
+    },
+    {
+      "source": "forecast.date2_setting",
+      "row": {
+        "row_index": 7,
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금 Ⅱ 주식혼합2형(ETF_삼성)",
+        "date1_setting": "341,507",
+        "date2_setting": "13,715,113",
+        "date1_redemption": "384,210",
+        "date2_redemption": "25,464,526"
+      },
+      "order": {
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금Ⅱ 주식혼합2형(ETF_삼성)",
+        "settle_class": "1",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "13,715,113"
+      }
+    },
+    {
+      "source": "forecast.date2_redemption",
+      "row": {
+        "row_index": 7,
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금 Ⅱ 주식혼합2형(ETF_삼성)",
+        "date1_setting": "341,507",
+        "date2_setting": "13,715,113",
+        "date1_redemption": "384,210",
+        "date2_redemption": "25,464,526"
+      },
+      "order": {
+        "fund_code": "BBJ770",
+        "fund_name": "변액연금Ⅱ 주식혼합2형(ETF_삼성)",
+        "settle_class": "1",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "25,464,526"
+      }
+    },
+    {
+      "source": "forecast.date2_setting",
+      "row": {
+        "row_index": 8,
+        "fund_code": "BBJAG0",
+        "fund_name": "성장가치주혼합형(ETF_삼성)",
+        "date1_setting": "207,339,753",
+        "date2_setting": "348,098,451",
+        "date1_redemption": "437,600,603",
+        "date2_redemption": "307,581,751"
+      },
+      "order": {
+        "fund_code": "BBJAG0",
+        "fund_name": "성장가치주혼합형(ETF_삼성)",
+        "settle_class": "1",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "348,098,451"
+      }
+    },
+    {
+      "source": "forecast.date2_redemption",
+      "row": {
+        "row_index": 8,
+        "fund_code": "BBJAG0",
+        "fund_name": "성장가치주혼합형(ETF_삼성)",
+        "date1_setting": "207,339,753",
+        "date2_setting": "348,098,451",
+        "date1_redemption": "437,600,603",
+        "date2_redemption": "307,581,751"
+      },
+      "order": {
+        "fund_code": "BBJAG0",
+        "fund_name": "성장가치주혼합형(ETF_삼성)",
+        "settle_class": "1",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "307,581,751"
+      }
+    },
+    {
+      "source": "forecast.date2_setting",
+      "row": {
+        "row_index": 9,
+        "fund_code": "BBJC00",
+        "fund_name": "ACTIVE주식혼합형",
+        "date1_setting": "48,024",
+        "date2_setting": "7,447,192",
+        "date1_redemption": "798,486",
+        "date2_redemption": "16,522,380"
+      },
+      "order": {
+        "fund_code": "BBJC00",
+        "fund_name": "ACTIVE주식혼합형",
+        "settle_class": "1",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "7,447,192"
+      }
+    },
+    {
+      "source": "forecast.date2_redemption",
+      "row": {
+        "row_index": 9,
+        "fund_code": "BBJC00",
+        "fund_name": "ACTIVE주식혼합형",
+        "date1_setting": "48,024",
+        "date2_setting": "7,447,192",
+        "date1_redemption": "798,486",
+        "date2_redemption": "16,522,380"
+      },
+      "order": {
+        "fund_code": "BBJC00",
+        "fund_name": "ACTIVE주식혼합형",
+        "settle_class": "1",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "16,522,380"
+      }
+    },
+    {
+      "source": "forecast.date2_setting",
+      "row": {
+        "row_index": 10,
+        "fund_code": "BBJIA0",
+        "fund_name": "르네상스주식형(ETF_삼성)",
+        "date1_setting": "512,717,896",
+        "date2_setting": "191,601,081",
+        "date1_redemption": "223,168,278",
+        "date2_redemption": "72,321,005"
+      },
+      "order": {
+        "fund_code": "BBJIA0",
+        "fund_name": "르네상스주식형(ETF_삼성)",
+        "settle_class": "1",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "191,601,081"
+      }
+    },
+    {
+      "source": "forecast.date2_redemption",
+      "row": {
+        "row_index": 10,
+        "fund_code": "BBJIA0",
+        "fund_name": "르네상스주식형(ETF_삼성)",
+        "date1_setting": "512,717,896",
+        "date2_setting": "191,601,081",
+        "date1_redemption": "223,168,278",
+        "date2_redemption": "72,321,005"
+      },
+      "order": {
+        "fund_code": "BBJIA0",
+        "fund_name": "르네상스주식형(ETF_삼성)",
+        "settle_class": "1",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "72,321,005"
+      }
+    },
+    {
+      "source": "forecast.date2_setting",
+      "row": {
+        "row_index": 13,
+        "fund_code": "BBJZ00",
+        "fund_name": "글로벌자산배분적극형",
+        "date1_setting": "29,159",
+        "date2_setting": "15,096",
+        "date1_redemption": "4,966",
+        "date2_redemption": "15,370"
+      },
+      "order": {
+        "fund_code": "BBJZ00",
+        "fund_name": "글로벌자산배분적극형",
+        "settle_class": "1",
+        "order_type": "3",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "15,096"
+      }
+    },
+    {
+      "source": "forecast.date2_redemption",
+      "row": {
+        "row_index": 13,
+        "fund_code": "BBJZ00",
+        "fund_name": "글로벌자산배분적극형",
+        "date1_setting": "29,159",
+        "date2_setting": "15,096",
+        "date1_redemption": "4,966",
+        "date2_redemption": "15,370"
+      },
+      "order": {
+        "fund_code": "BBJZ00",
+        "fund_name": "글로벌자산배분적극형",
+        "settle_class": "1",
+        "order_type": "1",
+        "base_date": "2026-03-18",
+        "t_day": "03",
+        "transfer_amount": "15,370"
+      }
+    }
+  ],
+  "settlement_name_by_code": {
+    "BALI00": "퇴연주식형",
+    "BALX00": "(디폴트옵션전용) 글로벌에셋밸런스형",
+    "BBI100": "변액유니버설종신-채권형",
+    "BBIM20": "변액유니버설종신-채권형 Ⅱ (채권_삼성)",
+    "BBIQ00": "배당주형",
+    "BBJ650": "변액연금 Ⅱ 주식혼합1형(ETF_삼성)",
+    "BBJ670": "변액연금 Ⅱ 주식혼합1형(채권_삼성)",
+    "BBJ770": "변액연금 Ⅱ 주식혼합2형(ETF_삼성)",
+    "BBJAG0": "성장가치주혼합형(ETF_삼성)",
+    "BBJC00": "ACTIVE주식혼합형",
+    "BBJIA0": "르네상스주식형(ETF_삼성)",
+    "BBJU00": "글로벌멀티에셋형",
+    "BBJW00": "중장기채권형",
+    "BBJZ00": "글로벌자산배분적극형",
+    "BBKV00": "글로벌멀티전략형"
+  }
+}

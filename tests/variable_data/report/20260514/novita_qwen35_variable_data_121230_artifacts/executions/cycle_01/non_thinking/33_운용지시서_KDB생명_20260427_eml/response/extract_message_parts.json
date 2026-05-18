@@ -1,0 +1,31 @@
+{
+  "label": "extract",
+  "finish_reason": "stop",
+  "elapsed_seconds": 18.641,
+  "usage": {
+    "prompt_tokens": 3089,
+    "completion_tokens": 1376,
+    "total_tokens": 4465,
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "text_tokens": 567,
+      "image_tokens": 2522,
+      "video_tokens": 0
+    },
+    "completion_tokens_details": {
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": 1376,
+      "image_tokens": 0,
+      "video_tokens": 0
+    }
+  },
+  "reasoning_content_present": false,
+  "reasoning_content": null,
+  "content": "{\n  \"file_name\": \"운용지시서(KDB생명)_20260427.eml\",\n  \"source_path\": \"/Users/bhkim/Documents/codex_prj_sam_asset/document/운용지시서(KDB생명)_20260427.eml\",\n  \"model_name\": \"qwen/qwen3.5-397b-a17b\",\n  \"base_date\": \"2026-04-27\",\n  \"status\": \"COMPLETED\",\n  \"reason\": null,\n  \"issues\": [],\n  \"orders\": [\n    {\n      \"fund_code\": \"492007\",\n      \"fund_name\": \"액티브배당성장70혼합형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"6,587,078\"\n    },\n    {\n      \"fund_code\": \"492007\",\n      \"fund_name\": \"액티브배당성장70혼합형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"14,483,055\"\n    },\n    {\n      \"fund_code\": \"F00432\",\n      \"fund_name\": \"글로벌 자산배분안정형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"1,166,711\"\n    },\n    {\n      \"fund_code\": \"F00432\",\n      \"fund_name\": \"글로벌 자산배분안정형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"12,673,412\"\n    },\n    {\n      \"fund_code\": \"822337\",\n      \"fund_name\": \"글로벌 자산배분적극형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"13,350,190\"\n    },\n    {\n      \"fund_code\": \"822337\",\n      \"fund_name\": \"글로벌 자산배분적극형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"5,934,685\"\n    },\n    {\n      \"fund_code\": \"004434\",\n      \"fund_name\": \"미국고배당포커스주식형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"13,984,034\"\n    },\n    {\n      \"fund_code\": \"004434\",\n      \"fund_name\": \"미국고배당포커스주식형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"7,492,608\"\n    },\n    {\n      \"fund_code\": \"4013\",\n      \"fund_name\": \"인덱스플러스알파 70 혼합형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"13,951,275\"\n    },\n    {\n      \"fund_code\": \"4013\",\n      \"fund_name\": \"인덱스플러스알파 70 혼합형\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"17,883,174\"\n    },\n    {\n      \"fund_code\": \"91414\",\n      \"fund_name\": \"인덱스혼합형 2 (주식 4)\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"111,494,218\"\n    },\n    {\n      \"fund_code\": \"91414\",\n      \"fund_name\": \"인덱스혼합형 2 (주식 4)\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2026-04-27\",\n      \"t_day\": \"02\",\n      \"transfer_amount\": \"2,300,135,515\"\n    }\n  ]\n}"
+}

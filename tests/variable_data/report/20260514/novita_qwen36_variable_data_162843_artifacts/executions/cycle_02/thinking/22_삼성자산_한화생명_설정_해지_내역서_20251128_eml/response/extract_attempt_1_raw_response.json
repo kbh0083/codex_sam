@@ -1,0 +1,70 @@
+{
+  "request": {
+    "url": "https://api.novita.ai/openai/v1/chat/completions",
+    "model": "qwen/qwen3.6-27b",
+    "message_count": 1,
+    "content_parts": [
+      "text",
+      "image_url"
+    ],
+    "attempt": 1,
+    "max_attempts": 4,
+    "enable_thinking": true,
+    "separate_reasoning": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 0.0,
+    "repetition_penalty": 1.0,
+    "max_tokens": 32768,
+    "stream": false,
+    "response_format": {
+      "type": "json_object"
+    }
+  },
+  "http_status": 200,
+  "elapsed_seconds": 30.207,
+  "response_json": {
+    "id": "629eacfb1ac92bae13a58851a69e1315",
+    "object": "chat.completion",
+    "created": 1778744239,
+    "model": "qwen/qwen3.6-27b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"file_name\": \"삼성자산_한화생명_설정_해지_내역서_20251128.eml\",\n  \"source_path\": \"/Users/bhkim/Documents/codex_prj_sam_asset/document/삼성자산_한화생명_설정_해지_내역서_20251128.eml\",\n  \"model_name\": \"qwen/qwen3.6-27b\",\n  \"base_date\": \"2025-11-28\",\n  \"status\": \"COMPLETED\",\n  \"reason\": null,\n  \"issues\": [],\n  \"orders\": [\n    {\n      \"fund_code\": \"32451\",\n      \"fund_name\": \"퇴직연금연금자산배분형\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"3\",\n      \"base_date\": \"2025-11-28\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"500,063\"\n    },\n    {\n      \"fund_code\": \"V63053\",\n      \"fund_name\": \"보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\",\n      \"settle_class\": \"2\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-11-28\",\n      \"t_day\": \"01\",\n      \"transfer_amount\": \"85,848,214\"\n    },\n    {\n      \"fund_code\": \"V63053\",\n      \"fund_name\": \"보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\",\n      \"settle_class\": \"1\",\n      \"order_type\": \"1\",\n      \"base_date\": \"2025-11-28\",\n      \"t_day\": \"03\",\n      \"transfer_amount\": \"508,615,208\"\n    }\n  ]\n}",
+          "reasoning_content": "user wants me to extract order data from the provided image of a Hanwha Life \"Setting/Cancellation Statement\" table.\n\n**1. Analyze the Request:**\n*   **Input:** An image of a table.\n*   **Task:** OCR and extract specific order data.\n*   **Output Format:** JSON object with specific fields (`file_name`, `source_path`, `model_name`, `base_date`, `status`, `reason`, `issues`, `orders`).\n*   **Constraints:**\n    *   `base_date`: 2025-11-28.\n    *   Ignore total rows and rows with 0, \"-\", blank amounts.\n    *   Group rows by Fund Code/Name.\n    *   **Settled Amount (Settle Class 2):** Extract from the `펀드계` (Fund Account) column under `설정(예탁) 및 해지금액` (Setting/Deposit & Cancellation Amount).\n        *   Positive `펀드계` -> `order_type`: \"3\" (Setting), `settle_class`: \"2\", `t_day`: \"01\".\n        *   Negative `펀드계` -> Absolute value, `order_type`: \"1\" (Redemption), `settle_class`: \"2\", `t_day`: \"01\".\n    *   **Claim Amount (Settle Class 1):** Extract from the `익익영업일 이체예상금액` (T+2 Business Day Expected Transfer Amount) column.\n        *   *Crucial Rule:* Do NOT use `익영업일 이체예상금액` (T+1). Only use `익익영업일`.\n        *   Positive `익익영업일` -> `order_type`: \"3\", `settle_class`: \"1\", `t_day`: \"03\".\n        *   Negative `익익영업일` -> Absolute value, `order_type`: \"1\", `settle_class`: \"1\", `t_day`: \"03\".\n    *   If both Settled and Claim amounts exist for a fund, create two separate orders.\n    *   `transfer_amount`: String with commas, no negative sign.\n    *   **Verification:** Check for 3 specific orders:\n        1.  32451 Settled (`펀드계`)\n        2.  V63053 Settled (`펀드계`)\n        3.  V63053 Claim (`익익영업일`)\n\n**2. Analyze the Image Table:**\n\n*   **Headers:**\n    *   `펀드코드` (Fund Code)\n    *   `펀드명` (Fund Name)\n    *   `설정(예탁) 및 해지금액` -> `투자일임/수익증권` (Investment Discretion/Income Securities) & `펀드계` (Fund Account)\n    *   `보수출금` (Commission Withdrawal)\n    *   `예탁금 이용료` (Deposit Usage Fee)\n    *   `수탁은행 수령금액` (Custodian Bank Receipt Amount)\n    *   `익영업일 이체예상금액` (T+1 Expected Transfer) -> *Ignore for orders*\n    *   `익익영업일 이체예상금액` (T+2 Expected Transfer) -> *Use for Claim Orders*\n    *   ... other columns ...\n\n*   **Row Analysis:**\n\n    *   **Row 1 (Total):** `총계` -> Ignore.\n\n    *   **Row 2 (Fund 32451):**\n        *   `펀드코드`: 32451\n        *   `펀드명`: 퇴직연금연금자산배분형\n        *   `입금` (Deposit): 500,063\n        *   `출금` (Withdrawal): 0\n        *   `환매 신청` (Redemption Application): 0\n        *   `펀드계` (Fund Account): 500,063 (Positive) -> **Order 1**\n            *   `order_type`: \"3\"\n            *   `settle_class`: \"2\"\n            *   `t_day`: \"01\"\n            *   `transfer_amount`: \"500,063\"\n        *   `익영업일 이체예상금액`: 16,600,000 -> *Ignore*\n        *   `익익영업일 이체예상금액`: 0 -> No Claim Order.\n\n    *   **Row 3 (Fund V430252):**\n        *   `펀드코드`: V430252\n        *   `펀드명`: 변액CI 혼합형(삼성단기채권)\n        *   `펀드계`: 0 -> Ignore.\n        *   `익익영업일`: 0 -> Ignore.\n\n    *   **Row 4 (Fund V530115):**\n        *   `펀드코드`: V530115\n        *   `펀드명`: 변액연금II 혼합형II(삼성단기채권)\n        *   `펀드계`: 0 -> Ignore.\n        *   `익익영업일`: 0 -> Ignore.\n\n    *   **Row 5 (Fund V530246):**\n        *   `펀드코드`: V530246\n        *   `펀드명`: 변액연금II 가치주혼합형II(삼성단기채권)\n        *   `펀드계`: 0 -> Ignore.\n        *   `익익영업일`: 0 -> Ignore.\n\n    *   **Row 6 (Fund V63053):**\n        *   `펀드코드`: V63053\n        *   `펀드명`: 보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\n        *   `입금`: 0\n        *   `출금`: -85,848,214\n        *   `환매 신청`: 0\n        *   `펀드계` (Fund Account): -85,848,214 (Negative) -> **Order 2**\n            *   `order_type`: \"1\" (Redemption)\n            *   `settle_class`: \"2\"\n            *   `t_day`: \"01\"\n            *   `transfer_amount`: \"85,848,214\" (Absolute value)\n        *   `익영업일 이체예상금액`: -458,400,000 -> *Ignore*\n        *   `익익영업일 이체예상금액`: -508,615,208 (Negative) -> **Order 3**\n            *   `order_type`: \"1\" (Redemption)\n            *   `settle_class`: \"1\"\n            *   `t_day`: \"03\"\n            *   `transfer_amount`: \"508,615,208\" (Absolute value)\n\n    *   **Row 7 (Fund V910119):**\n        *   `펀드코드`: V910119\n        *   `펀드명`: 플러스 UP 변액연금 V 파생혼합형(삼성크레딧채권)\n        *   `펀드계`: 0 -> Ignore.\n        *   `익익영업일`: 0 -> Ignore.\n\n    *   **Row 8 (Fund V9101R):**\n        *   `펀드코드`: V9101R\n        *   `펀드명`: 플러스 UP 변액연금 V 파생혼합형(삼성단기채권)\n        *   `펀드계`: 0 -> Ignore.\n        *   `익익영업일`: 0 -> Ignore.\n\n**3. Constructing the JSON:**\n\n*   **Order 1:**\n    *   Fund: 32451 / 퇴직연금연금자산배분형\n    *   Type: 3 (Setting)\n    *   Class: 2\n    *   T-day: 01\n    *   Amount: 500,063\n\n*   **Order 2:**\n    *   Fund: V63053 / 보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\n    *   Type: 1 (Redemption - because Fund Account is negative)\n    *   Class: 2\n    *   T-day: 01\n    *   Amount: 85,848,214\n\n*   **Order 3:**\n    *   Fund: V63053 / 보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)\n    *   Type: 1 (Redemption - because T+2 amount is negative)\n    *   Class: 1\n    *   T-day: 03\n    *   Amount: 508,615,208\n\n**4. Final Verification:**\n*   Did I extract 32451 Settled? Yes.\n*   Did I extract V63053 Settled? Yes.\n*   Did I extract V63053 Claim? Yes.\n*   Are amounts formatted correctly (commas, positive strings)? Yes.\n*   Are dates correct? Base date 2025-11-28.\n*   Is the JSON structure correct? Yes.\n\n**5. Formatting:**\n*   `file_name`: \"삼성자산_한화생명_설정_해지_내역서_20251128.eml\" (from prompt)\n*   `source_path`: \"/Users/bhkim/Documents/codex_prj_sam_asset/document/삼성자산_한화생명_설정_해지_내역서_20251128.eml\" (from prompt)\n*   `model_name`: \"qwen/qwen3.6-27b\" (from prompt)\n*   `base_date`: \"2025-11-28\"\n\nLet's double check the V63053 T+2 amount.\nColumn `익익영업일 이체예상금액`.\nRow V63053.\nValue is `-508,615,208`.\nSo `order_type` is \"1\", `transfer_amount` is \"508,615,208\". Correct.\n\nLet's double check the V63053 Fund Account amount.\nColumn `펀드계`.\nRow V63053.\nValue is `-85,848,214`.\nSo `order_type` is \"1\", `transfer_amount` is \"85,848,214\". Correct.\n\nLet's double check 32451 Fund Account amount.\nColumn `펀드계`.\nRow 32451.\nValue is `500,063`.\nSo `order_type` is \"3\", `transfer_amount` is \"500,063\". Correct.\n\nWait, looking closely at 32451 row.\n`입금` (Deposit) is 500,063.\n`출금` (Withdrawal) is 0.\n`환매 신청` (Redemption Application) is 0.\n`펀드계` (Fund Account) is 500,063.\nThis is a positive value, so it's a Setting order (Type 3).\n\nLooking at V63053 row.\n`입금`: 0\n`출금`: -85,848,214\n`환매 신청`: 0\n`펀드계`: -85,848,214.\nThis is a negative value, so it's a Redemption order (Type 1).\n\nThe logic holds up.\n\nOne detail: `transfer_amount` format. \"string with commas\".\n\"500,063\"\n\"85,848,214\"\n\"508,615,208\"\n\nFinal JSON construction."
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3696,
+      "completion_tokens": 3235,
+      "total_tokens": 6931,
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "text_tokens": 1198,
+        "image_tokens": 2498,
+        "video_tokens": 0
+      },
+      "completion_tokens_details": {
+        "audio_tokens": 0,
+        "reasoning_tokens": 2734,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0,
+        "text_tokens": 501,
+        "image_tokens": 0,
+        "video_tokens": 0
+      }
+    },
+    "system_fingerprint": ""
+  },
+  "response_text": null
+}

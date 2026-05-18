@@ -1,0 +1,18 @@
+{
+  "cases": [
+    {
+      "case_id": "12_동양생명_20260318_html",
+      "company": "동양생명",
+      "source": "/Users/bhkim/Documents/codex_prj_sam_asset/document/동양생명_20260318.html",
+      "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.json",
+      "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.csv",
+      "expected_orders": 40,
+      "base_date": "2026-03-18",
+      "kind": "html",
+      "strategy": "dongyang_two_stage",
+      "compact_fund_name": true,
+      "sheet_name": null,
+      "xlsx_range": null
+    }
+  ]
+}

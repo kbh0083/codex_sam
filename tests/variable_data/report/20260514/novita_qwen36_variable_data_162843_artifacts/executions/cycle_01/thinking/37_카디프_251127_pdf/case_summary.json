@@ -1,0 +1,57 @@
+{
+  "case_id": "37_카디프_251127_pdf",
+  "company": "카디프생명",
+  "cycle": 1,
+  "profile": "thinking",
+  "verdict": "PASS",
+  "status": "COMPLETED",
+  "base_date": "2025-11-27",
+  "orders": 46,
+  "expected_orders": 46,
+  "json_core_exact": true,
+  "csv_canonical_exact": true,
+  "llm_call_count": 1,
+  "elapsed_seconds": 95.304,
+  "usage": {
+    "prompt_tokens": 5592,
+    "completion_tokens": 11234,
+    "total_tokens": 16826,
+    "by_call": {
+      "extract_attempt_1": {
+        "prompt_tokens": 5592,
+        "completion_tokens": 11234,
+        "total_tokens": 16826,
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "text_tokens": 548,
+          "image_tokens": 5044,
+          "video_tokens": 0
+        },
+        "completion_tokens_details": {
+          "audio_tokens": 0,
+          "reasoning_tokens": 6655,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "text_tokens": 4579,
+          "image_tokens": 0,
+          "video_tokens": 0
+        }
+      }
+    }
+  },
+  "finish_reasons": {
+    "extract_attempt_1": "stop"
+  },
+  "reasoning_content_present": true,
+  "paths": {
+    "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/37_카디프_251127_pdf",
+    "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/37_카디프_251127_pdf/result/37_카디프_251127_pdf.json",
+    "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/37_카디프_251127_pdf/result/37_카디프_251127_pdf.csv",
+    "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/37_카디프_251127_pdf/validation_summary.json",
+    "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.json",
+    "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.csv"
+  }
+}

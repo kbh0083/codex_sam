@@ -1,0 +1,166 @@
+{
+  "case_id": "12_동양생명_20260318_html",
+  "verdict": "FAIL",
+  "checks": {
+    "status_completed": true,
+    "base_date_expected": true,
+    "orders_expected": true,
+    "issues_empty": true,
+    "json_core_exact": false,
+    "csv_canonical_exact": false
+  },
+  "status": "COMPLETED",
+  "base_date": "2026-03-18",
+  "orders": 40,
+  "expected_orders": 40,
+  "diff": {
+    "missing_from_result": [
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "15579386"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "36487222"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "17716295"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버셜종신-채권형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "21068647"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "54952749"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "59780678"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "108889122"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "68261693"
+      }
+    ],
+    "extra_in_result": [
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버설종신-채권형",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "15579386"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버설종신-채권형",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "36487222"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버설종신-채권형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "17716295"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBI100",
+        "fund_name": "변액유니버설종신-채권형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "21068647"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버설종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "3",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "54952749"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버설종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "1",
+        "settle_class": "2",
+        "t_day": "01",
+        "transfer_amount": "59780678"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버설종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "108889122"
+      },
+      {
+        "base_date": "2026-03-18",
+        "fund_code": "BBIM20",
+        "fund_name": "변액유니버설종신-채권형Ⅱ(채권_삼성)",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "03",
+        "transfer_amount": "68261693"
+      }
+    ]
+  }
+}

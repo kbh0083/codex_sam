@@ -1,0 +1,20 @@
+{
+  "case_id": "37_카디프_251127_pdf",
+  "verdict": "PASS",
+  "checks": {
+    "status_completed": true,
+    "base_date_expected": true,
+    "orders_expected": true,
+    "issues_empty": true,
+    "json_core_exact": true,
+    "csv_canonical_exact": true
+  },
+  "status": "COMPLETED",
+  "base_date": "2025-11-27",
+  "orders": 46,
+  "expected_orders": 46,
+  "diff": {
+    "missing_from_result": [],
+    "extra_in_result": []
+  }
+}

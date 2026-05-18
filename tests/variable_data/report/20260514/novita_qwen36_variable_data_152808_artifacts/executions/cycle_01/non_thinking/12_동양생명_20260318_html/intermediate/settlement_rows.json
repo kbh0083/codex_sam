@@ -1,0 +1,134 @@
+{
+  "section": "settlement",
+  "base_date": "2026-03-18",
+  "row_count": 15,
+  "issues": [
+    "fund_code",
+    "fund_name",
+    "setting_amount",
+    "redemption_amount",
+    "settlement_amount"
+  ],
+  "rows": [
+    {
+      "row_index": 1,
+      "fund_code": "BALI00",
+      "fund_name": "퇴연주식형",
+      "setting_amount": "8,592,243",
+      "redemption_amount": "0",
+      "settlement_amount": "8,592,243"
+    },
+    {
+      "row_index": 2,
+      "fund_code": "BALX00",
+      "fund_name": "(디프트옵션전용) 글로벌에셋밸런스형",
+      "setting_amount": "11,537,247",
+      "redemption_amount": "-8,554,421",
+      "settlement_amount": "2,982,826"
+    },
+    {
+      "row_index": 3,
+      "fund_code": "BBI100",
+      "fund_name": "변액유니버셜종신-채권형",
+      "setting_amount": "15,579,386",
+      "redemption_amount": "-36,487,222",
+      "settlement_amount": "-20,907,836"
+    },
+    {
+      "row_index": 4,
+      "fund_code": "BBIM20",
+      "fund_name": "변액유니버셜종신-채권형Ⅱ(채권_삼성)",
+      "setting_amount": "54,952,749",
+      "redemption_amount": "-59,780,678",
+      "settlement_amount": "-4,827,929"
+    },
+    {
+      "row_index": 5,
+      "fund_code": "BBIQ00",
+      "fund_name": "배당주형",
+      "setting_amount": "101,111,528",
+      "redemption_amount": "-46,646,530",
+      "settlement_amount": "54,464,998"
+    },
+    {
+      "row_index": 6,
+      "fund_code": "BBJ650",
+      "fund_name": "변액연금Ⅱ 주식혼합1형(ETF_삼성)",
+      "setting_amount": "24,301,178",
+      "redemption_amount": "-291,056",
+      "settlement_amount": "24,010,122"
+    },
+    {
+      "row_index": 7,
+      "fund_code": "BBJ670",
+      "fund_name": "변액연금Ⅱ 주식혼합1형(채권_삼성)",
+      "setting_amount": "0",
+      "redemption_amount": "0",
+      "settlement_amount": "0"
+    },
+    {
+      "row_index": 8,
+      "fund_code": "BBJ770",
+      "fund_name": "변액연금Ⅱ 주식혼합2형(ETF_삼성)",
+      "setting_amount": "10,579,537",
+      "redemption_amount": "-10,576,371",
+      "settlement_amount": "3,166"
+    },
+    {
+      "row_index": 9,
+      "fund_code": "BBJAG0",
+      "fund_name": "성장가치주혼합형(ETF_삼성)",
+      "setting_amount": "89,756,656",
+      "redemption_amount": "-341,048,082",
+      "settlement_amount": "-251,291,426"
+    },
+    {
+      "row_index": 10,
+      "fund_code": "BBJC00",
+      "fund_name": "ACTIVE주식혼합형",
+      "setting_amount": "2,468,027",
+      "redemption_amount": "-1,938,371",
+      "settlement_amount": "529,656"
+    },
+    {
+      "row_index": 11,
+      "fund_code": "BBJIA0",
+      "fund_name": "르네상스주식형(ETF_삼성)",
+      "setting_amount": "92,229,774",
+      "redemption_amount": "-47,435,622",
+      "settlement_amount": "44,794,152"
+    },
+    {
+      "row_index": 12,
+      "fund_code": "BBJU00",
+      "fund_name": "글로벌멀티에셋형",
+      "setting_amount": "14,324",
+      "redemption_amount": "-586",
+      "settlement_amount": "13,738"
+    },
+    {
+      "row_index": 13,
+      "fund_code": "BBJW00",
+      "fund_name": "중장기채권형",
+      "setting_amount": "0",
+      "redemption_amount": "0",
+      "settlement_amount": "0"
+    },
+    {
+      "row_index": 14,
+      "fund_code": "BBJZ00",
+      "fund_name": "글로벌자산배분적극형",
+      "setting_amount": "0",
+      "redemption_amount": "0",
+      "settlement_amount": "0"
+    },
+    {
+      "row_index": 15,
+      "fund_code": "BBKV00",
+      "fund_name": "글로벌멀티전략형",
+      "setting_amount": "0",
+      "redemption_amount": "0",
+      "settlement_amount": "0"
+    }
+  ]
+}

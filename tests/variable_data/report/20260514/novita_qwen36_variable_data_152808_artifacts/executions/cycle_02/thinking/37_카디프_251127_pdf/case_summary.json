@@ -1,0 +1,54 @@
+{
+  "case_id": "37_카디프_251127_pdf",
+  "company": "카디프생명",
+  "cycle": 2,
+  "profile": "thinking",
+  "verdict": "FAIL",
+  "failure_reason": "JSON parse failed",
+  "status": null,
+  "base_date": null,
+  "orders": 0,
+  "expected_orders": 46,
+  "json_core_exact": false,
+  "csv_canonical_exact": false,
+  "llm_call_count": 1,
+  "elapsed_seconds": 37.031,
+  "usage": {
+    "prompt_tokens": 5489,
+    "completion_tokens": 3694,
+    "total_tokens": 9183,
+    "by_call": {
+      "extract": {
+        "prompt_tokens": 5489,
+        "completion_tokens": 3694,
+        "total_tokens": 9183,
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "text_tokens": 445,
+          "image_tokens": 5044,
+          "video_tokens": 0
+        },
+        "completion_tokens_details": {
+          "audio_tokens": 0,
+          "reasoning_tokens": 3363,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "text_tokens": 331,
+          "image_tokens": 0,
+          "video_tokens": 0
+        }
+      }
+    }
+  },
+  "finish_reasons": {
+    "extract": "stop"
+  },
+  "reasoning_content_present": true,
+  "paths": {
+    "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_152808_artifacts/executions/cycle_02/thinking/37_카디프_251127_pdf",
+    "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_152808_artifacts/executions/cycle_02/thinking/37_카디프_251127_pdf/validation_summary.json"
+  }
+}

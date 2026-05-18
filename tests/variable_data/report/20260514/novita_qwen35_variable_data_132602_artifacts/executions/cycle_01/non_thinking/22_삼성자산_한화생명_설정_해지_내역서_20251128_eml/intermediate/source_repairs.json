@@ -1,0 +1,21 @@
+[
+  {
+    "type": "source_table_order_added",
+    "order": {
+      "fund_code": "V63053",
+      "fund_name": "보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-28",
+      "t_day": "03",
+      "transfer_amount": "508,615,208"
+    },
+    "evidence": {
+      "row_index": 17,
+      "row_type": "환매 신청",
+      "column": "익익영업일 이체예상금액",
+      "raw_value": "-508,615,208",
+      "rule": "future_t03_request"
+    }
+  }
+]

@@ -1,0 +1,201 @@
+{
+  "case_id": "14_라이나_250826_xlsx",
+  "verdict": "FAIL",
+  "checks": {
+    "status_completed": true,
+    "base_date_expected": true,
+    "orders_expected": false,
+    "issues_empty": true,
+    "json_core_exact": false,
+    "csv_canonical_exact": false
+  },
+  "status": "COMPLETED",
+  "base_date": "2025-08-26",
+  "orders": 30,
+  "expected_orders": 10,
+  "diff": {
+    "missing_from_result": [],
+    "extra_in_result": [
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6102",
+        "fund_name": "혼합안정형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "335969"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6102",
+        "fund_name": "혼합안정형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "3826639"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6103",
+        "fund_name": "브이캅그로스형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "9639"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6105",
+        "fund_name": "해외혼합형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "264750"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6105",
+        "fund_name": "해외혼합형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "4939"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6106",
+        "fund_name": "에그리비즈니스주식형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "1165050"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6106",
+        "fund_name": "에그리비즈니스주식형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "16846"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6107",
+        "fund_name": "아시아50주식형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "790329"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6107",
+        "fund_name": "아시아50주식형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "980000"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "610J",
+        "fund_name": "밸류고배당주식형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "767369"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "610L",
+        "fund_name": "미국주식형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "761019"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "610L",
+        "fund_name": "미국주식형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "891500"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6110",
+        "fund_name": "차이나주식형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "1920703825"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6110",
+        "fund_name": "차이나주식형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "307619493"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6111",
+        "fund_name": "글로벌이머징형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "1232725"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6111",
+        "fund_name": "글로벌이머징형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "19919"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6112",
+        "fund_name": "이머징커머티티주식형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "1268"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6113",
+        "fund_name": "주식형",
+        "order_type": "3",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "1661750"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6113",
+        "fund_name": "주식형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "24523917"
+      },
+      {
+        "base_date": "2025-08-26",
+        "fund_code": "6116",
+        "fund_name": "스마트&세이프코스피원자재형",
+        "order_type": "1",
+        "settle_class": "1",
+        "t_day": "01",
+        "transfer_amount": "18107"
+      }
+    ]
+  }
+}

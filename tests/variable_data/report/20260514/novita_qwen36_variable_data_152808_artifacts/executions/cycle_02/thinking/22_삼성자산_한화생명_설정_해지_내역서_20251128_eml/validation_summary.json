@@ -1,0 +1,18 @@
+{
+  "case_id": "22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+  "verdict": "FAIL",
+  "reason": "JSON parse failed",
+  "parse_info": {
+    "parse_ok": false,
+    "error": "parsed content is not JSON object",
+    "mode": "raw"
+  },
+  "checks": {
+    "status_completed": false,
+    "base_date_expected": false,
+    "orders_expected": false,
+    "issues_empty": false,
+    "json_core_exact": false,
+    "csv_canonical_exact": false
+  }
+}

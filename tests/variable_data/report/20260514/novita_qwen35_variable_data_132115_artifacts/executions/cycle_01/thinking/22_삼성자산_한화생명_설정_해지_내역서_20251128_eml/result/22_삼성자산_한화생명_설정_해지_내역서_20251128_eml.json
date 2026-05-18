@@ -1,0 +1,29 @@
+{
+  "file_name": "삼성자산_한화생명_설정_해지_내역서_20251128.eml",
+  "source_path": "/Users/bhkim/Documents/codex_prj_sam_asset/document/삼성자산_한화생명_설정_해지_내역서_20251128.eml",
+  "model_name": "qwen/qwen3.5-397b-a17b",
+  "base_date": "2025-11-28",
+  "status": "COMPLETED",
+  "reason": null,
+  "issues": [],
+  "orders": [
+    {
+      "fund_code": "32451",
+      "fund_name": "퇴직연금연금자산배분형",
+      "settle_class": "2",
+      "order_type": "3",
+      "base_date": "2025-11-28",
+      "t_day": "01",
+      "transfer_amount": "500,063"
+    },
+    {
+      "fund_code": "V63053",
+      "fund_name": "보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)",
+      "settle_class": "2",
+      "order_type": "1",
+      "base_date": "2025-11-28",
+      "t_day": "01",
+      "transfer_amount": "85,848,214"
+    }
+  ]
+}

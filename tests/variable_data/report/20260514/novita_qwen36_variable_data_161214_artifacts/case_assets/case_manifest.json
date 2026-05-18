@@ -1,0 +1,60 @@
+{
+  "cases": [
+    {
+      "case_id": "33_운용지시서_KDB생명_20260427_eml",
+      "company": "KDB생명",
+      "source": "/Users/bhkim/Documents/codex_prj_sam_asset/document/운용지시서(KDB생명)_20260427.eml",
+      "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.json",
+      "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.csv",
+      "expected_orders": 12,
+      "base_date": "2026-04-27",
+      "kind": "eml",
+      "strategy": "single_prompt",
+      "compact_fund_name": false,
+      "sheet_name": null,
+      "xlsx_range": null
+    },
+    {
+      "case_id": "22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+      "company": "한화생명",
+      "source": "/Users/bhkim/Documents/codex_prj_sam_asset/document/삼성자산_한화생명_설정_해지_내역서_20251128.eml",
+      "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.json",
+      "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.csv",
+      "expected_orders": 3,
+      "base_date": "2025-11-28",
+      "kind": "eml",
+      "strategy": "single_prompt",
+      "compact_fund_name": false,
+      "sheet_name": null,
+      "xlsx_range": null
+    },
+    {
+      "case_id": "12_동양생명_20260318_html",
+      "company": "동양생명",
+      "source": "/Users/bhkim/Documents/codex_prj_sam_asset/document/동양생명_20260318.html",
+      "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.json",
+      "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.csv",
+      "expected_orders": 40,
+      "base_date": "2026-03-18",
+      "kind": "html",
+      "strategy": "dongyang_two_stage",
+      "compact_fund_name": true,
+      "sheet_name": null,
+      "xlsx_range": null
+    },
+    {
+      "case_id": "37_카디프_251127_pdf",
+      "company": "카디프생명",
+      "source": "/Users/bhkim/Documents/codex_prj_sam_asset/document/카디프_251127.pdf",
+      "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.json",
+      "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.csv",
+      "expected_orders": 46,
+      "base_date": "2025-11-27",
+      "kind": "pdf",
+      "strategy": "single_prompt",
+      "compact_fund_name": false,
+      "sheet_name": null,
+      "xlsx_range": null
+    }
+  ]
+}

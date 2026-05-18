@@ -1,0 +1,1087 @@
+{
+  "run_id": "novita_qwen36_variable_data_162843",
+  "report_path": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843.md",
+  "artifact_root": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts",
+  "overall": "PASS",
+  "verdict_counts": {
+    "PASS": 16
+  },
+  "profile_summary": [
+    {
+      "profile": "non_thinking",
+      "total": 8,
+      "pass": 8,
+      "fail": 0,
+      "blocked": 0,
+      "avg_elapsed_seconds": 20.981,
+      "avg_total_tokens": 7139.5
+    },
+    {
+      "profile": "thinking",
+      "total": 8,
+      "pass": 8,
+      "fail": 0,
+      "blocked": 0,
+      "avg_elapsed_seconds": 72.385,
+      "avg_total_tokens": 13475.6
+    }
+  ],
+  "summaries": [
+    {
+      "case_id": "33_운용지시서_KDB생명_20260427_eml",
+      "company": "KDB생명",
+      "cycle": 1,
+      "profile": "thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2026-04-27",
+      "orders": 12,
+      "expected_orders": 12,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 56.745,
+      "usage": {
+        "prompt_tokens": 3361,
+        "completion_tokens": 6751,
+        "total_tokens": 10112,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 3361,
+            "completion_tokens": 6751,
+            "total_tokens": 10112,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 839,
+              "image_tokens": 2522,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 5297,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1454,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": true,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/33_운용지시서_KDB생명_20260427_eml",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/33_운용지시서_KDB생명_20260427_eml/result/33_운용지시서_KDB생명_20260427_eml.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/33_운용지시서_KDB생명_20260427_eml/result/33_운용지시서_KDB생명_20260427_eml.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/33_운용지시서_KDB생명_20260427_eml/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.csv"
+      }
+    },
+    {
+      "case_id": "22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+      "company": "한화생명",
+      "cycle": 1,
+      "profile": "thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2025-11-28",
+      "orders": 3,
+      "expected_orders": 3,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 23.413,
+      "usage": {
+        "prompt_tokens": 3696,
+        "completion_tokens": 2395,
+        "total_tokens": 6091,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 3696,
+            "completion_tokens": 2395,
+            "total_tokens": 6091,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 1198,
+              "image_tokens": 2498,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 1636,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 759,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": true,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.csv"
+      }
+    },
+    {
+      "case_id": "12_동양생명_20260318_html",
+      "company": "동양생명",
+      "cycle": 1,
+      "profile": "thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2026-03-18",
+      "orders": 40,
+      "expected_orders": 40,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 4,
+      "elapsed_seconds": 160.957,
+      "usage": {
+        "prompt_tokens": 14076,
+        "completion_tokens": 16611,
+        "total_tokens": 30687,
+        "by_call": {
+          "settlement_attempt_1": {
+            "prompt_tokens": 2899,
+            "completion_tokens": 3160,
+            "total_tokens": 6059,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 566,
+              "image_tokens": 2333,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 1407,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1753,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          },
+          "settlement_attempt_2": {
+            "prompt_tokens": 2899,
+            "completion_tokens": 3311,
+            "total_tokens": 6210,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 566,
+              "image_tokens": 2333,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 1870,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1441,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          },
+          "forecast_attempt_1": {
+            "prompt_tokens": 4139,
+            "completion_tokens": 3817,
+            "total_tokens": 7956,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 1652,
+              "image_tokens": 2487,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 1949,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1868,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          },
+          "forecast_attempt_2": {
+            "prompt_tokens": 4139,
+            "completion_tokens": 6323,
+            "total_tokens": 10462,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 1652,
+              "image_tokens": 2487,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 4434,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1889,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "settlement_attempt_1": "stop",
+        "settlement_attempt_2": "stop",
+        "forecast_attempt_1": "stop",
+        "forecast_attempt_2": "stop"
+      },
+      "reasoning_content_present": true,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/12_동양생명_20260318_html",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/12_동양생명_20260318_html/result/12_동양생명_20260318_html.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/12_동양생명_20260318_html/result/12_동양생명_20260318_html.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/12_동양생명_20260318_html/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.csv"
+      }
+    },
+    {
+      "case_id": "37_카디프_251127_pdf",
+      "company": "카디프생명",
+      "cycle": 1,
+      "profile": "thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2025-11-27",
+      "orders": 46,
+      "expected_orders": 46,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 95.304,
+      "usage": {
+        "prompt_tokens": 5592,
+        "completion_tokens": 11234,
+        "total_tokens": 16826,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 5592,
+            "completion_tokens": 11234,
+            "total_tokens": 16826,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 548,
+              "image_tokens": 5044,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 6655,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 4579,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": true,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/37_카디프_251127_pdf",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/37_카디프_251127_pdf/result/37_카디프_251127_pdf.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/37_카디프_251127_pdf/result/37_카디프_251127_pdf.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/thinking/37_카디프_251127_pdf/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.csv"
+      }
+    },
+    {
+      "case_id": "33_운용지시서_KDB생명_20260427_eml",
+      "company": "KDB생명",
+      "cycle": 1,
+      "profile": "non_thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2026-04-27",
+      "orders": 12,
+      "expected_orders": 12,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 14.749,
+      "usage": {
+        "prompt_tokens": 3365,
+        "completion_tokens": 1371,
+        "total_tokens": 4736,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 3365,
+            "completion_tokens": 1371,
+            "total_tokens": 4736,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 843,
+              "image_tokens": 2522,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1371,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": false,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/33_운용지시서_KDB생명_20260427_eml",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/33_운용지시서_KDB생명_20260427_eml/result/33_운용지시서_KDB생명_20260427_eml.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/33_운용지시서_KDB생명_20260427_eml/result/33_운용지시서_KDB생명_20260427_eml.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/33_운용지시서_KDB생명_20260427_eml/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.csv"
+      }
+    },
+    {
+      "case_id": "22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+      "company": "한화생명",
+      "cycle": 1,
+      "profile": "non_thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2025-11-28",
+      "orders": 3,
+      "expected_orders": 3,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 10.919,
+      "usage": {
+        "prompt_tokens": 3700,
+        "completion_tokens": 479,
+        "total_tokens": 4179,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 3700,
+            "completion_tokens": 479,
+            "total_tokens": 4179,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 1202,
+              "image_tokens": 2498,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 479,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": false,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.csv"
+      }
+    },
+    {
+      "case_id": "12_동양생명_20260318_html",
+      "company": "동양생명",
+      "cycle": 1,
+      "profile": "non_thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2026-03-18",
+      "orders": 40,
+      "expected_orders": 40,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 2,
+      "elapsed_seconds": 25.277,
+      "usage": {
+        "prompt_tokens": 7045,
+        "completion_tokens": 2538,
+        "total_tokens": 9583,
+        "by_call": {
+          "settlement_attempt_1": {
+            "prompt_tokens": 2903,
+            "completion_tokens": 1434,
+            "total_tokens": 4337,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 570,
+              "image_tokens": 2333,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1434,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          },
+          "forecast_attempt_1": {
+            "prompt_tokens": 4142,
+            "completion_tokens": 1104,
+            "total_tokens": 5246,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 1655,
+              "image_tokens": 2487,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1104,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "settlement_attempt_1": "stop",
+        "forecast_attempt_1": "stop"
+      },
+      "reasoning_content_present": false,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/12_동양생명_20260318_html",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/12_동양생명_20260318_html/result/12_동양생명_20260318_html.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/12_동양생명_20260318_html/result/12_동양생명_20260318_html.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/12_동양생명_20260318_html/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.csv"
+      }
+    },
+    {
+      "case_id": "37_카디프_251127_pdf",
+      "company": "카디프생명",
+      "cycle": 1,
+      "profile": "non_thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2025-11-27",
+      "orders": 46,
+      "expected_orders": 46,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 35.505,
+      "usage": {
+        "prompt_tokens": 5596,
+        "completion_tokens": 4464,
+        "total_tokens": 10060,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 5596,
+            "completion_tokens": 4464,
+            "total_tokens": 10060,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 552,
+              "image_tokens": 5044,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 4464,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": false,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/37_카디프_251127_pdf",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/37_카디프_251127_pdf/result/37_카디프_251127_pdf.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/37_카디프_251127_pdf/result/37_카디프_251127_pdf.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_01/non_thinking/37_카디프_251127_pdf/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.csv"
+      }
+    },
+    {
+      "case_id": "33_운용지시서_KDB생명_20260427_eml",
+      "company": "KDB생명",
+      "cycle": 2,
+      "profile": "thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2026-04-27",
+      "orders": 12,
+      "expected_orders": 12,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 61.022,
+      "usage": {
+        "prompt_tokens": 3361,
+        "completion_tokens": 4942,
+        "total_tokens": 8303,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 3361,
+            "completion_tokens": 4942,
+            "total_tokens": 8303,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 839,
+              "image_tokens": 2522,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 3415,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1527,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": true,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/33_운용지시서_KDB생명_20260427_eml",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/33_운용지시서_KDB생명_20260427_eml/result/33_운용지시서_KDB생명_20260427_eml.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/33_운용지시서_KDB생명_20260427_eml/result/33_운용지시서_KDB생명_20260427_eml.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/33_운용지시서_KDB생명_20260427_eml/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.csv"
+      }
+    },
+    {
+      "case_id": "22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+      "company": "한화생명",
+      "cycle": 2,
+      "profile": "thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2025-11-28",
+      "orders": 3,
+      "expected_orders": 3,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 30.207,
+      "usage": {
+        "prompt_tokens": 3696,
+        "completion_tokens": 3235,
+        "total_tokens": 6931,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 3696,
+            "completion_tokens": 3235,
+            "total_tokens": 6931,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 1198,
+              "image_tokens": 2498,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 2734,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 501,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": true,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.csv"
+      }
+    },
+    {
+      "case_id": "12_동양생명_20260318_html",
+      "company": "동양생명",
+      "cycle": 2,
+      "profile": "thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2026-03-18",
+      "orders": 40,
+      "expected_orders": 40,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 2,
+      "elapsed_seconds": 66.743,
+      "usage": {
+        "prompt_tokens": 7037,
+        "completion_tokens": 7285,
+        "total_tokens": 14322,
+        "by_call": {
+          "settlement_attempt_1": {
+            "prompt_tokens": 2899,
+            "completion_tokens": 2800,
+            "total_tokens": 5699,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 566,
+              "image_tokens": 2333,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 1332,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1468,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          },
+          "forecast_attempt_1": {
+            "prompt_tokens": 4138,
+            "completion_tokens": 4485,
+            "total_tokens": 8623,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 1651,
+              "image_tokens": 2487,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 2693,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1792,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "settlement_attempt_1": "stop",
+        "forecast_attempt_1": "stop"
+      },
+      "reasoning_content_present": true,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/12_동양생명_20260318_html",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/12_동양생명_20260318_html/result/12_동양생명_20260318_html.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/12_동양생명_20260318_html/result/12_동양생명_20260318_html.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/12_동양생명_20260318_html/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.csv"
+      }
+    },
+    {
+      "case_id": "37_카디프_251127_pdf",
+      "company": "카디프생명",
+      "cycle": 2,
+      "profile": "thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2025-11-27",
+      "orders": 46,
+      "expected_orders": 46,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 84.692,
+      "usage": {
+        "prompt_tokens": 5592,
+        "completion_tokens": 8941,
+        "total_tokens": 14533,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 5592,
+            "completion_tokens": 8941,
+            "total_tokens": 14533,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 548,
+              "image_tokens": 5044,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 4231,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 4710,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": true,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/37_카디프_251127_pdf",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/37_카디프_251127_pdf/result/37_카디프_251127_pdf.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/37_카디프_251127_pdf/result/37_카디프_251127_pdf.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/thinking/37_카디프_251127_pdf/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.csv"
+      }
+    },
+    {
+      "case_id": "33_운용지시서_KDB생명_20260427_eml",
+      "company": "KDB생명",
+      "cycle": 2,
+      "profile": "non_thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2026-04-27",
+      "orders": 12,
+      "expected_orders": 12,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 13.0,
+      "usage": {
+        "prompt_tokens": 3365,
+        "completion_tokens": 1371,
+        "total_tokens": 4736,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 3365,
+            "completion_tokens": 1371,
+            "total_tokens": 4736,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 843,
+              "image_tokens": 2522,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1371,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": false,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/33_운용지시서_KDB생명_20260427_eml",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/33_운용지시서_KDB생명_20260427_eml/result/33_운용지시서_KDB생명_20260427_eml.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/33_운용지시서_KDB생명_20260427_eml/result/33_운용지시서_KDB생명_20260427_eml.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/33_운용지시서_KDB생명_20260427_eml/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.csv"
+      }
+    },
+    {
+      "case_id": "22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+      "company": "한화생명",
+      "cycle": 2,
+      "profile": "non_thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2025-11-28",
+      "orders": 3,
+      "expected_orders": 3,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 6.601,
+      "usage": {
+        "prompt_tokens": 3700,
+        "completion_tokens": 479,
+        "total_tokens": 4179,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 3700,
+            "completion_tokens": 479,
+            "total_tokens": 4179,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 1202,
+              "image_tokens": 2498,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 479,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": false,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.csv"
+      }
+    },
+    {
+      "case_id": "12_동양생명_20260318_html",
+      "company": "동양생명",
+      "cycle": 2,
+      "profile": "non_thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2026-03-18",
+      "orders": 40,
+      "expected_orders": 40,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 2,
+      "elapsed_seconds": 25.322,
+      "usage": {
+        "prompt_tokens": 7045,
+        "completion_tokens": 2538,
+        "total_tokens": 9583,
+        "by_call": {
+          "settlement_attempt_1": {
+            "prompt_tokens": 2903,
+            "completion_tokens": 1434,
+            "total_tokens": 4337,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 570,
+              "image_tokens": 2333,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1434,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          },
+          "forecast_attempt_1": {
+            "prompt_tokens": 4142,
+            "completion_tokens": 1104,
+            "total_tokens": 5246,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 1655,
+              "image_tokens": 2487,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 1104,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "settlement_attempt_1": "stop",
+        "forecast_attempt_1": "stop"
+      },
+      "reasoning_content_present": false,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/12_동양생명_20260318_html",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/12_동양생명_20260318_html/result/12_동양생명_20260318_html.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/12_동양생명_20260318_html/result/12_동양생명_20260318_html.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/12_동양생명_20260318_html/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.csv"
+      }
+    },
+    {
+      "case_id": "37_카디프_251127_pdf",
+      "company": "카디프생명",
+      "cycle": 2,
+      "profile": "non_thinking",
+      "verdict": "PASS",
+      "status": "COMPLETED",
+      "base_date": "2025-11-27",
+      "orders": 46,
+      "expected_orders": 46,
+      "json_core_exact": true,
+      "csv_canonical_exact": true,
+      "llm_call_count": 1,
+      "elapsed_seconds": 36.477,
+      "usage": {
+        "prompt_tokens": 5596,
+        "completion_tokens": 4464,
+        "total_tokens": 10060,
+        "by_call": {
+          "extract_attempt_1": {
+            "prompt_tokens": 5596,
+            "completion_tokens": 4464,
+            "total_tokens": 10060,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "text_tokens": 552,
+              "image_tokens": 5044,
+              "video_tokens": 0
+            },
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": 4464,
+              "image_tokens": 0,
+              "video_tokens": 0
+            }
+          }
+        }
+      },
+      "finish_reasons": {
+        "extract_attempt_1": "stop"
+      },
+      "reasoning_content_present": false,
+      "paths": {
+        "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/37_카디프_251127_pdf",
+        "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/37_카디프_251127_pdf/result/37_카디프_251127_pdf.json",
+        "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/37_카디프_251127_pdf/result/37_카디프_251127_pdf.csv",
+        "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_162843_artifacts/executions/cycle_02/non_thinking/37_카디프_251127_pdf/validation_summary.json",
+        "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.json",
+        "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/카디프생명/카디프_251127.csv"
+      }
+    }
+  ]
+}

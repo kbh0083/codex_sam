@@ -1,0 +1,20 @@
+{
+  "case_id": "22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+  "verdict": "PASS",
+  "checks": {
+    "status_completed": true,
+    "base_date_expected": true,
+    "orders_expected": true,
+    "issues_empty": true,
+    "json_core_exact": true,
+    "csv_canonical_exact": true
+  },
+  "status": "COMPLETED",
+  "base_date": "2025-11-28",
+  "orders": 3,
+  "expected_orders": 3,
+  "diff": {
+    "missing_from_result": [],
+    "extra_in_result": []
+  }
+}

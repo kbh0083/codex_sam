@@ -1,0 +1,24 @@
+{
+  "case_id": "12_동양생명_20260318_html",
+  "verdict": "FAIL",
+  "reason": "settlement JSON parse failed",
+  "parse_info": {
+    "parse_ok": false,
+    "errors": [
+      {
+        "mode": "raw",
+        "error": "Expecting value: line 1 column 1 (char 0)"
+      }
+    ],
+    "content_preview": "",
+    "attempts": 2
+  },
+  "checks": {
+    "status_completed": false,
+    "base_date_expected": false,
+    "orders_expected": false,
+    "issues_empty": false,
+    "json_core_exact": false,
+    "csv_canonical_exact": false
+  }
+}

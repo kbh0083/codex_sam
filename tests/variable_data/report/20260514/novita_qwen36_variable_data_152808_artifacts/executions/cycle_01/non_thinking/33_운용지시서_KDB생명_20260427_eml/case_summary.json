@@ -1,0 +1,57 @@
+{
+  "case_id": "33_운용지시서_KDB생명_20260427_eml",
+  "company": "KDB생명",
+  "cycle": 1,
+  "profile": "non_thinking",
+  "verdict": "FAIL",
+  "status": "COMPLETED",
+  "base_date": "2026-04-27",
+  "orders": 11,
+  "expected_orders": 12,
+  "json_core_exact": false,
+  "csv_canonical_exact": false,
+  "llm_call_count": 1,
+  "elapsed_seconds": 14.67,
+  "usage": {
+    "prompt_tokens": 3083,
+    "completion_tokens": 1269,
+    "total_tokens": 4352,
+    "by_call": {
+      "extract": {
+        "prompt_tokens": 3083,
+        "completion_tokens": 1269,
+        "total_tokens": 4352,
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "text_tokens": 561,
+          "image_tokens": 2522,
+          "video_tokens": 0
+        },
+        "completion_tokens_details": {
+          "audio_tokens": 0,
+          "reasoning_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "text_tokens": 1269,
+          "image_tokens": 0,
+          "video_tokens": 0
+        }
+      }
+    }
+  },
+  "finish_reasons": {
+    "extract": "stop"
+  },
+  "reasoning_content_present": false,
+  "paths": {
+    "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_152808_artifacts/executions/cycle_01/non_thinking/33_운용지시서_KDB생명_20260427_eml",
+    "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_152808_artifacts/executions/cycle_01/non_thinking/33_운용지시서_KDB생명_20260427_eml/result/33_운용지시서_KDB생명_20260427_eml.json",
+    "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_152808_artifacts/executions/cycle_01/non_thinking/33_운용지시서_KDB생명_20260427_eml/result/33_운용지시서_KDB생명_20260427_eml.csv",
+    "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_152808_artifacts/executions/cycle_01/non_thinking/33_운용지시서_KDB생명_20260427_eml/validation_summary.json",
+    "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.json",
+    "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/KDB생명/운용지시서(KDB생명)_20260427.csv"
+  }
+}

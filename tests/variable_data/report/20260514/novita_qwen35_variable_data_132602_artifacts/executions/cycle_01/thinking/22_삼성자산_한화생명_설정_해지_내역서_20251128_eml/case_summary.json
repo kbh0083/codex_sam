@@ -1,0 +1,78 @@
+{
+  "case_id": "22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+  "company": "한화생명",
+  "cycle": 1,
+  "profile": "thinking",
+  "verdict": "PASS",
+  "status": "COMPLETED",
+  "base_date": "2025-11-28",
+  "orders": 3,
+  "expected_orders": 3,
+  "json_core_exact": true,
+  "csv_canonical_exact": true,
+  "repairs": [
+    {
+      "type": "source_table_order_added",
+      "order": {
+        "fund_code": "V63053",
+        "fund_name": "보장성변액 글로벌멀티에셋안정배분형III(삼성혼합)",
+        "settle_class": "1",
+        "order_type": "1",
+        "base_date": "2025-11-28",
+        "t_day": "03",
+        "transfer_amount": "508,615,208"
+      },
+      "evidence": {
+        "row_index": 17,
+        "row_type": "환매 신청",
+        "column": "익익영업일 이체예상금액",
+        "raw_value": "-508,615,208",
+        "rule": "future_t03_request"
+      }
+    }
+  ],
+  "llm_call_count": 1,
+  "elapsed_seconds": 7.555,
+  "usage": {
+    "prompt_tokens": 3165,
+    "completion_tokens": 370,
+    "total_tokens": 3535,
+    "by_call": {
+      "extract": {
+        "prompt_tokens": 3165,
+        "completion_tokens": 370,
+        "total_tokens": 3535,
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "text_tokens": 667,
+          "image_tokens": 2498,
+          "video_tokens": 0
+        },
+        "completion_tokens_details": {
+          "audio_tokens": 0,
+          "reasoning_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "text_tokens": 370,
+          "image_tokens": 0,
+          "video_tokens": 0
+        }
+      }
+    }
+  },
+  "finish_reasons": {
+    "extract": "stop"
+  },
+  "reasoning_content_present": false,
+  "paths": {
+    "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_132602_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml",
+    "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_132602_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.json",
+    "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_132602_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/result/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml.csv",
+    "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_132602_artifacts/executions/cycle_01/thinking/22_삼성자산_한화생명_설정_해지_내역서_20251128_eml/validation_summary.json",
+    "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.json",
+    "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/한화생명/삼성자산_한화생명_설정_해지_내역서_20251128.csv"
+  }
+}

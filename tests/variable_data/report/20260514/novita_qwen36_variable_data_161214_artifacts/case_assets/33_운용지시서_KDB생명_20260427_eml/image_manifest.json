@@ -1,0 +1,11 @@
+{
+  "renderer": "html_table_pil",
+  "source_path": "/Users/bhkim/Documents/codex_prj_sam_asset/document/운용지시서(KDB생명)_20260427.eml",
+  "image_path": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen36_variable_data_161214_artifacts/case_assets/33_운용지시서_KDB생명_20260427_eml/input_image/33_운용지시서_KDB생명_20260427_eml_table.png",
+  "html_table_count": 1,
+  "html_row_count": 45,
+  "html_column_count": 8,
+  "image_width": 3748,
+  "image_height": 5408,
+  "image_sha256": "f8c9b58d33fefac19181e9a8d62d09683cc5b25a2642c67f4b8bc6afccf0ca0c"
+}

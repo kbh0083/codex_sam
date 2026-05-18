@@ -1,0 +1,69 @@
+{
+  "request": {
+    "url": "https://api.novita.ai/openai/v1/chat/completions",
+    "model": "qwen/qwen3.6-27b",
+    "message_count": 1,
+    "content_parts": [
+      "text",
+      "image_url"
+    ],
+    "attempt": 1,
+    "max_attempts": 4,
+    "enable_thinking": false,
+    "separate_reasoning": true,
+    "temperature": 0,
+    "top_p": 1.0,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 0.0,
+    "repetition_penalty": 1.0,
+    "max_tokens": 16384,
+    "stream": false,
+    "response_format": {
+      "type": "json_object"
+    }
+  },
+  "http_status": 200,
+  "elapsed_seconds": 45.998,
+  "response_json": {
+    "id": "bcbf0ea0dade81b938edd943cda046f1",
+    "object": "chat.completion",
+    "created": 1778745962,
+    "model": "qwen/qwen3.6-27b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\"section\":\"forecast\",\"base_date\":\"2026-03-18\",\"row_count\":13,\"issues\":[],\"headers\":{\"setting_date1\":\"3월19일\",\"setting_date2\":\"3월20일\",\"redemption_date1\":\"3월19일\",\"redemption_date2\":\"3월20일\"},\"rows\":[{\"row_index\":0,\"fund_code\":\"BALI00\",\"fund_name\":\"퇴연주식형\",\"date1_setting\":\"0\",\"date2_setting\":\"0\",\"date1_redemption\":\"0\",\"date2_redemption\":\"1,656,769\"},{\"row_index\":1,\"fund_code\":\"BALX00\",\"fund_name\":\"(디폴트옵션전용)글로벌에셋밸런스형\",\"date1_setting\":\"0\",\"date2_setting\":\"0\",\"date1_redemption\":\"44,300,158\",\"date2_redemption\":\"0\"},{\"row_index\":2,\"fund_code\":\"BBI100\",\"fund_name\":\"변액유니버셜종신-채권형\",\"date1_setting\":\"13,178,460\",\"date2_setting\":\"21,068,647\",\"date1_redemption\":\"26,354,176\",\"date2_redemption\":\"17,716,295\"},{\"row_index\":3,\"fund_code\":\"BBIM20\",\"fund_name\":\"변액유니버셜종신-채권형Ⅱ(채권_삼성)\",\"date1_setting\":\"57,478,270\",\"date2_setting\":\"68,261,693\",\"date1_redemption\":\"123,789,168\",\"date2_redemption\":\"108,889,122\"},{\"row_index\":4,\"fund_code\":\"BBIQ00\",\"fund_name\":\"배당주형\",\"date1_setting\":\"1,792,883\",\"date2_setting\":\"17,167,074\",\"date1_redemption\":\"12,033,449\",\"date2_redemption\":\"27,624,062\"},{\"row_index\":5,\"fund_code\":\"BBJ650\",\"fund_name\":\"변액연금Ⅱ 주식혼합1형(ETF_삼성)\",\"date1_setting\":\"1,671,769\",\"date2_setting\":\"293,528\",\"date1_redemption\":\"22,277,215\",\"date2_redemption\":\"14,190,753\"},{\"row_index\":6,\"fund_code\":\"BBJ770\",\"fund_name\":\"변액연금Ⅱ 주식혼합2형(ETF_삼성)\",\"date1_setting\":\"341,507\",\"date2_setting\":\"13,715,113\",\"date1_redemption\":\"384,210\",\"date2_redemption\":\"25,464,526\"},{\"row_index\":7,\"fund_code\":\"BBJAG0\",\"fund_name\":\"성장가치주혼합형(ETF_삼성)\",\"date1_setting\":\"207,339,753\",\"date2_setting\":\"348,098,451\",\"date1_redemption\":\"437,600,603\",\"date2_redemption\":\"307,581,751\"},{\"row_index\":8,\"fund_code\":\"BBJC00\",\"fund_name\":\"ACTIVE주식혼합형\",\"date1_setting\":\"48,024\",\"date2_setting\":\"7,447,192\",\"date1_redemption\":\"798,486\",\"date2_redemption\":\"16,522,380\"},{\"row_index\":9,\"fund_code\":\"BBJIA0\",\"fund_name\":\"르네상스주식형(ETF_삼성)\",\"date1_setting\":\"512,717,896\",\"date2_setting\":\"191,601,081\",\"date1_redemption\":\"223,168,278\",\"date2_redemption\":\"72,321,005\"},{\"row_index\":10,\"fund_code\":\"BBJU00\",\"fund_name\":\"글로벌멀티에셋형\",\"date1_setting\":\"45,772\",\"date2_setting\":\"0\",\"date1_redemption\":\"1,862\",\"date2_redemption\":\"0\"},{\"row_index\":11,\"fund_code\":\"BBJW00\",\"fund_name\":\"중장기채권형\",\"date1_setting\":\"0\",\"date2_setting\":\"0\",\"date1_redemption\":\"3,720,751\",\"date2_redemption\":\"0\"},{\"row_index\":12,\"fund_code\":\"BBJZ00\",\"fund_name\":\"글로벌자산배분적극형\",\"date1_setting\":\"29,159\",\"date2_setting\":\"15,096\",\"date1_redemption\":\"4,966\",\"date2_redemption\":\"15,370\"}]}"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 4142,
+      "completion_tokens": 1104,
+      "total_tokens": 5246,
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "text_tokens": 1655,
+        "image_tokens": 2487,
+        "video_tokens": 0
+      },
+      "completion_tokens_details": {
+        "audio_tokens": 0,
+        "reasoning_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0,
+        "text_tokens": 1104,
+        "image_tokens": 0,
+        "video_tokens": 0
+      }
+    },
+    "system_fingerprint": ""
+  },
+  "response_text": null
+}

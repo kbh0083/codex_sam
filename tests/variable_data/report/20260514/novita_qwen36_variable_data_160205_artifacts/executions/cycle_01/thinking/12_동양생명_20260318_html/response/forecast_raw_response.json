@@ -1,0 +1,68 @@
+{
+  "request": {
+    "url": "https://api.novita.ai/openai/v1/chat/completions",
+    "model": "qwen/qwen3.6-27b",
+    "message_count": 1,
+    "content_parts": [
+      "text",
+      "image_url"
+    ],
+    "enable_thinking": true,
+    "separate_reasoning": true,
+    "temperature": 0,
+    "top_p": 1.0,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 0.0,
+    "repetition_penalty": 1.0,
+    "max_tokens": 32768,
+    "stream": false,
+    "response_format": {
+      "type": "json_object"
+    }
+  },
+  "http_status": 200,
+  "elapsed_seconds": 36.687,
+  "response_json": {
+    "id": "7a1bff2a7427276429a0eed5bf1ed74f",
+    "object": "chat.completion",
+    "created": 1778742285,
+    "model": "qwen/qwen3.6-27b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "[{\n  \"section\": \"forecast\",\n  \"base_date\": \"2026-03-18\",\n  \"row_count\": 13,\n  \"issues\": [],\n  \"headers\": {\n    \"setting_date1\": \"3월19일\",\n    \"setting_date2\": \"3월20일\",\n    \"redemption_date1\": \"3월19일\",\n    \"redemption_date2\": \"3월20일\"\n  },\n  \"rows\": [\n    {\n      \"row_index\": 1,\n      \"fund_code\": \"BALI00\",\n      \"fund_name\": \"퇴연주식형\",\n      \"date1_setting\": \"0\",\n      \"date2_setting\": \"0\",\n      \"date1_redemption\": \"0\",\n      \"date2_redemption\": \"1,656,769\"\n    },\n    {\n      \"row_index\": 2,\n      \"fund_code\": \"BALX00\",\n      \"fund_name\": \"(디폴트옵션전용)글로벌에셋밸런스형\",\n      \"date1_setting\": \"0\",\n      \"date2_setting\": \"0\",\n      \"date1_redemption\": \"44,300,158\",\n      \"date2_redemption\": \"0\"\n    },\n    {\n      \"row_index\": 3,\n      \"fund_code\": \"BBI100\",\n      \"fund_name\": \"변액유니버셜종신-채권형\",\n      \"date1_setting\": \"13,178,460\",\n      \"date2_setting\": \"21,068,647\",\n      \"date1_redemption\": \"26,354,176\",\n      \"date2_redemption\": \"17,716,295\"\n    },\n    {\n      \"row_index\": 4,\n      \"fund_code\": \"BBIM20\",\n      \"fund_name\": \"변액유니버셜종신-채권형Ⅱ(채권_삼성)\",\n      \"date1_setting\": \"57,478,270\",\n      \"date2_setting\": \"68,261,693\",\n      \"date1_redemption\": \"123,789,168\",\n      \"date2_redemption\": \"108,889,122\"\n    },\n    {\n      \"row_index\": 5,\n      \"fund_code\": \"BBIQ00\",\n      \"fund_name\": \"배당주형\",\n      \"date1_setting\": \"1,792,883\",\n      \"date2_setting\": \"17,167,074\",\n      \"date1_redemption\": \"12,033,449\",\n      \"date2_redemption\": \"27,624,062\"\n    },\n    {\n      \"row_index\": 6,\n      \"fund_code\": \"BBJ650\",\n      \"fund_name\": \"변액연금Ⅱ 주식혼합1형(ETF_삼성)\",\n      \"date1_setting\": \"1,671,769\",\n      \"date2_setting\": \"293,528\",\n      \"date1_redemption\": \"22,277,215\",\n      \"date2_redemption\": \"14,190,753\"\n    },\n    {\n      \"row_index\": 7,\n      \"fund_code\": \"BBJ770\",\n      \"fund_name\": \"변액연금Ⅱ 주식혼합2형(ETF_삼성)\",\n      \"date1_setting\": \"341,507\",\n      \"date2_setting\": \"13,715,113\",\n      \"date1_redemption\": \"384,210\",\n      \"date2_redemption\": \"25,464,526\"\n    },\n    {\n      \"row_index\": 8,\n      \"fund_code\": \"BBJAG0\",\n      \"fund_name\": \"성장가치주혼합형(ETF_삼성)\",\n      \"date1_setting\": \"207,339,753\",\n      \"date2_setting\": \"348,098,451\",\n      \"date1_redemption\": \"437,600,603\",\n      \"date2_redemption\": \"307,581,751\"\n    },\n    {\n      \"row_index\": 9,\n      \"fund_code\": \"BBJC00\",\n      \"fund_name\": \"ACTIVE주식혼합형\",\n      \"date1_setting\": \"48,024\",\n      \"date2_setting\": \"7,447,192\",\n      \"date1_redemption\": \"798,486\",\n      \"date2_redemption\": \"16,522,380\"\n    },\n    {\n      \"row_index\": 10,\n      \"fund_code\": \"BBJIA0\",\n      \"fund_name\": \"르네상스주식형(ETF_삼성)\",\n      \"date1_setting\": \"512,717,896\",\n      \"date2_setting\": \"191,601,081\",\n      \"date1_redemption\": \"223,168,278\",\n      \"date2_redemption\": \"72,321,005\"\n    },\n    {\n      \"row_index\": 11,\n      \"fund_code\": \"BBJU00\",\n      \"fund_name\": \"글로벌멀티에셋형\",\n      \"date1_setting\": \"45,772\",\n      \"date2_setting\": \"0\",\n      \"date1_redemption\": \"1,862\",\n      \"date2_redemption\": \"0\"\n    },\n    {\n      \"row_index\": 12,\n      \"fund_code\": \"BBJW00\",\n      \"fund_name\": \"중장기채권형\",\n      \"date1_setting\": \"0\",\n      \"date2_setting\": \"0\",\n      \"date1_redemption\": \"3,720,751\",\n      \"date2_redemption\": \"0\"\n    },\n    {\n      \"row_index\": 13,\n      \"fund_code\": \"BBJZ00\",\n      \"fund_name\": \"글로벌자산배분적극형\",\n      \"date1_setting\": \"29,159\",\n      \"date2_setting\": \"15,096\",\n      \"date1_redemption\": \"4,966\",\n      \"date2_redemption\": \"15,370\"\n    }\n  ]\n}]",
+          "reasoning_content": "user wants me to extract data from the \"예상내역\" (Forecast Details) section of the provided image.\n\n**1. Identify the Section:**\nThe image contains a table titled \"예상내역\". This is the target section.\n\n**2. Analyze the Table Structure:**\n- **Headers:**\n    - Column 1: 펀드코드 (Fund Code)\n    - Column 2: 펀드명 (Fund Name)\n    - Column 3-4: 설정금액 (Setting Amount) -> Sub-headers: 3월19일 (March 19), 3월20일 (March 20)\n    - Column 5-6: 해지금액 (Redemption Amount) -> Sub-headers: 3월19일 (March 19), 3월20일 (March 20)\n- **Data Rows:** I need to count the rows.\n    1. BALI00\n    2. BALX00\n    3. BBI100\n    4. BBIM20\n    5. BBIQ00\n    6. BBJ650\n    7. BBJ770\n    8. BBJAG0\n    9. BBJC00\n    10. BBJIA0\n    11. BBJU00\n    12. BBJW00\n    13. BBJZ00\n    - There is a \"합계\" (Total) row at the bottom, which I must exclude.\n    - Total data rows = 13. This matches the instruction \"합계 row 제외 data row는 정확히 13개입니다.\"\n\n**3. Extract Data Row by Row:**\n\n*   **Row 1:**\n    *   Code: BALI00\n    *   Name: 퇴연주식형\n    *   Date1 Setting: 0\n    *   Date2 Setting: 0\n    *   Date1 Redemption: 0\n    *   Date2 Redemption: 1,656,769\n\n*   **Row 2:**\n    *   Code: BALX00\n    *   Name: (디폴트옵션전용)글로벌에셋밸런스형\n    *   Date1 Setting: 0\n    *   Date2 Setting: 0\n    *   Date1 Redemption: 44,300,158\n    *   Date2 Redemption: 0\n\n*   **Row 3:**\n    *   Code: BBI100\n    *   Name: 변액유니버셜종신-채권형\n    *   Date1 Setting: 13,178,460\n    *   Date2 Setting: 21,068,647\n    *   Date1 Redemption: 26,354,176\n    *   Date2 Redemption: 17,716,295\n\n*   **Row 4:**\n    *   Code: BBIM20\n    *   Name: 변액유니버셜종신-채권형Ⅱ(채권_삼성)\n    *   Date1 Setting: 57,478,270\n    *   Date2 Setting: 68,261,693\n    *   Date1 Redemption: 123,789,168\n    *   Date2 Redemption: 108,889,122\n\n*   **Row 5:**\n    *   Code: BBIQ00\n    *   Name: 배당주형\n    *   Date1 Setting: 1,792,883\n    *   Date2 Setting: 17,167,074\n    *   Date1 Redemption: 12,033,449\n    *   Date2 Redemption: 27,624,062\n\n*   **Row 6:**\n    *   Code: BBJ650\n    *   Name: 변액연금Ⅱ 주식혼합1형(ETF_삼성)\n    *   Date1 Setting: 1,671,769\n    *   Date2 Setting: 293,528\n    *   Date1 Redemption: 22,277,215\n    *   Date2 Redemption: 14,190,753\n\n*   **Row 7:**\n    *   Code: BBJ770\n    *   Name: 변액연금Ⅱ 주식혼합2형(ETF_삼성)\n    *   Date1 Setting: 341,507\n    *   Date2 Setting: 13,715,113\n    *   Date1 Redemption: 384,210\n    *   Date2 Redemption: 25,464,526\n\n*   **Row 8:**\n    *   Code: BBJAG0\n    *   Name: 성장가치주혼합형(ETF_삼성)\n    *   Date1 Setting: 207,339,753\n    *   Date2 Setting: 348,098,451\n    *   Date1 Redemption: 437,600,603\n    *   Date2 Redemption: 307,581,751\n\n*   **Row 9:**\n    *   Code: BBJC00\n    *   Name: ACTIVE주식혼합형\n    *   Date1 Setting: 48,024\n    *   Date2 Setting: 7,447,192\n    *   Date1 Redemption: 798,486\n    *   Date2 Redemption: 16,522,380\n\n*   **Row 10:**\n    *   Code: BBJIA0\n    *   Name: 르네상스주식형(ETF_삼성)\n    *   Date1 Setting: 512,717,896\n    *   Date2 Setting: 191,601,081\n    *   Date1 Redemption: 223,168,278\n    *   Date2 Redemption: 72,321,005\n\n*   **Row 11:**\n    *   Code: BBJU00\n    *   Name: 글로벌멀티에셋형\n    *   Date1 Setting: 45,772\n    *   Date2 Setting: 0\n    *   Date1 Redemption: 1,862\n    *   Date2 Redemption: 0\n\n*   **Row 12:**\n    *   Code: BBJW00\n    *   Name: 중장기채권형\n    *   Date1 Setting: 0\n    *   Date2 Setting: 0\n    *   Date1 Redemption: 3,720,751\n    *   Date2 Redemption: 0\n\n*   **Row 13:**\n    *   Code: BBJZ00\n    *   Name: 글로벌자산배분적극형\n    *   Date1 Setting: 29,159\n    *   Date2 Setting: 15,096\n    *   Date1 Redemption: 4,966\n    *   Date2 Redemption: 15,370\n\n**4. Check Fund Names against Rules:**\n- BBI100: `변액유니버셜종신-채권형` (Matches image)\n- BALX00: `(디폴트옵션전용)글로벌에셋밸런스형` (Matches image)\n- BBIM20: `변액유니버셜종신-채권형Ⅱ(채권_삼성)` (Matches image)\n- BBJ650: `변액연금Ⅱ 주식혼합1형(ETF_삼성)` (Matches image)\n- BBJ770: `변액연금Ⅱ 주식혼합2형(ETF_삼성)` (Matches image)\n- BALI00: `퇴연주식형` (Matches image)\n\n**5. Construct JSON:**\n- `section`: \"forecast\"\n- `base_date`: \"2026-03-18\"\n- `row_count`: 13\n- `issues`: []\n- `headers`:\n    - `setting_date1`: \"3월19일\"\n    - `setting_date2`: \"3월20일\"\n    - `redemption_date1`: \"3월19일\"\n    - `redemption_date2`: \"3월20일\"\n- `rows`: Array of objects constructed above.\n\n**6. Final Review:**\n- Check for any OCR errors.\n- Ensure numbers are copied exactly (commas included).\n- Ensure fund names are exact.\n- Ensure row count is correct.\n- Ensure no \"Total\" row is included.\n\nThe extraction looks solid. I will now format the JSON."
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 4105,
+      "completion_tokens": 3657,
+      "total_tokens": 7762,
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "text_tokens": 1618,
+        "image_tokens": 2487,
+        "video_tokens": 0
+      },
+      "completion_tokens_details": {
+        "audio_tokens": 0,
+        "reasoning_tokens": 1968,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0,
+        "text_tokens": 1689,
+        "image_tokens": 0,
+        "video_tokens": 0
+      }
+    },
+    "system_fingerprint": ""
+  },
+  "response_text": null
+}

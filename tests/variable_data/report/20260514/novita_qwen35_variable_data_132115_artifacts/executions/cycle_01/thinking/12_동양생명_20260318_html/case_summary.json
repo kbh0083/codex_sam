@@ -1,0 +1,82 @@
+{
+  "case_id": "12_동양생명_20260318_html",
+  "company": "동양생명",
+  "cycle": 1,
+  "profile": "thinking",
+  "verdict": "PASS",
+  "status": "COMPLETED",
+  "base_date": "2026-03-18",
+  "orders": 40,
+  "expected_orders": 40,
+  "json_core_exact": true,
+  "csv_canonical_exact": true,
+  "repairs": [],
+  "llm_call_count": 2,
+  "elapsed_seconds": 36.441,
+  "usage": {
+    "prompt_tokens": 6457,
+    "completion_tokens": 2516,
+    "total_tokens": 8973,
+    "by_call": {
+      "settlement": {
+        "prompt_tokens": 2614,
+        "completion_tokens": 1435,
+        "total_tokens": 4049,
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "text_tokens": 281,
+          "image_tokens": 2333,
+          "video_tokens": 0
+        },
+        "completion_tokens_details": {
+          "audio_tokens": 0,
+          "reasoning_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "text_tokens": 1435,
+          "image_tokens": 0,
+          "video_tokens": 0
+        }
+      },
+      "forecast": {
+        "prompt_tokens": 3843,
+        "completion_tokens": 1081,
+        "total_tokens": 4924,
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "text_tokens": 1356,
+          "image_tokens": 2487,
+          "video_tokens": 0
+        },
+        "completion_tokens_details": {
+          "audio_tokens": 0,
+          "reasoning_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "text_tokens": 1081,
+          "image_tokens": 0,
+          "video_tokens": 0
+        }
+      }
+    }
+  },
+  "finish_reasons": {
+    "settlement": "stop",
+    "forecast": "stop"
+  },
+  "reasoning_content_present": false,
+  "paths": {
+    "execution_dir": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_132115_artifacts/executions/cycle_01/thinking/12_동양생명_20260318_html",
+    "result_json": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_132115_artifacts/executions/cycle_01/thinking/12_동양생명_20260318_html/result/12_동양생명_20260318_html.json",
+    "result_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_132115_artifacts/executions/cycle_01/thinking/12_동양생명_20260318_html/result/12_동양생명_20260318_html.csv",
+    "validation_summary": "/Users/bhkim/Documents/codex_prj_sam_asset/tests/variable_data/report/20260514/novita_qwen35_variable_data_132115_artifacts/executions/cycle_01/thinking/12_동양생명_20260318_html/validation_summary.json",
+    "answer_json": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.json",
+    "answer_csv": "/Users/bhkim/Documents/codex_prj_sam_asset/거래처별_문서_정답/동양생명/동양생명_20260318.csv"
+  }
+}

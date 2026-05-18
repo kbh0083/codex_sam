@@ -1,0 +1,67 @@
+{
+  "request": {
+    "url": "https://api.novita.ai/openai/v1/chat/completions",
+    "model": "qwen/qwen3.5-397b-a17b",
+    "message_count": 1,
+    "content_parts": [
+      "text",
+      "image_url"
+    ],
+    "enable_thinking": false,
+    "separate_reasoning": true,
+    "temperature": 0,
+    "top_p": 1.0,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 0.0,
+    "repetition_penalty": 1.0,
+    "max_tokens": 16384,
+    "stream": false,
+    "response_format": {
+      "type": "json_object"
+    }
+  },
+  "http_status": 200,
+  "elapsed_seconds": 25.068,
+  "response_json": {
+    "id": "328503fe26ec5b2532242993a600dcba",
+    "object": "chat.completion",
+    "created": 1778728809,
+    "model": "qwen/qwen3.5-397b-a17b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"section\": \"forecast\",\n  \"base_date\": \"2026-03-18\",\n  \"row_count\": 13,\n  \"issues\": null,\n  \"headers\": {\n    \"setting_date1\": \"3월19일\",\n    \"setting_date2\": \"3월20일\",\n    \"redemption_date1\": \"3월19일\",\n    \"redemption_date2\": \"3월20일\"\n  },\n  \"rows\": [\n    {\n      \"row_index\": 1,\n      \"fund_code\": \"BALI00\",\n      \"fund_name\": \"퇴연주식형\",\n      \"date1_setting\": \"0\",\n      \"date2_setting\": \"0\",\n      \"date1_redemption\": \"0\",\n      \"date2_redemption\": \"1,656,769\"\n    },\n    {\n      \"row_index\": 2,\n      \"fund_code\": \"BALX00\",\n      \"fund_name\": \"(디폴트옵션전용) 글로벌에셋밸런스형\",\n      \"date1_setting\": \"0\",\n      \"date2_setting\": \"0\",\n      \"date1_redemption\": \"44,300,158\",\n      \"date2_redemption\": \"0\"\n    },\n    {\n      \"row_index\": 3,\n      \"fund_code\": \"BBI100\",\n      \"fund_name\": \"변액유니버셜증권-채권형\",\n      \"date1_setting\": \"13,178,460\",\n      \"date2_setting\": \"21,068,647\",\n      \"date1_redemption\": \"26,354,176\",\n      \"date2_redemption\": \"17,716,295\"\n    },\n    {\n      \"row_index\": 4,\n      \"fund_code\": \"BBIM20\",\n      \"fund_name\": \"변액유니버셜증권-채권형 II (채권_삼성)\",\n      \"date1_setting\": \"57,478,270\",\n      \"date2_setting\": \"68,261,693\",\n      \"date1_redemption\": \"123,789,168\",\n      \"date2_redemption\": \"108,889,122\"\n    },\n    {\n      \"row_index\": 5,\n      \"fund_code\": \"BBIQ00\",\n      \"fund_name\": \"배당주형\",\n      \"date1_setting\": \"1,792,883\",\n      \"date2_setting\": \"17,167,074\",\n      \"date1_redemption\": \"12,033,449\",\n      \"date2_redemption\": \"27,624,062\"\n    },\n    {\n      \"row_index\": 6,\n      \"fund_code\": \"BBJ650\",\n      \"fund_name\": \"변액연금 II 주식혼합1형(ETF_삼성)\",\n      \"date1_setting\": \"1,671,769\",\n      \"date2_setting\": \"293,528\",\n      \"date1_redemption\": \"22,277,215\",\n      \"date2_redemption\": \"14,190,753\"\n    },\n    {\n      \"row_index\": 7,\n      \"fund_code\": \"BBJ770\",\n      \"fund_name\": \"변액연금 II 주식혼합2형(ETF_삼성)\",\n      \"date1_setting\": \"341,507\",\n      \"date2_setting\": \"13,715,113\",\n      \"date1_redemption\": \"384,210\",\n      \"date2_redemption\": \"25,464,526\"\n    },\n    {\n      \"row_index\": 8,\n      \"fund_code\": \"BBJAG0\",\n      \"fund_name\": \"성장가치주혼합형(ETF_삼성)\",\n      \"date1_setting\": \"207,339,753\",\n      \"date2_setting\": \"348,098,451\",\n      \"date1_redemption\": \"437,600,603\",\n      \"date2_redemption\": \"307,581,751\"\n    },\n    {\n      \"row_index\": 9,\n      \"fund_code\": \"BBJC00\",\n      \"fund_name\": \"ACTIVE주식혼합형\",\n      \"date1_setting\": \"48,024\",\n      \"date2_setting\": \"7,447,192\",\n      \"date1_redemption\": \"798,486\",\n      \"date2_redemption\": \"16,522,380\"\n    },\n    {\n      \"row_index\": 10,\n      \"fund_code\": \"BBJIA0\",\n      \"fund_name\": \"르네상스주식형(ETF_삼성)\",\n      \"date1_setting\": \"512,717,896\",\n      \"date2_setting\": \"191,601,081\",\n      \"date1_redemption\": \"223,168,278\",\n      \"date2_redemption\": \"72,321,005\"\n    },\n    {\n      \"row_index\": 11,\n      \"fund_code\": \"BBJU00\",\n      \"fund_name\": \"글로벌멀티에셋형\",\n      \"date1_setting\": \"45,772\",\n      \"date2_setting\": \"0\",\n      \"date1_redemption\": \"1,862\",\n      \"date2_redemption\": \"0\"\n    },\n    {\n      \"row_index\": 12,\n      \"fund_code\": \"BBJW00\",\n      \"fund_name\": \"중장기채권형\",\n      \"date1_setting\": \"0\",\n      \"date2_setting\": \"0\",\n      \"date1_redemption\": \"3,720,751\",\n      \"date2_redemption\": \"0\"\n    },\n    {\n      \"row_index\": 13,\n      \"fund_code\": \"BBJZ00\",\n      \"fund_name\": \"글로벌자산배분적극형\",\n      \"date1_setting\": \"29,159\",\n      \"date2_setting\": \"15,096\",\n      \"date1_redemption\": \"4,966\",\n      \"date2_redemption\": \"15,370\"\n    }\n  ]\n}"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3841,
+      "completion_tokens": 1588,
+      "total_tokens": 5429,
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "text_tokens": 1354,
+        "image_tokens": 2487,
+        "video_tokens": 0
+      },
+      "completion_tokens_details": {
+        "audio_tokens": 0,
+        "reasoning_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0,
+        "text_tokens": 1588,
+        "image_tokens": 0,
+        "video_tokens": 0
+      }
+    },
+    "system_fingerprint": ""
+  },
+  "response_text": null
+}

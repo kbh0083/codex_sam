@@ -1,0 +1,425 @@
+{
+  "file_name": "카디프_251127.pdf",
+  "source_path": "/Users/bhkim/Documents/codex_prj_sam_asset/document/카디프_251127.pdf",
+  "model_name": "qwen/qwen3.6-27b",
+  "base_date": "2025-11-27",
+  "status": "COMPLETED",
+  "reason": null,
+  "issues": [],
+  "orders": [
+    {
+      "fund_code": "AEE",
+      "fund_name": "Asia(ex Japan) Index FoF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "668,326"
+    },
+    {
+      "fund_code": "ARF",
+      "fund_name": "Active solution asset allocation FoF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "388,918"
+    },
+    {
+      "fund_code": "ASE",
+      "fund_name": "Global Theme Active ETF FoF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "26,926,853"
+    },
+    {
+      "fund_code": "EBE",
+      "fund_name": "USD Emerging Markets Bond ETF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "64,531"
+    },
+    {
+      "fund_code": "FME",
+      "fund_name": "Future Mobility Active ETF FoF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "21,427,754"
+    },
+    {
+      "fund_code": "GBE",
+      "fund_name": "Global Bond FoF II",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "2,420,174"
+    },
+    {
+      "fund_code": "HCE",
+      "fund_name": "Global Bio Health ETF Fofs",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "6,311,824"
+    },
+    {
+      "fund_code": "ITE",
+      "fund_name": "Global IT Tech ETF Fofs",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "51,606,643"
+    },
+    {
+      "fund_code": "KQE",
+      "fund_name": "KOSDAQ150 ETF FoF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "16,341,669"
+    },
+    {
+      "fund_code": "KSF",
+      "fund_name": "Kodex Sector ETF FoF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "108,921"
+    },
+    {
+      "fund_code": "MAF",
+      "fund_name": "New global asset allocation FoF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "814,151"
+    },
+    {
+      "fund_code": "MMF2",
+      "fund_name": "Daily Averaging MMF_20",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "1,293,299"
+    },
+    {
+      "fund_code": "MMF3",
+      "fund_name": "Daily Averaging MMF_120",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "117,082,115"
+    },
+    {
+      "fund_code": "MRF",
+      "fund_name": "Smart beta asset allocation FoF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "100,902"
+    },
+    {
+      "fund_code": "NET",
+      "fund_name": "Eco-friendly Energy Active ETF FoF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "12,682,365"
+    },
+    {
+      "fund_code": "NLE",
+      "fund_name": "Nasdaq Large Cap ETF FoF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "410,923,019"
+    },
+    {
+      "fund_code": "NQE",
+      "fund_name": "Nasdaq ETF FoF",
+      "settle_class": "1",
+      "order_type": "3",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "635,647,691"
+    },
+    {
+      "fund_code": "ATE",
+      "fund_name": "AI innovative Theme selection",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "42,346"
+    },
+    {
+      "fund_code": "BEE",
+      "fund_name": "Bond ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "208,169,495"
+    },
+    {
+      "fund_code": "BEE2",
+      "fund_name": "Bond ETF FoF II",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "9,572,034"
+    },
+    {
+      "fund_code": "CAE",
+      "fund_name": "China A50 ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "145,737"
+    },
+    {
+      "fund_code": "CCE",
+      "fund_name": "China CSI300 ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "6,131,872"
+    },
+    {
+      "fund_code": "CEE",
+      "fund_name": "China ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "3,933,233"
+    },
+    {
+      "fund_code": "CHE",
+      "fund_name": "China H ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "13,785,649"
+    },
+    {
+      "fund_code": "CWF",
+      "fund_name": "Global ESG Equity ETF Fofs",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "258,880,131"
+    },
+    {
+      "fund_code": "EEE",
+      "fund_name": "India EM Equity ETF FoFs",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "833,609"
+    },
+    {
+      "fund_code": "EUF",
+      "fund_name": "European Equity ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "1,999,615"
+    },
+    {
+      "fund_code": "GDE",
+      "fund_name": "Gold ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "71,969,586"
+    },
+    {
+      "fund_code": "GDF",
+      "fund_name": "Global Dividend Income FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "13,710,278"
+    },
+    {
+      "fund_code": "GEE",
+      "fund_name": "Global equity ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "75,070,013"
+    },
+    {
+      "fund_code": "GLE",
+      "fund_name": "Gold ETF FoF 2",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "46,353,926"
+    },
+    {
+      "fund_code": "HYE",
+      "fund_name": "Global High Yield Bond ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "109,056"
+    },
+    {
+      "fund_code": "JEE",
+      "fund_name": "Japan Equity ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "10,035,832"
+    },
+    {
+      "fund_code": "KEF",
+      "fund_name": "Kodex200 ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "1,008,420,334"
+    },
+    {
+      "fund_code": "KUB",
+      "fund_name": "KOSPI200 USTN Balanced ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "825,985"
+    },
+    {
+      "fund_code": "LEE",
+      "fund_name": "Large cap equity ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "62,456,637"
+    },
+    {
+      "fund_code": "MEE",
+      "fund_name": "Momentum equity ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "41,009,861"
+    },
+    {
+      "fund_code": "MMF",
+      "fund_name": "MMF Fund of funds",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "73,939,476"
+    },
+    {
+      "fund_code": "QEE",
+      "fund_name": "Quality equity ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "12,085,188"
+    },
+    {
+      "fund_code": "TRE",
+      "fund_name": "TRF3070 ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "3,993,810"
+    },
+    {
+      "fund_code": "UDE",
+      "fund_name": "USD ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "7,685,464"
+    },
+    {
+      "fund_code": "UEE",
+      "fund_name": "US Equity ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "372,369,354"
+    },
+    {
+      "fund_code": "UEE2",
+      "fund_name": "S&P 500 ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "10,275,212"
+    },
+    {
+      "fund_code": "URE",
+      "fund_name": "Reits ETF FoFs",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "1,249,962"
+    },
+    {
+      "fund_code": "URS",
+      "fund_name": "US Russell2000 ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "13,978,967"
+    },
+    {
+      "fund_code": "VEE",
+      "fund_name": "Value equity ETF FoF",
+      "settle_class": "1",
+      "order_type": "1",
+      "base_date": "2025-11-27",
+      "t_day": "01",
+      "transfer_amount": "7,888,076"
+    }
+  ]
+}
